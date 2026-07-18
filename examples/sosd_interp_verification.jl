@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Plots
 using LinearAlgebra
 using StaticArrays
@@ -42,7 +42,7 @@ function verify_mfcm_interpolation()
     
     history = [v_m1..., v_0..., v_1..., v_2...]
     
-    grid = MFCM.TimeGrid([h, 2*h, 3*h]) # t_1=h
+    grid = SOSD.TimeGrid([h, 2*h, 3*h]) # t_1=h
     prob = LDDEProblem{1, Float64}(ProportionalMX(t->zeros(1,1)), DelayMX[], Additive(t->zeros(1)))
     sys_mats = build_system_matrices(prob, grid, tableau, r)
     
@@ -61,14 +61,14 @@ function verify_mfcm_interpolation()
         theta = rel_idx - m_idx
         
         weights = m.tableau.ce(theta)
-        y = MFCM.fetch_delayed_state(m_idx, weights, history, BSIZE, Val(D), Val(S))[1]
+        y = SOSD.fetch_delayed_state(m_idx, weights, history, BSIZE, Val(D), Val(S))[1]
         push!(y_interp, y)
     end
     
     err = abs.(y_ref .- y_interp)
     
-    p1 = plot(thetas, y_ref, label="Reference", title="MFCM fetch_delayed_state Verification")
-    plot!(p1, thetas, y_interp, label="MFCM Interp", linestyle=:dash)
+    p1 = plot(thetas, y_ref, label="Reference", title="SOSD fetch_delayed_state Verification")
+    plot!(p1, thetas, y_interp, label="SOSD Interp", linestyle=:dash)
     
     p2 = plot(thetas, err, label="Error", title="Interpolation Error", yscale=:log10)
     

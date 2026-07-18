@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using StaticArrays
 using KrylovKit
 using Printf
@@ -6,11 +6,11 @@ using LinearAlgebra
 
 # Mathieu Problem
 function create_mathieu(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, sin(4π / T * t)])
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, sin(4π / T * t)])
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 δ, ε, b0, a1 = 3.0, 0.2, -0.15, 0.1
@@ -32,7 +32,7 @@ ps = [40, 80, 160, 320]
 
 println("Verifying Endpoint Strategy:")
 for name in ["RK3", "RK4"]
-    tab = (name == "RK3") ? RK3(strategy=MFCM.endpoint) : RK4(strategy=MFCM.endpoint)
+    tab = (name == "RK3") ? RK3(strategy=SOSD.endpoint) : RK4(strategy=SOSD.endpoint)
     println("\nConvergence for $name (Endpoint):")
     errors = []
     for p in ps

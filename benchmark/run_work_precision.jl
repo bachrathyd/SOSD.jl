@@ -3,7 +3,7 @@
 # (warmup + repeated runs, mean ± std). All data goes to CSV; figures are made
 # separately by make_figures.jl.
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
 
 "Round to even (beam needs r = p/2)."
 even_p(x) = max(2, 2 * round(Int, x / 2))
@@ -22,7 +22,7 @@ function run_work_precision(sys::BenchSystem; p_max_time::Float64=20.0,
             print("  p=$p ")
             local mu, tm, ts, nrep
             try
-                f = tab === :sdm2 ? (() -> sdm_mu(sys, p; order=2)) : (() -> mfcm_mu(sys, p, tab))
+                f = tab === :sdm2 ? (() -> sdm_mu(sys, p; order=2)) : (() -> sosd_mu(sys, p, tab))
                 mu, tm, ts, nrep = time_stats(f; budget=2.0, min_reps=4, max_reps=10)
             catch e
                 println("FAILED: ", sprint(showerror, e)[1:min(end,200)])

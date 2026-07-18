@@ -2,8 +2,8 @@
 # Radau IIA (order 2s-1) and Lobatto IIIA (order 2s-2) on the delayed Mathieu
 # equation. Complements run_order_verification.jl (Gauss + explicit families).
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
-using MFCM.RungeKutta
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
+using SOSD.RungeKutta
 
 function run_order_implicit_families()
     sys = make_mathieu()
@@ -12,16 +12,16 @@ function run_order_implicit_families()
     isfile(csv) && rm(csv)
 
     families = [
-        ("RadauIIA-2",   MFCM.from_rkjl(TableauRadauIIA(2)),   3),
-        ("RadauIIA-3",   MFCM.from_rkjl(TableauRadauIIA(3)),   5),
-        ("LobattoIIIA-3", MFCM.from_rkjl(TableauLobattoIIIA(3)), 4),
-        ("LobattoIIIA-4", MFCM.from_rkjl(TableauLobattoIIIA(4)), 6),
+        ("RadauIIA-2",   SOSD.from_rkjl(TableauRadauIIA(2)),   3),
+        ("RadauIIA-3",   SOSD.from_rkjl(TableauRadauIIA(3)),   5),
+        ("LobattoIIIA-3", SOSD.from_rkjl(TableauLobattoIIIA(3)), 4),
+        ("LobattoIIIA-4", SOSD.from_rkjl(TableauLobattoIIIA(4)), 6),
     ]
     for (label, tab, nominal) in families
         errs = Float64[]; used = Int[]
         for p in unique(round.(Int, 2 .^ (3:0.5:9)))
             mu = try
-                mfcm_mu(sys, p, tab)
+                sosd_mu(sys, p, tab)
             catch e
                 @warn "$label failed at p=$p"; break
             end

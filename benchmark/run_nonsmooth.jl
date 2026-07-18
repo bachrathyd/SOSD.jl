@@ -6,7 +6,7 @@
 # This is measured for GL1/GL2/GL3 and is a core argument for the sweet spot:
 # moderate order + many steps is more robust for non-smooth engineering systems.
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
 
 function run_nonsmooth()
     sys = make_beam(act_and_wait=true)
@@ -16,8 +16,8 @@ function run_nonsmooth()
     mu_ref = get(cache, sys.name, NaN)
     if !isfinite(mu_ref)
         println("[nonsmooth] computing aligned-grid reference (GL3, p=1500/2000, lazy)...")
-        mu1 = mfcm_mu(sys, 1500, GL(3); tol=1e-13, solver=:lazy)
-        mu2 = mfcm_mu(sys, 2000, GL(3); tol=1e-13, solver=:lazy)
+        mu1 = sosd_mu(sys, 1500, GL(3); tol=1e-13, solver=:lazy)
+        mu2 = sosd_mu(sys, 2000, GL(3); tol=1e-13, solver=:lazy)
         @printf("[nonsmooth] ref agree: %.3e\n", abs(mu1 - mu2) / abs(mu2))
         mu_ref = mu2
         cache[sys.name] = mu_ref
@@ -38,7 +38,7 @@ function run_nonsmooth()
             for p in ps
                 local mu
                 try
-                    mu = mfcm_mu(sys, p, tab)
+                    mu = sosd_mu(sys, p, tab)
                 catch e
                     println("  p=$p FAILED"); break
                 end

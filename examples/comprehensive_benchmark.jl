@@ -8,7 +8,7 @@ using BenchmarkTools
 using LinearAlgebra
 using SemiDiscretizationMethod
 
-# 1. Governing Equation for MFCM (In-place)
+# 1. Governing Equation for SOSD (In-place)
 function DelayMathieu!(du, u, h, p, t)
     ζ, δ, ϵ, b, τ, T = p
     du[1] = u[2]

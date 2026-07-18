@@ -7,14 +7,14 @@
 #
 # This is the "large-p / high-dimensional" demonstration case of the paper:
 # the banded moderate-order route should win decisively here.
-# It exercises the dense (heap-allocated) assembly path of MFCM, since
+# It exercises the dense (heap-allocated) assembly path of SOSD, since
 # S*D = 28*S is far beyond the StaticArrays fast-path threshold.
 #
 # Parameters follow SemiDiscretizationMethod.jl/examples/beam_delay_feedback.jl:
 #   E = 210 GPa, A = 1e-4 m², ρ = 7800 kg/m³, L = 100 m, η = 0.01, N = 15
 #   c = sqrt(E/ρ), Tspeed = L/c, τ = 0.2*Tspeed, T = 0.4*Tspeed  (τ/T = 1/2)
 
-using MFCM
+using SOSD
 using LinearAlgebra
 using KrylovKit
 using Printf
@@ -51,7 +51,7 @@ end
 """
     beam_problem(; E, A, ρ, L, η, N, P, τpTspeed, TperpTspeed, act_and_wait)
 
-Build the MFCM `LDDEProblem` for the delayed-feedback beam and return
+Build the SOSD `LDDEProblem` for the delayed-feedback beam and return
 `(prob, D, τ, Tper)`. With `act_and_wait = true` the feedback matrix switches
 off for t ≥ 0.8*Tper (non-smooth stress-test configuration).
 """
@@ -78,16 +78,16 @@ function beam_problem(; E=210e9, A=1e-4, ρ=7800.0, L=100.0, η=0.01, N=15,
 
     # NOTE: names are qualified so this file can be included alongside
     # SemiDiscretizationMethod (which exports the same type names).
-    AMx = MFCM.ProportionalMX(t -> A_sys)
+    AMx = SOSD.ProportionalMX(t -> A_sys)
     τ1 = t -> τ
     BMx1 = if act_and_wait
-        MFCM.DelayMX(τ1, t -> B .* (mod(t, Tper) < 0.8 * Tper))
+        SOSD.DelayMX(τ1, t -> B .* (mod(t, Tper) < 0.8 * Tper))
     else
-        MFCM.DelayMX(τ1, t -> B)
+        SOSD.DelayMX(τ1, t -> B)
     end
-    cVec = MFCM.Additive(t -> Ffirst)
+    cVec = SOSD.Additive(t -> Ffirst)
 
-    prob = MFCM.LDDEProblem{D, Float64}(AMx, [BMx1], cVec)
+    prob = SOSD.LDDEProblem{D, Float64}(AMx, [BMx1], cVec)
     return prob, D, τ, Tper
 end
 

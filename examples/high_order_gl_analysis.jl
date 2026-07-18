@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Plots
 using LinearAlgebra
 using StaticArrays
@@ -16,20 +16,20 @@ function get_prob()
         x_tau = h(p_params, t - τ)[1]
         return @SVector [v, -2*ζ*v - (δ + ε*cos(2π/T*t))*x + b*x_tau]
     end
-    return MFCM.extract_SDM_system(rhs, nothing, Val(2))
+    return SOSD.extract_SDM_system(rhs, nothing, Val(2))
 end
 
 const global_prob = get_prob()
 
 function mathieu_mumax(p, s; tab=nothing)
-    if isnothing(tab); try tab = MFCM.GL(s); catch; return NaN, 0.0; end; end
-    grid = MFCM.TimeGrid(collect(range(0.0, T, length=p+1)))
+    if isnothing(tab); try tab = SOSD.GL(s); catch; return NaN, 0.0; end; end
+    grid = SOSD.TimeGrid(collect(range(0.0, T, length=p+1)))
     BSIZE = (s + 1) * 2; state_size = (p + 1) * BSIZE
     mu_val = NaN
     t = @elapsed begin
         try
-            sys = MFCM.build_system_matrices(global_prob, grid, tab, p)
-            m = MFCM.SparseMonodromyMap(MFCM.MonodromyMap(global_prob, grid, tab, sys, p, p, state_size))
+            sys = SOSD.build_system_matrices(global_prob, grid, tab, p)
+            m = SOSD.SparseMonodromyMap(SOSD.MonodromyMap(global_prob, grid, tab, sys, p, p, state_size))
             vals, _ = eigsolve(m, rand(state_size), 1, :LM; tol=1e-11)
             mu_val = abs(vals[1])
         catch e

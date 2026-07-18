@@ -1,4 +1,4 @@
-module MFCM
+module SOSD
 
 using LinearAlgebra
 using StaticArrays

@@ -36,7 +36,7 @@
   for collocation steps (matching-order CE for free).
 - Explicit steps unstable on the stiff FEM beam until a CFL-like p bound
   (errors 1e20–1e43); A-stable Gauss stages unaffected.
-- All MFCM variants: fitted time exponent 1.0 (linear complexity preserved).
+- All SOSD variants: fitted time exponent 1.0 (linear complexity preserved).
 - SD-classic ≈ O(p^2.86) vs MFSD O(p^1.0) — predecessor parity; μ agreement
   1e-15; 2500× speedup at p = 1778.
 - Single-step GL20 (p = 1) reproduces converged spectrum to 3e-9 —

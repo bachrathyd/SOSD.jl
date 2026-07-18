@@ -3,7 +3,7 @@
 # MFSD (banded LR mapping, O(p^1)) time-complexity contrast on the delayed
 # Mathieu equation, in the same environment as all other measurements.
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
 
 function run_classic_sd()
     sys = make_mathieu()

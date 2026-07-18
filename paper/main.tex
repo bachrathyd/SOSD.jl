@@ -58,7 +58,7 @@ delayed boundary feedback. We further argue that previous
 $p$-refinement with $h$-refinement, and we prescribe a fair work--precision
 methodology (log--log axes, wide resolution ranges, variance-reported CPU
 times, one machine and thread configuration). All methods are released in the
-open-source Julia package \textsf{MFCM.jl}.
+open-source Julia package \textsf{SOSD.jl}.
 \end{abstract}
 
 \keywords{Time-delay systems, semi-discretization, collocation, Runge--Kutta
@@ -138,7 +138,7 @@ The contributions are, honestly delimited:
   \item a fair-comparison methodology that separates $p$- and $h$-refinement
         and reports work--precision curves with variance on one fixed
         machine configuration (Section~\ref{sec:fair}); and
-  \item an open-source Julia implementation, \textsf{MFCM.jl}, with all
+  \item an open-source Julia implementation, \textsf{SOSD.jl}, with all
         scripts needed to reproduce every figure.
 \end{enumerate}
 Neither collocation itself \citep{Breda2005} nor the multiplication-free
@@ -550,7 +550,7 @@ the CPU-time optimum sits at a problem-dependent sweet spot of moderate order
 and many steps, drifting only logarithmically with the accuracy target and
 towards lower order for larger system dimension and non-smooth coefficients.
 This unifies and clarifies, rather than reinvents; the actionable outputs are
-the sweet-spot guidance and the open-source \textsf{MFCM.jl} implementation.
+the sweet-spot guidance and the open-source \textsf{SOSD.jl} implementation.
 
 \begin{acks}
 \TODOnum{funding, computing acknowledgements}
@@ -606,7 +606,7 @@ $t < 0.8\,T$. \TODOnum{beam reference $\mu$ from final CSV}
 
 All computations: Julia 1.12.4 on Windows 11 (x86-64), BLAS restricted to a
 single thread, package versions pinned by the repository manifests
-(\textsf{MFCM.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
+(\textsf{SOSD.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
 baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are means over
 repeated warm-started runs with standard deviations shown as bands; start
 vectors of all Krylov iterations are deterministic. Reference multipliers are

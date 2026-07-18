@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using StaticArrays
 using KrylovKit
 using Printf
@@ -7,11 +7,11 @@ using RungeKutta
 
 # Mathieu Problem
 function create_mathieu(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, sin(4π / T * t)])
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, sin(4π / T * t)])
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 δ, ε, b0, a1 = 3.0, 0.2, -0.15, 0.1
@@ -33,7 +33,7 @@ println("Check RK Orders in RungeKutta.jl:")
 @printf("RK4 order: %d\n", RungeKutta.order(TableauRK4()))
 @printf("RK5 order: %d\n", RungeKutta.order(TableauRK5()))
 
-println("\nInternal Convergence of MFCM GL(2):")
+println("\nInternal Convergence of SOSD GL(2):")
 # Use p=1000 as reference for GL(2)
 ref_gl2 = get_mu(1000, GL(2))
 ps = [50, 100, 200, 400, 800]
@@ -43,7 +43,7 @@ for p in ps
     @printf("p=%4d | mu=%.10f | err=%.2e\n", p, mu, err)
 end
 
-println("\nInternal Convergence of MFCM RK4:")
+println("\nInternal Convergence of SOSD RK4:")
 ref_rk4 = get_mu(2000, RK4())
 for p in ps
     mu = get_mu(p, RK4())
@@ -51,7 +51,7 @@ for p in ps
     @printf("p=%4d | mu=%.10f | err=%.2e\n", p, mu, err)
 end
 
-println("\nInternal Convergence of MFCM RK5:")
+println("\nInternal Convergence of SOSD RK5:")
 ref_rk5 = get_mu(2000, RK5())
 for p in ps
     mu = get_mu(p, RK5())
@@ -59,7 +59,7 @@ for p in ps
     @printf("p=%4d | mu=%.10f | err=%.2e\n", p, mu, err)
 end
 
-println("\nInternal Convergence of MFCM RK8:")
+println("\nInternal Convergence of SOSD RK8:")
 ref_rk8 = get_mu(2000, RK8())
 for p in ps
     mu = get_mu(p, RK8())

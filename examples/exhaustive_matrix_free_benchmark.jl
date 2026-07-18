@@ -121,7 +121,7 @@ function run_exhaustive_matrix_free_benchmark()
     end
     results["SDM (O2)"] = (Float64.(sdm_ps), Float64.(sdm_times), Float64.(sdm_errors), Float64.(sdm_mems))
 
-    # 2. Benchmark MFCM (Matrix-Free DiffEq) Solvers
+    # 2. Benchmark SOSD (Matrix-Free DiffEq) Solvers
     for (name, alg, is_implicit) in solvers
         println("\nBenchmarking $name...")
         times, errors, p_vals, mems = [], [], [], []

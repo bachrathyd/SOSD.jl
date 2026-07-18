@@ -35,7 +35,7 @@ function base_sweep!(y_out::AbstractVector{T}, m::MonodromyMap{D, S, T, W, BSIZE
     return y_out
 end
 
-@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{MFCM.collocation}) where {W, T, D, S}
+@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{SOSD.collocation}) where {W, T, D, S}
     # Stage-based interpolation (Collocation)
     idx_m = (m_idx - 1) * BSIZE + 1; idx_next = m_idx * BSIZE + 1
     res = zero(SVector{D, T})
@@ -50,12 +50,12 @@ end
     return res
 end
 
-@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{MFCM.denseoutput}) where {W, T, D, S}
+@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{SOSD.denseoutput}) where {W, T, D, S}
     # Stage-based mapping for Dense Output (same mapping as collocation)
-    return fetch_delayed_state(m_idx, weights, history, BSIZE, Val(D), Val(S), Val(MFCM.collocation))
+    return fetch_delayed_state(m_idx, weights, history, BSIZE, Val(D), Val(S), Val(SOSD.collocation))
 end
 
-@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{MFCM.endpoint}) where {W, T, D, S}
+@inline function fetch_delayed_state(m_idx::Int, weights::SVector{W, T}, history::Vector{T}, BSIZE::Int, ::Val{D}, ::Val{S}, ::Val{SOSD.endpoint}) where {W, T, D, S}
     # Centered endpoint interpolation
     res = zero(SVector{D, T}); offset = (W - 1) ÷ 2
     for i in 1:W

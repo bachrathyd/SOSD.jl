@@ -5,7 +5,7 @@ using LinearAlgebra
 """
     from_rkjl(tab::Tableau; strategy=nothing)
 
-Converts a RungeKutta.jl tableau to an MFCM.RKTableau.
+Converts a RungeKutta.jl tableau to an SOSD.RKTableau.
 """
 function from_rkjl(tab::Tableau; strategy=nothing)
     s = tab.s

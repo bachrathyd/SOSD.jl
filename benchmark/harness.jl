@@ -1,4 +1,4 @@
-# Shared benchmark harness for the MFCM paper experiments.
+# Shared benchmark harness for the SOSD paper experiments.
 #
 # Fair-comparison rules (paper Section: methodology):
 #   - one machine, BLAS threads pinned to 1, environment reported
@@ -7,7 +7,7 @@
 #   - eigenvalue error measured against a two-resolution-verified reference
 #   - deterministic start vectors (no RNG in timed paths)
 
-using MFCM
+using SOSD
 using SemiDiscretizationMethod
 const SDM = SemiDiscretizationMethod
 using LinearAlgebra
@@ -38,20 +38,20 @@ function write_env_report()
         println(io, "CPU: ", Sys.cpu_info()[1].model, " x ", Sys.CPU_THREADS, " threads")
         println(io, "BLAS: ", BLAS.get_config(), "  threads = ", BLAS.get_num_threads())
         println(io, "Julia threads: ", Threads.nthreads())
-        for pkg in ("MFCM", "SemiDiscretizationMethod", "KrylovKit", "StaticArrays", "RungeKutta")
+        for pkg in ("SOSD", "SemiDiscretizationMethod", "KrylovKit", "StaticArrays", "RungeKutta")
             println(io, pkg, " loaded")
         end
     end
 end
 
 # ---------------------------------------------------------------------------
-# Test systems: (name, MFCM problem, SDM problem, T, taumax, D, r_of_p)
+# Test systems: (name, SOSD problem, SDM problem, T, taumax, D, r_of_p)
 # Each system defines r(p) so that r*h >= taumax on the grid h = T/p.
 # ---------------------------------------------------------------------------
 
 struct BenchSystem
     name::String
-    prob                 # MFCM LDDEProblem
+    prob                 # SOSD LDDEProblem
     sdm_prob             # SemiDiscretizationMethod LDDEProblem (or nothing)
     T::Float64
     taumax::Float64
@@ -64,8 +64,8 @@ function make_mathieu(; δ=3.0, ε=0.2, b0=-0.15, a1=0.1, T=2π)
     A_f = t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1]
     B_f = t -> @SMatrix [0.0 0.0; b0 0.0]
     c_f = t -> @SVector [0.0, sin(4π / T * t)]
-    prob = MFCM.LDDEProblem{2, Float64}(MFCM.ProportionalMX(A_f),
-        [MFCM.DelayMX(t -> 2π, B_f)], MFCM.Additive(c_f))
+    prob = SOSD.LDDEProblem{2, Float64}(SOSD.ProportionalMX(A_f),
+        [SOSD.DelayMX(t -> 2π, B_f)], SOSD.Additive(c_f))
     sdm_prob = SDM.LDDEProblem(SDM.ProportionalMX(A_f), [SDM.DelayMX(t -> 2π, B_f)], SDM.Additive(c_f))
     BenchSystem("mathieu", prob, sdm_prob, T, 2π, 2, p -> p)
 end
@@ -75,8 +75,8 @@ function make_bio(; a=1.0, b=1.0, τ=2.0, T=2π)
     A_f = t -> SMatrix{1,1}(0.0)
     B_f = t -> SMatrix{1,1}(-(a + b*cos(t)))
     c_f = t -> SVector{1}(0.0)
-    prob = MFCM.LDDEProblem{1, Float64}(MFCM.ProportionalMX(A_f),
-        [MFCM.DelayMX(t -> τ, B_f)], MFCM.Additive(c_f))
+    prob = SOSD.LDDEProblem{1, Float64}(SOSD.ProportionalMX(A_f),
+        [SOSD.DelayMX(t -> τ, B_f)], SOSD.Additive(c_f))
     sdm_prob = SDM.LDDEProblem(SDM.ProportionalMX(A_f), [SDM.DelayMX(t -> τ, B_f)], SDM.Additive(c_f))
     BenchSystem("bio", prob, sdm_prob, T, τ, 1, p -> ceil(Int, τ / (T / p)))
 end
@@ -89,8 +89,8 @@ function make_turning_ssv(; kw=0.2, ζ=0.1, Ω=0.3, ASSV=0.1, NT=10)
     A_f = t -> @SMatrix [0.0 1.0; -1-kw -ζ]
     B_f = t -> @SMatrix [0.0 0.0; kw 0.0]
     c_f = t -> @SVector [0.0, cos(t * 2π)]
-    prob = MFCM.LDDEProblem{2, Float64}(MFCM.ProportionalMX(A_f),
-        [MFCM.DelayMX(τ_f, B_f)], MFCM.Additive(c_f))
+    prob = SOSD.LDDEProblem{2, Float64}(SOSD.ProportionalMX(A_f),
+        [SOSD.DelayMX(τ_f, B_f)], SOSD.Additive(c_f))
     sdm_prob = SDM.LDDEProblem(SDM.ProportionalMX(A_f), [SDM.DelayMX(τ_f, B_f)], SDM.Additive(c_f))
     BenchSystem("turning_ssv", prob, sdm_prob, T, τmax, 2, p -> ceil(Int, τmax / (T / p)))
 end
@@ -126,11 +126,11 @@ end
 det_x0(n) = normalize!([1.0 + 0.1 * sin(7.3i) for i in 1:n])
 
 """
-    mfcm_mu(sys, p, tableau; solver=:sparse, tol=1e-11)
+    sosd_mu(sys, p, tableau; solver=:sparse, tol=1e-11)
 
-Dominant Floquet multiplier magnitude via MFCM. Returns NaN on failure.
+Dominant Floquet multiplier magnitude via SOSD. Returns NaN on failure.
 """
-function mfcm_mu(sys::BenchSystem, p::Int, tableau; solver::Symbol=:sparse, tol=1e-11)
+function sosd_mu(sys::BenchSystem, p::Int, tableau; solver::Symbol=:sparse, tol=1e-11)
     r = sys.r_of_p(p)
     S = size(tableau.a, 1)
     BSIZE = (S + 1) * sys.D
@@ -239,8 +239,8 @@ function reference_mu(sys::BenchSystem; s::Int = sys.D > 10 ? 5 : 10,
     haskey(cache, sys.name) && return cache[sys.name]
     @printf("[ref] computing reference for %s (GL%d, p=%d & %d, %s)...\n", sys.name, s, p1, p2, solver)
     tab = GL(s)
-    mu1 = mfcm_mu(sys, iseven(p1) ? p1 : p1 + 1, tab; tol=1e-13, solver=solver)
-    mu2 = mfcm_mu(sys, iseven(p2) ? p2 : p2 + 1, tab; tol=1e-13, solver=solver)
+    mu1 = sosd_mu(sys, iseven(p1) ? p1 : p1 + 1, tab; tol=1e-13, solver=solver)
+    mu2 = sosd_mu(sys, iseven(p2) ? p2 : p2 + 1, tab; tol=1e-13, solver=solver)
     rel = abs(mu1 - mu2) / abs(mu2)
     @printf("[ref] %s: mu(p1)=%.15g  mu(p2)=%.15g  rel.diff=%.2e\n", sys.name, mu1, mu2, rel)
     rel < agree_tol || @warn "Reference for $(sys.name) not converged to $agree_tol (rel=$rel)"
@@ -279,8 +279,8 @@ function method_set(; large_system::Bool=false)
     push!(methods, ("SDM-O2", :sdm2, 2))
     push!(methods, ("RK1", ExplicitEuler(), 1))
     push!(methods, ("RK2", Heun(), 2))
-    push!(methods, ("RK4", MFCM.RK4(), 4))
-    push!(methods, ("RK5", MFCM.RK5(), 5))
+    push!(methods, ("RK4", SOSD.RK4(), 4))
+    push!(methods, ("RK5", SOSD.RK5(), 5))
     push!(methods, ("GL1", GL(1), 2))
     push!(methods, ("GL2", GL(2), 4))
     push!(methods, ("GL3", GL(3), 6))

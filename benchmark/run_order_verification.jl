@@ -3,7 +3,7 @@
 # Verifies that each integrator achieves its theoretical convergence order and
 # that the delay interpolation does not cap it.
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
 
 function run_order_verification()
     sys = make_mathieu()
@@ -22,7 +22,7 @@ function run_order_verification()
         for p in ps
             mu = NaN
             try
-                mu = tab === :sdm2 ? sdm_mu(sys, p; order=2) : mfcm_mu(sys, p, tab)
+                mu = tab === :sdm2 ? sdm_mu(sys, p; order=2) : sosd_mu(sys, p, tab)
             catch e
                 @warn "order-verification $label failed at p=$p" exception=e
                 break

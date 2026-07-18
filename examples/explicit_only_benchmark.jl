@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using SemiDiscretizationMethod
 using Plots
 using StaticArrays
@@ -9,12 +9,12 @@ using LinearAlgebra
 using Printf
 
 # --- Mathieu Problem Definition ---
-function createMathieuProblem_MFCM(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+function createMathieuProblem_SOSD(δ, ε, b0, a1; T=2π)
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, sin(4π / T * t)])
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, sin(4π / T * t)])
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 function createMathieuProblem_SDM(δ, ε, b0, a1; T=2π)
@@ -34,7 +34,7 @@ function run_explicit_benchmark()
     p_ref = 800
     r_ref = p_ref
     tableau_ref = GL(10)
-    prob_ref = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T)
+    prob_ref = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T)
     grid_ref = TimeGrid(collect(range(0.0, T, length=p_ref+1)))
     sys_ref = build_system_matrices(prob_ref, grid_ref, tableau_ref, r_ref)
     m_ref = MonodromyMap(prob_ref, grid_ref, tableau_ref, sys_ref, p_ref, r_ref, (r_ref+1)*(11)*D)
@@ -59,7 +59,7 @@ function run_explicit_benchmark()
     results = Dict()
     execution_order = []
     
-    # --- 2. Explicit MFCM ---
+    # --- 2. Explicit SOSD ---
     for (name, tab) in solvers
         S = size(tab.a, 1)
         full_name = "Sparse $name"
@@ -71,7 +71,7 @@ function run_explicit_benchmark()
             print("$p ")
             try
                 h = T / p; r = p
-                prob = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T)
+                prob = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T)
                 grid = TimeGrid(collect(range(0.0, T, length=p+1)))
                 BSIZE = (S + 1) * D
                 state_size = (r + 1) * BSIZE

@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using MDBM
 using Plots
 using StaticArrays

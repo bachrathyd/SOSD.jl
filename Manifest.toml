@@ -2,7 +2,7 @@
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "85e5804d584bd6e16649acca789d29ee41b1e860"
+project_hash = "7fd3469e50c2ed08cbc723b6c8f9adce371b08dc"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -481,12 +481,6 @@ version = "0.3.29"
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 version = "1.11.0"
 
-[[deps.MFCM]]
-deps = ["ForwardDiff", "KrylovKit", "LinearAlgebra", "LinearMaps", "RungeKutta", "SparseArrays", "StaticArrays"]
-path = "."
-uuid = "e93c12a4-b5d7-4f8a-9e6b-0c1d2e3f4a5b"
-version = "0.1.1"
-
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "oneTBB_jll"]
 git-tree-sha1 = "282cadc186e7b2ae0eeadbd7a4dffed4196ae2aa"
@@ -685,6 +679,12 @@ version = "0.5.20"
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
+
+[[deps.SOSD]]
+deps = ["ForwardDiff", "KrylovKit", "LinearAlgebra", "LinearMaps", "RungeKutta", "SparseArrays", "StaticArrays"]
+path = "."
+uuid = "a8518967-a96f-44f7-81cf-f0e26ec34142"
+version = "0.2.0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"

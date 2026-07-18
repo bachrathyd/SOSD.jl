@@ -1,7 +1,7 @@
 using Test
-using MFCM
+using SOSD
 
-@testset "MFCM.jl Tests" begin
+@testset "SOSD.jl Tests" begin
     println("Running ODE Convergence Tests...")
     include("ode_convergence.jl")
     

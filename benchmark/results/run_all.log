@@ -1,0 +1,743 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+
+======================================================================
+ ORDER VERIFICATION
+======================================================================
+[ref] computing reference for mathieu (GL10, p=600 & 900, sparse)...
+[ref] mathieu: mu(p1)=0.351417260953552  mu(p2)=0.351417260953549  rel.diff=8.85e-15
+SDM-O2   nominal order  2  fitted slope  3.13
+RK1      nominal order  1  fitted slope   NaN
+RK2      nominal order  2  fitted slope  2.00
+RK4      nominal order  4  fitted slope  3.28
+RK5      nominal order  5  fitted slope  2.14
+GL1      nominal order  2  fitted slope  2.00
+GL2      nominal order  4  fitted slope  4.00
+GL3      nominal order  6  fitted slope  5.98
+GL5      nominal order 10  fitted slope  9.96
+GL8      nominal order 16  fitted slope   NaN
+[order-verification] done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\order_verification_mathieu.csv
+
+======================================================================
+ WORK-PRECISION / TIME-COMPLEXITY
+======================================================================
+
+[mathieu] SDM-O2
+  p=6 rel_err=1.71e-01 t=9.95e-05s(±8e-06,n=10)
+  p=10 rel_err=1.16e-01 t=0.000124s(±1e-05,n=10)
+  p=16 rel_err=2.59e-02 t=0.000171s(±6e-06,n=10)
+  p=25 rel_err=6.86e-03 t=0.0003s(±1e-05,n=10)
+  p=40 rel_err=1.70e-03 t=0.00039s(±4e-05,n=10)
+  p=63 rel_err=4.38e-04 t=0.000452s(±1e-05,n=10)
+  p=100 rel_err=1.11e-04 t=0.000613s(±5e-05,n=10)
+  p=158 rel_err=2.55e-05 t=0.00427s(±0.01,n=10)
+  p=251 rel_err=5.79e-06 t=0.00125s(±0.0001,n=10)
+  p=398 rel_err=5.17e-07 t=0.00182s(±7e-05,n=10)
+  p=631 rel_err=2.00e-07 t=0.00273s(±6e-05,n=10)
+  p=1000 rel_err=6.57e-08 t=0.00502s(±0.001,n=10)
+  p=1585 rel_err=8.95e-09 t=0.00833s(±0.002,n=10)
+  p=2512 rel_err=7.68e-09 t=0.0126s(±0.002,n=10)
+  p=3981 rel_err=1.41e-09 t=0.0195s(±0.001,n=10)
+
+[mathieu] RK1
+  p=6 rel_err=2.08e+02 t=0.000156s(±5e-05,n=10)
+  p=10 rel_err=1.21e+02 t=0.000243s(±5e-05,n=10)
+  p=16 rel_err=4.64e+01 t=0.000395s(±2e-05,n=10)
+  p=25 rel_err=1.73e+01 t=0.000655s(±5e-05,n=10)
+  p=40 rel_err=7.05e+00 t=0.000869s(±6e-05,n=10)
+  p=63 rel_err=3.45e+00 t=0.00127s(±9e-05,n=10)
+  p=100 rel_err=1.86e+00 t=0.00179s(±9e-05,n=10)
+  p=158 rel_err=1.08e+00 t=0.00274s(±0.0001,n=10)
+  p=251 rel_err=6.41e-01 t=0.00438s(±0.0002,n=10)
+  p=398 rel_err=3.77e-01 t=0.00889s(±0.006,n=10)
+  p=631 rel_err=2.16e-01 t=0.0138s(±0.007,n=10)
+  p=1000 rel_err=1.21e-01 t=0.0214s(±0.007,n=10)
+  p=1585 rel_err=6.78e-02 t=0.0332s(±0.007,n=10)
+  p=2512 rel_err=3.92e-02 t=0.0487s(±0.003,n=10)
+  p=3981 rel_err=2.33e-02 t=0.0792s(±0.003,n=10)
+
+[mathieu] RK2
+  p=6 rel_err=1.14e+02 t=0.000244s(±5e-05,n=10)
+  p=10 rel_err=7.80e+00 t=0.000405s(±6e-05,n=10)
+  p=16 rel_err=1.49e+00 t=0.00059s(±7e-06,n=10)
+  p=25 rel_err=3.87e-01 t=0.00107s(±6e-05,n=10)
+  p=40 rel_err=3.40e-02 t=0.00144s(±0.0001,n=10)
+  p=63 rel_err=1.41e-01 t=0.00231s(±9e-05,n=10)
+  p=100 rel_err=4.91e-02 t=0.00334s(±0.0001,n=10)
+  p=158 rel_err=1.92e-02 t=0.00787s(±0.009,n=10)
+  p=251 rel_err=7.57e-03 t=0.00996s(±0.007,n=10)
+  p=398 rel_err=3.02e-03 t=0.0163s(±0.008,n=10)
+  p=631 rel_err=1.20e-03 t=0.0263s(±0.009,n=10)
+  p=1000 rel_err=4.80e-04 t=0.0364s(±0.005,n=10)
+  p=1585 rel_err=1.91e-04 t=0.0564s(±0.004,n=10)
+  p=2512 rel_err=7.62e-05 t=0.09s(±0.007,n=10)
+  p=3981 rel_err=3.04e-05 t=0.192s(±0.1,n=10)
+
+[mathieu] RK4
+  p=6 rel_err=1.77e-01 t=0.000572s(±5e-05,n=10)
+  p=10 rel_err=8.25e-02 t=0.000959s(±0.0001,n=10)
+  p=16 rel_err=3.24e-02 t=0.00144s(±4e-05,n=10)
+  p=25 rel_err=8.04e-03 t=0.00214s(±7e-05,n=10)
+  p=40 rel_err=1.57e-03 t=0.00316s(±4e-05,n=10)
+  p=63 rel_err=3.17e-04 t=0.00499s(±1e-04,n=10)
+  p=100 rel_err=6.47e-05 t=0.00795s(±0.0002,n=10)
+  p=158 rel_err=1.39e-05 t=0.0158s(±0.008,n=10)
+  p=251 rel_err=3.02e-06 t=0.0225s(±0.007,n=10)
+  p=398 rel_err=6.91e-07 t=0.0349s(±0.008,n=10)
+  p=631 rel_err=1.63e-07 t=0.0574s(±0.007,n=10)
+  p=1000 rel_err=3.91e-08 t=0.0848s(±0.003,n=10)
+  p=1585 rel_err=9.55e-09 t=0.13s(±0.003,n=10)
+  p=2512 rel_err=2.32e-09 t=0.255s(±0.1,n=8)
+  p=3981 rel_err=5.83e-10 t=0.41s(±0.1,n=6)
+
+[mathieu] RK5
+  p=6 rel_err=3.49e-01 t=0.0014s(±6e-05,n=10)
+  p=10 rel_err=1.66e-02 t=0.00178s(±9e-05,n=10)
+  p=16 rel_err=1.38e-03 t=0.00291s(±1e-04,n=10)
+  p=25 rel_err=9.48e-04 t=0.00497s(±0.0002,n=10)
+  p=40 rel_err=3.38e-04 t=0.00749s(±0.0001,n=10)
+  p=63 rel_err=1.18e-04 t=0.0196s(±0.02,n=10)
+  p=100 rel_err=4.14e-05 t=0.0213s(±0.009,n=10)
+  p=158 rel_err=1.51e-05 t=0.0301s(±0.007,n=10)
+  p=251 rel_err=5.61e-06 t=0.0473s(±0.008,n=10)
+  p=398 rel_err=2.14e-06 t=0.072s(±0.007,n=10)
+  p=631 rel_err=8.26e-07 t=0.122s(±0.005,n=10)
+  p=1000 rel_err=3.23e-07 t=0.191s(±0.008,n=10)
+  p=1585 rel_err=1.27e-07 t=0.288s(±0.003,n=7)
+  p=2512 rel_err=5.02e-08 t=0.579s(±0.2,n=4)
+  p=3981 rel_err=1.99e-08 t=0.852s(±0.2,n=4)
+
+[mathieu] GL1
+  p=6 rel_err=1.66e+00 t=0.000157s(±1e-05,n=10)
+  p=10 rel_err=1.06e+00 t=0.000226s(±8e-06,n=10)
+  p=16 rel_err=5.77e-01 t=0.000369s(±9e-06,n=10)
+  p=25 rel_err=2.94e-01 t=0.000676s(±2e-05,n=10)
+  p=40 rel_err=1.34e-01 t=0.0019s(±0.003,n=10)
+  p=63 rel_err=5.84e-02 t=0.00131s(±4e-05,n=10)
+  p=100 rel_err=2.41e-02 t=0.00201s(±0.0001,n=10)
+  p=158 rel_err=9.82e-03 t=0.00327s(±0.0003,n=10)
+  p=251 rel_err=3.92e-03 t=0.00643s(±0.006,n=10)
+  p=398 rel_err=1.56e-03 t=0.00853s(±0.004,n=10)
+  p=631 rel_err=6.22e-04 t=0.0134s(±0.004,n=10)
+  p=1000 rel_err=2.48e-04 t=0.0205s(±0.004,n=10)
+  p=1585 rel_err=9.86e-05 t=0.0335s(±0.003,n=10)
+  p=2512 rel_err=3.93e-05 t=0.0518s(±0.003,n=10)
+  p=3981 rel_err=1.56e-05 t=0.083s(±0.004,n=10)
+
+[mathieu] GL2
+  p=6 rel_err=2.59e-01 t=0.000342s(±8e-06,n=10)
+  p=10 rel_err=4.56e-02 t=0.000619s(±4e-05,n=10)
+  p=16 rel_err=7.48e-03 t=0.000911s(±2e-05,n=10)
+  p=25 rel_err=1.28e-03 t=0.0024s(±0.003,n=10)
+  p=40 rel_err=1.97e-04 t=0.00195s(±5e-05,n=10)
+  p=63 rel_err=3.21e-05 t=0.00297s(±0.0001,n=10)
+  p=100 rel_err=5.07e-06 t=0.00473s(±8e-05,n=10)
+  p=158 rel_err=8.13e-07 t=0.00916s(±0.006,n=10)
+  p=251 rel_err=1.28e-07 t=0.0125s(±0.004,n=10)
+  p=398 rel_err=2.02e-08 t=0.0196s(±0.004,n=10)
+  p=631 rel_err=3.20e-09 t=0.0312s(±0.004,n=10)
+  p=1000 rel_err=5.07e-10 t=0.049s(±0.003,n=10)
+  p=1585 rel_err=8.03e-11 t=0.0796s(±0.003,n=10)
+  p=2512 rel_err=1.27e-11 t=0.126s(±0.004,n=10)
+  p=3981 rel_err=2.01e-12 t=0.247s(±0.1,n=9)
+
+[mathieu] GL3
+  p=6 rel_err=8.08e-03 t=0.000637s(±8e-05,n=10)
+  p=10 rel_err=4.10e-04 t=0.00099s(±7e-05,n=10)
+  p=16 rel_err=2.51e-05 t=0.0014s(±3e-05,n=10)
+  p=25 rel_err=1.75e-06 t=0.00215s(±0.0002,n=10)
+  p=40 rel_err=1.05e-07 t=0.00348s(±0.0003,n=10)
+  p=63 rel_err=6.86e-09 t=0.00509s(±0.0001,n=10)
+  p=100 rel_err=4.29e-10 t=0.00794s(±0.0002,n=10)
+  p=158 rel_err=2.76e-11 t=0.017s(±0.01,n=10)
+  p=251 rel_err=1.72e-12 t=0.0209s(±0.005,n=10)
+  p=398 rel_err=1.11e-13 t=0.0337s(±0.006,n=10)
+  p=631 rel_err=4.58e-15 t=0.0561s(±0.006,n=10)
+  p=1000 rel_err=8.21e-15 t=0.0848s(±0.004,n=10)
+  p=1585 rel_err=1.74e-15 t=0.135s(±0.004,n=10)
+  p=2512 rel_err=2.69e-15 t=0.253s(±0.09,n=9)
+  p=3981 rel_err=1.96e-14 t=0.369s(±0.04,n=6)
+
+[mathieu] GL5
+  p=6 rel_err=8.96e-07 t=0.0303s(±0.09,n=10)
+  p=10 rel_err=5.70e-09 t=0.00219s(±0.0002,n=10)
+  p=16 rel_err=5.28e-11 t=0.00336s(±0.0001,n=10)
+  p=25 rel_err=6.14e-13 t=0.00519s(±9e-05,n=10)
+  p=40 rel_err=4.74e-15 t=0.00908s(±0.0001,n=10)
+  p=63 rel_err=3.16e-16 t=0.0144s(±0.0003,n=10)
+  p=100 rel_err=3.95e-15 t=0.0218s(±0.007,n=10)
+  (floor reached)
+
+[mathieu] GL8
+  p=6 rel_err=1.57e-13 t=0.00361s(±9e-05,n=10)
+  p=10 rel_err=3.16e-16 t=0.00856s(±0.009,n=10)
+  p=16 rel_err=9.48e-16 t=0.00941s(±0.0002,n=10)
+  p=25 rel_err=1.42e-15 t=0.0169s(±0.006,n=10)
+  p=40 rel_err=3.79e-15 t=0.0261s(±0.007,n=10)
+  (floor reached)
+[work-precision] mathieu done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\work_precision_mathieu.csv
+[ref] computing reference for bio (GL10, p=600 & 900, sparse)...
+[ref] bio: mu(p1)=0.626021929290189  mu(p2)=0.626021929290183  rel.diff=8.16e-15
+
+[bio] SDM-O2
+  p=6 rel_err=1.12e-01 t=5.43e-05s(±1e-05,n=10)
+  p=10 rel_err=1.66e-02 t=5.78e-05s(±4e-06,n=10)
+  p=16 rel_err=6.04e-03 t=7.28e-05s(±5e-06,n=10)
+  p=25 rel_err=2.17e-03 t=9.06e-05s(±2e-06,n=10)
+  p=40 rel_err=3.35e-04 t=0.000141s(±6e-06,n=10)
+  p=63 rel_err=1.26e-04 t=0.00025s(±9e-06,n=10)
+  p=100 rel_err=2.85e-05 t=0.00036s(±3e-05,n=10)
+  p=158 rel_err=4.93e-06 t=0.000557s(±3e-05,n=10)
+  p=251 rel_err=1.99e-06 t=0.000728s(±3e-05,n=10)
+  p=398 rel_err=2.83e-07 t=0.00105s(±5e-05,n=10)
+  p=631 rel_err=1.17e-07 t=0.00593s(±0.01,n=10)
+  p=1000 rel_err=1.81e-08 t=0.00241s(±0.0001,n=10)
+  p=1585 rel_err=5.28e-10 t=0.00496s(±0.004,n=10)
+  p=2512 rel_err=5.87e-10 t=0.00644s(±0.002,n=10)
+  p=3981 rel_err=4.26e-10 t=0.0105s(±0.002,n=10)
+
+[bio] RK1
+  p=6 rel_err=3.46e+00 t=0.000113s(±5e-05,n=10)
+  p=10 rel_err=2.05e+00 t=0.000175s(±5e-05,n=10)
+  p=16 rel_err=1.23e+00 t=0.000224s(±5e-05,n=10)
+  p=25 rel_err=6.01e-01 t=0.000334s(±5e-05,n=10)
+  p=40 rel_err=1.25e-01 t=0.00052s(±5e-05,n=10)
+  p=63 rel_err=7.85e-02 t=0.00085s(±5e-05,n=10)
+  p=100 rel_err=4.95e-02 t=0.0013s(±5e-05,n=10)
+  p=158 rel_err=3.13e-02 t=0.00569s(±0.01,n=10)
+  p=251 rel_err=1.96e-02 t=0.00297s(±8e-05,n=10)
+  p=398 rel_err=1.24e-02 t=0.0076s(±0.009,n=10)
+  p=631 rel_err=7.80e-03 t=0.00719s(±0.0001,n=10)
+  p=1000 rel_err=4.92e-03 t=0.0137s(±0.007,n=10)
+  p=1585 rel_err=3.10e-03 t=0.0203s(±0.007,n=10)
+  p=2512 rel_err=1.96e-03 t=0.0321s(±0.008,n=10)
+  p=3981 rel_err=1.24e-03 t=0.0497s(±0.007,n=10)
+
+[bio] RK2
+  p=6 rel_err=5.06e-02 t=0.000173s(±5e-05,n=10)
+  p=10 rel_err=4.73e-02 t=0.00027s(±5e-05,n=10)
+  p=16 rel_err=2.93e-02 t=0.000386s(±6e-05,n=10)
+  p=25 rel_err=5.40e-03 t=0.000575s(±5e-05,n=10)
+  p=40 rel_err=2.67e-03 t=0.000913s(±5e-05,n=10)
+  p=63 rel_err=1.54e-03 t=0.00158s(±9e-05,n=10)
+  p=100 rel_err=4.22e-04 t=0.00241s(±0.0001,n=10)
+  p=158 rel_err=1.10e-05 t=0.00366s(±0.0001,n=10)
+  p=251 rel_err=6.28e-05 t=0.00879s(±0.01,n=10)
+  p=398 rel_err=2.71e-05 t=0.0113s(±0.007,n=10)
+  p=631 rel_err=1.05e-05 t=0.017s(±0.008,n=10)
+  p=1000 rel_err=6.61e-07 t=0.0249s(±0.006,n=10)
+  p=1585 rel_err=1.34e-06 t=0.0381s(±0.007,n=10)
+  p=2512 rel_err=6.20e-07 t=0.0622s(±0.008,n=10)
+  p=3981 rel_err=1.00e-07 t=0.0965s(±0.005,n=10)
+
+[bio] RK4
+  p=6 rel_err=1.68e-02 t=0.000408s(±6e-05,n=10)
+  p=10 rel_err=2.81e-03 t=0.000665s(±8e-05,n=10)
+  p=16 rel_err=6.27e-04 t=0.000927s(±5e-05,n=10)
+  p=25 rel_err=3.39e-04 t=0.00152s(±6e-05,n=10)
+  p=40 rel_err=6.56e-05 t=0.00246s(±0.0001,n=10)
+  p=63 rel_err=7.02e-06 t=0.00375s(±9e-05,n=10)
+  p=100 rel_err=5.70e-06 t=0.00601s(±0.0003,n=10)
+  p=158 rel_err=8.29e-07 t=0.00922s(±0.0004,n=10)
+  p=251 rel_err=3.74e-07 t=0.0167s(±0.008,n=10)
+  p=398 rel_err=5.07e-08 t=0.0249s(±0.007,n=10)
+  p=631 rel_err=2.36e-08 t=0.0409s(±0.009,n=10)
+  p=1000 rel_err=3.20e-09 t=0.0632s(±0.008,n=10)
+  p=1585 rel_err=1.61e-09 t=0.0981s(±0.006,n=10)
+  p=2512 rel_err=6.83e-11 t=0.156s(±0.005,n=10)
+  p=3981 rel_err=5.52e-11 t=0.297s(±0.1,n=7)
+
+[bio] RK5
+  p=6 rel_err=3.30e-04 t=0.000901s(±7e-05,n=10)
+  p=10 rel_err=1.72e-03 t=0.00151s(±6e-05,n=10)
+  p=16 rel_err=8.24e-04 t=0.00243s(±8e-05,n=10)
+  p=25 rel_err=3.44e-04 t=0.00427s(±0.0002,n=10)
+  p=40 rel_err=7.48e-05 t=0.00588s(±1e-04,n=10)
+  p=63 rel_err=6.26e-05 t=0.00916s(±0.0002,n=10)
+  p=100 rel_err=2.16e-05 t=0.0146s(±0.0006,n=10)
+  p=158 rel_err=5.75e-06 t=0.025s(±0.007,n=10)
+  p=251 rel_err=3.92e-06 t=0.0386s(±0.007,n=10)
+  p=398 rel_err=1.35e-06 t=0.0607s(±0.007,n=10)
+  p=631 rel_err=5.63e-07 t=0.098s(±0.007,n=10)
+  p=1000 rel_err=1.65e-07 t=0.153s(±0.007,n=10)
+  p=1585 rel_err=9.18e-08 t=0.255s(±0.008,n=8)
+  p=2512 rel_err=4.17e-08 t=0.403s(±0.007,n=5)
+  p=3981 rel_err=1.26e-08 t=0.675s(±0.05,n=4)
+
+[bio] GL1
+  p=6 rel_err=7.81e-02 t=0.000124s(±4e-05,n=10)
+  p=10 rel_err=1.06e-02 t=0.000191s(±8e-05,n=10)
+  p=16 rel_err=9.44e-03 t=0.000231s(±4e-06,n=10)
+  p=25 rel_err=5.05e-03 t=0.00035s(±1e-05,n=10)
+  p=40 rel_err=1.32e-03 t=0.000552s(±1e-05,n=10)
+  p=63 rel_err=7.70e-04 t=0.00091s(±2e-05,n=10)
+  p=100 rel_err=2.73e-04 t=0.00149s(±4e-05,n=10)
+  p=158 rel_err=5.85e-05 t=0.00234s(±0.0003,n=10)
+  p=251 rel_err=4.76e-05 t=0.00347s(±0.0002,n=10)
+  p=398 rel_err=8.50e-06 t=0.00555s(±0.0001,n=10)
+  p=631 rel_err=7.00e-06 t=0.00877s(±0.0003,n=10)
+  p=1000 rel_err=1.34e-06 t=0.0184s(±0.01,n=10)
+  p=1585 rel_err=4.75e-07 t=0.0302s(±0.007,n=10)
+  p=2512 rel_err=7.18e-09 t=0.038s(±0.007,n=10)
+  p=3981 rel_err=1.56e-07 t=0.0606s(±0.007,n=10)
+
+[bio] GL2
+  p=6 rel_err=5.62e-03 t=0.000247s(±4e-05,n=10)
+  p=10 rel_err=8.86e-04 t=0.000366s(±8e-06,n=10)
+  p=16 rel_err=2.60e-05 t=0.000574s(±3e-05,n=10)
+  p=25 rel_err=1.66e-05 t=0.000893s(±1e-05,n=10)
+  p=40 rel_err=3.05e-05 t=0.00151s(±4e-05,n=10)
+  p=63 rel_err=2.73e-07 t=0.0029s(±0.001,n=10)
+  p=100 rel_err=6.58e-07 t=0.00424s(±0.001,n=10)
+  p=158 rel_err=5.07e-07 t=0.00567s(±0.0002,n=10)
+  p=251 rel_err=1.06e-08 t=0.0133s(±0.01,n=10)
+  p=398 rel_err=3.21e-08 t=0.015s(±0.003,n=10)
+  p=631 rel_err=1.68e-09 t=0.0248s(±0.007,n=10)
+  p=1000 rel_err=2.02e-09 t=0.0445s(±0.01,n=10)
+  p=1585 rel_err=8.19e-11 t=0.0614s(±0.006,n=10)
+  p=2512 rel_err=8.50e-11 t=0.1s(±0.006,n=10)
+  p=3981 rel_err=1.49e-11 t=0.151s(±0.01,n=10)
+
+[bio] GL3
+  p=6 rel_err=4.61e-04 t=0.000407s(±5e-05,n=10)
+  p=10 rel_err=7.12e-05 t=0.000659s(±5e-05,n=10)
+  p=16 rel_err=2.87e-06 t=0.00107s(±8e-05,n=10)
+  p=25 rel_err=2.10e-07 t=0.00163s(±4e-05,n=10)
+  p=40 rel_err=1.34e-07 t=0.00281s(±0.0007,n=10)
+  p=63 rel_err=6.59e-09 t=0.00529s(±0.002,n=10)
+  p=100 rel_err=8.38e-10 t=0.00925s(±0.01,n=10)
+  p=158 rel_err=5.93e-10 t=0.0112s(±0.003,n=10)
+  p=251 rel_err=1.13e-10 t=0.0175s(±0.007,n=10)
+  p=398 rel_err=1.55e-11 t=0.0278s(±0.008,n=10)
+  p=631 rel_err=1.25e-12 t=0.0465s(±0.01,n=10)
+  p=1000 rel_err=3.38e-13 t=0.0654s(±0.007,n=10)
+  p=1585 rel_err=1.17e-13 t=0.108s(±0.01,n=10)
+  p=2512 rel_err=4.19e-14 t=0.176s(±0.03,n=10)
+  p=3981 rel_err=1.29e-14 t=0.27s(±0.01,n=8)
+
+[bio] GL5
+  p=6 rel_err=2.81e-06 t=0.0011s(±0.0003,n=10)
+  p=10 rel_err=1.51e-07 t=0.00984s(±0.03,n=10)
+  p=16 rel_err=2.32e-09 t=0.0026s(±0.0003,n=10)
+  p=25 rel_err=1.45e-10 t=0.00386s(±0.0002,n=10)
+  p=40 rel_err=1.62e-11 t=0.0431s(±0.1,n=10)
+  p=63 rel_err=1.91e-13 t=0.0106s(±0.002,n=10)
+  p=100 rel_err=5.52e-14 t=0.0161s(±0.001,n=10)
+  p=158 rel_err=1.60e-14 t=0.0298s(±0.02,n=10)
+  p=251 rel_err=1.72e-14 t=0.0411s(±0.01,n=10)
+  p=398 rel_err=2.57e-14 t=0.0687s(±0.009,n=10)
+  p=631 rel_err=2.39e-14 t=0.104s(±0.009,n=10)
+  p=1000 rel_err=6.92e-14 t=0.163s(±0.006,n=10)
+  p=1585 rel_err=4.47e-14 t=0.25s(±0.007,n=9)
+  p=2512 rel_err=4.59e-14 t=0.506s(±0.2,n=4)
+  p=3981 rel_err=1.31e-14 t=0.72s(±0.2,n=4)
+
+[bio] GL8
+  p=6 rel_err=3.88e-09 t=0.00261s(±6e-05,n=10)
+  p=10 rel_err=1.09e-11 t=0.00396s(±6e-05,n=10)
+  p=16 rel_err=1.42e-15 t=0.00636s(±8e-05,n=10)
+  p=25 rel_err=1.42e-14 t=0.0148s(±0.01,n=10)
+  p=40 rel_err=1.12e-14 t=0.0181s(±0.008,n=10)
+  p=63 rel_err=2.25e-14 t=0.0269s(±0.007,n=10)
+  p=100 rel_err=1.61e-14 t=0.0431s(±0.008,n=10)
+  p=158 rel_err=2.43e-14 t=0.0683s(±0.005,n=10)
+  p=251 rel_err=1.76e-14 t=0.106s(±0.009,n=10)
+  p=398 rel_err=4.79e-15 t=0.167s(±0.007,n=10)
+  p=631 rel_err=7.98e-15 t=0.318s(±0.1,n=7)
+  p=1000 rel_err=4.52e-14 t=0.436s(±0.03,n=5)
+  p=1585 rel_err=3.78e-14 t=0.771s(±0.1,n=4)
+  p=2512 rel_err=1.24e-15 t=1.27s(±0.2,n=4)
+  p=3981 rel_err=5.55e-14 t=2.01s(±0.2,n=4)
+[work-precision] bio done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\work_precision_bio.csv
+[ref] computing reference for turning_ssv (GL10, p=600 & 900, sparse)...
+[ref] turning_ssv: mu(p1)=4.47616838309133  mu(p2)=4.47616838309123  rel.diff=2.08e-14
+
+[turning_ssv] SDM-O2
+  p=63 rel_err=9.99e-01 t=0.000207s(±1e-05,n=10)
+  p=100 rel_err=7.25e-01 t=0.000367s(±8e-05,n=10)
+  p=158 rel_err=2.61e-01 t=0.000503s(±2e-05,n=10)
+  p=251 rel_err=6.17e-02 t=0.000748s(±2e-05,n=10)
+  p=398 rel_err=1.08e-02 t=0.00113s(±3e-05,n=10)
+  p=631 rel_err=2.00e-03 t=0.00179s(±7e-05,n=10)
+  p=1000 rel_err=8.77e-05 t=0.038s(±0.1,n=10)
+  p=1585 rel_err=6.57e-05 t=0.00497s(±0.0007,n=10)
+  p=2512 rel_err=5.17e-06 t=0.0094s(±0.001,n=10)
+  p=3981 rel_err=1.59e-06 t=0.014s(±0.006,n=10)
+  p=6310 rel_err=6.40e-07 t=0.0208s(±0.003,n=10)
+
+[turning_ssv] RK1
+  p=63 rel_err=2.42e+35 t=0.00104s(±6e-05,n=10)
+  p=100 rel_err=2.83e+38 t=0.00154s(±6e-05,n=10)
+  p=158 rel_err=5.84e+36 t=0.00224s(±6e-05,n=10)
+  p=251 rel_err=8.22e+29 t=0.00353s(±8e-05,n=10)
+  p=398 rel_err=4.42e+20 t=0.00886s(±0.01,n=10)
+  p=631 rel_err=1.77e+12 t=0.011s(±0.008,n=10)
+  p=1000 rel_err=1.91e+06 t=0.0158s(±0.008,n=10)
+  p=1585 rel_err=2.39e+03 t=0.0248s(±0.008,n=10)
+  p=2512 rel_err=9.07e+01 t=0.0369s(±0.009,n=10)
+  p=3981 rel_err=1.41e+01 t=0.0545s(±0.008,n=10)
+  p=6310 rel_err=4.29e+00 t=0.0897s(±0.007,n=10)
+
+[turning_ssv] RK2
+  p=63 rel_err=4.37e+50 t=0.002s(±7e-05,n=10)
+  p=100 rel_err=1.51e+42 t=0.00308s(±8e-05,n=10)
+  p=158 rel_err=2.68e+20 t=0.00475s(±0.0001,n=10)
+  p=251 rel_err=8.87e+02 t=0.00715s(±0.0003,n=10)
+  p=398 rel_err=8.14e+00 t=0.014s(±0.009,n=10)
+  p=631 rel_err=1.17e+00 t=0.0193s(±0.005,n=10)
+  p=1000 rel_err=3.05e-01 t=0.0328s(±0.008,n=10)
+  p=1585 rel_err=9.41e-02 t=0.05s(±0.009,n=10)
+  p=2512 rel_err=3.27e-02 t=0.0771s(±0.007,n=10)
+  p=3981 rel_err=1.15e-02 t=0.125s(±0.005,n=10)
+  p=6310 rel_err=4.32e-03 t=0.197s(±0.003,n=10)
+
+[turning_ssv] RK4
+  p=63 rel_err=9.12e+39 t=0.0059s(±0.0001,n=10)
+  p=100 rel_err=1.00e+00 t=0.0126s(±0.01,n=10)
+  p=158 rel_err=9.54e-01 t=0.0164s(±0.007,n=10)
+  p=251 rel_err=3.58e-01 t=0.0237s(±0.007,n=10)
+  p=398 rel_err=5.12e-02 t=0.038s(±0.008,n=10)
+  p=631 rel_err=6.29e-03 t=0.0612s(±0.007,n=10)
+  p=1000 rel_err=8.25e-04 t=0.0969s(±0.007,n=10)
+  p=1585 rel_err=1.12e-04 t=0.174s(±0.01,n=10)
+  p=2512 rel_err=1.82e-05 t=0.317s(±0.2,n=7)
+  p=3981 rel_err=3.23e-06 t=0.474s(±0.2,n=5)
+  p=6310 rel_err=6.36e-07 t=0.734s(±0.1,n=4)
+
+[turning_ssv] RK5
+  p=63 rel_err=1.49e+04 t=0.0192s(±0.003,n=10)
+  p=100 rel_err=8.49e-01 t=0.0285s(±0.006,n=10)
+  p=158 rel_err=1.52e-01 t=0.0396s(±0.008,n=10)
+  p=251 rel_err=4.79e-02 t=0.0592s(±0.006,n=10)
+  p=398 rel_err=1.41e-02 t=0.0963s(±0.009,n=10)
+  p=631 rel_err=5.06e-03 t=0.152s(±0.004,n=10)
+  p=1000 rel_err=1.99e-03 t=0.304s(±0.1,n=7)
+  p=1585 rel_err=7.77e-04 t=0.382s(±0.01,n=6)
+  p=2512 rel_err=3.10e-04 t=0.641s(±0.02,n=4)
+  p=3981 rel_err=1.23e-04 t=1.23s(±0.2,n=4)
+  p=6310 rel_err=4.96e-05 t=1.95s(±0.2,n=4)
+
+[turning_ssv] GL1
+  p=63 rel_err=9.94e-01 t=0.000967s(±5e-05,n=10)
+  p=100 rel_err=5.64e-03 t=0.0015s(±5e-05,n=10)
+  p=158 rel_err=9.09e-01 t=0.00242s(±3e-05,n=10)
+  p=251 rel_err=9.11e-01 t=0.00381s(±7e-05,n=10)
+  p=398 rel_err=5.43e-01 t=0.0142s(±0.03,n=10)
+  p=631 rel_err=2.40e-01 t=0.0097s(±0.0002,n=10)
+  p=1000 rel_err=9.75e-02 t=0.0154s(±0.001,n=10)
+  p=1585 rel_err=3.88e-02 t=0.0288s(±0.01,n=10)
+  p=2512 rel_err=1.54e-02 t=0.0444s(±0.01,n=10)
+  p=3981 rel_err=6.10e-03 t=0.0656s(±0.01,n=10)
+  p=6310 rel_err=2.45e-03 t=0.114s(±0.01,n=10)
+
+[turning_ssv] GL2
+  p=63 rel_err=9.84e-01 t=0.00293s(±0.0004,n=10)
+  p=100 rel_err=6.29e-01 t=0.00428s(±0.0002,n=10)
+  p=158 rel_err=1.44e-01 t=0.00659s(±0.0002,n=10)
+  p=251 rel_err=2.64e-02 t=0.0123s(±0.003,n=10)
+  p=398 rel_err=4.11e-03 t=0.027s(±0.01,n=10)
+  p=631 rel_err=6.80e-04 t=0.0456s(±0.02,n=10)
+  p=1000 rel_err=1.05e-04 t=0.0577s(±0.01,n=10)
+  p=1585 rel_err=1.84e-05 t=0.0763s(±0.006,n=10)
+  p=2512 rel_err=2.63e-06 t=0.115s(±0.007,n=10)
+  p=3981 rel_err=3.85e-07 t=0.183s(±0.005,n=10)
+  p=6310 rel_err=6.44e-08 t=0.304s(±0.007,n=7)
+
+[turning_ssv] GL3
+  p=63 rel_err=3.86e-01 t=0.00529s(±0.0002,n=10)
+  p=100 rel_err=3.94e-02 t=0.014s(±0.01,n=10)
+  p=158 rel_err=2.43e-03 t=0.0162s(±0.01,n=10)
+  p=251 rel_err=1.55e-04 t=0.0278s(±0.01,n=10)
+  p=398 rel_err=1.38e-05 t=0.0377s(±0.01,n=10)
+  p=631 rel_err=7.50e-07 t=0.0581s(±0.01,n=10)
+  p=1000 rel_err=6.52e-08 t=0.0901s(±0.008,n=10)
+  p=1585 rel_err=1.43e-08 t=0.142s(±0.01,n=10)
+  p=2512 rel_err=2.55e-10 t=0.29s(±0.1,n=7)
+  p=3981 rel_err=6.89e-11 t=0.351s(±0.01,n=6)
+  p=6310 rel_err=2.46e-11 t=0.547s(±0.03,n=4)
+
+[turning_ssv] GL5
+  p=63 rel_err=1.14e-03 t=0.0169s(±0.01,n=10)
+  p=100 rel_err=1.70e-05 t=0.0222s(±0.006,n=10)
+  p=158 rel_err=3.23e-07 t=0.0362s(±0.008,n=10)
+  p=251 rel_err=1.95e-08 t=0.0575s(±0.008,n=10)
+  p=398 rel_err=1.39e-09 t=0.089s(±0.006,n=10)
+  p=631 rel_err=5.34e-11 t=0.14s(±0.006,n=10)
+  p=1000 rel_err=6.63e-13 t=0.282s(±0.2,n=8)
+  p=1585 rel_err=8.91e-14 t=0.435s(±0.2,n=5)
+  p=2512 rel_err=2.44e-14 t=0.682s(±0.2,n=4)
+  p=3981 rel_err=4.96e-15 t=1.14s(±0.2,n=4)
+  p=6310 rel_err=1.90e-13 t=1.85s(±0.1,n=4)
+
+[turning_ssv] GL8
+  p=63 rel_err=5.37e-07 t=0.0518s(±0.03,n=10)
+  p=100 rel_err=4.38e-10 t=0.102s(±0.1,n=10)
+  p=158 rel_err=1.46e-11 t=0.102s(±0.01,n=10)
+  p=251 rel_err=1.85e-13 t=0.161s(±0.003,n=10)
+  p=398 rel_err=1.77e-14 t=0.315s(±0.1,n=7)
+  p=631 rel_err=5.56e-15 t=0.522s(±0.2,n=4)
+  p=1000 rel_err=1.81e-14 t=0.857s(±0.2,n=4)
+  p=1585 rel_err=2.40e-14 t=1.27s(±0.2,n=4)
+  p=2512 rel_err=9.29e-14 t=2.05s(±0.03,n=4)
+  p=3981 rel_err=5.42e-14 t=3.25s(±0.2,n=3)
+  p=6310 rel_err=2.22e-14 t=5.19s(±0.01,n=2)
+[work-precision] turning_ssv done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\work_precision_turning_ssv.csv
+[ref] computing reference for beam (GL5, p=600 & 900, lazy)...
+[ref] beam: mu(p1)=373.008326279219  mu(p2)=373.008322060713  rel.diff=1.13e-08
+
+[beam] SDM-O2
+  p=6 rel_err=2.66e-02 t=0.0888s(±0.03,n=10)
+  p=8 rel_err=1.19e-02 t=0.0982s(±0.004,n=10)
+  p=12 rel_err=3.81e-03 t=0.0918s(±0.005,n=10)
+  p=16 rel_err=1.68e-03 t=0.118s(±0.003,n=10)
+  p=22 rel_err=6.68e-04 t=0.0946s(±0.003,n=10)
+  p=32 rel_err=2.24e-04 t=0.0913s(±0.003,n=10)
+  p=46 rel_err=7.70e-05 t=0.126s(±0.005,n=10)
+  p=64 rel_err=2.90e-05 t=0.175s(±0.007,n=10)
+  p=90 rel_err=1.06e-05 t=0.313s(±0.2,n=8)
+  p=128 rel_err=3.73e-06 t=0.315s(±0.01,n=7)
+  p=182 rel_err=1.27e-06 t=0.474s(±0.01,n=5)
+  p=256 rel_err=4.86e-07 t=0.735s(±0.2,n=4)
+  p=362 rel_err=1.32e-07 t=1.18s(±0.2,n=4)
+  p=512 rel_err=6.48e-08 t=1.47s(±0.3,n=4)
+  p=724 rel_err=4.04e-08 t=2.27s(±0.4,n=4)
+
+[beam] RK1
+  p=6 rel_err=1.82e+06 t=0.00284s(±0.0003,n=10)
+  p=8 rel_err=1.46e+08 t=0.00471s(±0.001,n=10)
+  p=12 rel_err=1.99e+11 t=0.00656s(±0.001,n=10)
+  p=16 rel_err=5.76e+13 t=0.0071s(±0.001,n=10)
+  p=22 rel_err=3.12e+16 t=0.0105s(±0.002,n=10)
+  p=32 rel_err=1.17e+19 t=0.0167s(±0.01,n=10)
+  p=46 rel_err=2.25e+19 t=0.0263s(±0.01,n=10)
+  p=64 rel_err=7.29e+14 t=0.035s(±0.01,n=10)
+  p=90 rel_err=9.91e-02 t=0.0511s(±0.01,n=10)
+  p=128 rel_err=7.11e-02 t=0.0662s(±0.01,n=10)
+  p=182 rel_err=5.07e-02 t=0.308s(±0.3,n=8)
+  p=256 rel_err=3.64e-02 t=0.136s(±0.02,n=10)
+  p=362 rel_err=2.59e-02 t=0.312s(±0.3,n=10)
+  p=512 rel_err=1.84e-02 t=0.272s(±0.02,n=8)
+  p=724 rel_err=1.31e-02 t=0.526s(±0.3,n=4)
+
+[beam] RK2
+  p=6 rel_err=1.94e+13 t=0.0024s(±0.0004,n=10)
+  p=8 rel_err=3.16e+16 t=0.00314s(±0.0004,n=10)
+  p=12 rel_err=3.83e+21 t=0.0236s(±0.06,n=10)
+  p=16 rel_err=2.18e+25 t=0.0661s(±0.2,n=10)
+  p=22 rel_err=1.30e+29 t=0.0138s(±0.01,n=10)
+  p=32 rel_err=4.76e+31 t=0.0173s(±0.009,n=10)
+  p=46 rel_err=3.45e+29 t=0.0222s(±0.005,n=10)
+  p=64 rel_err=1.01e+20 t=0.033s(±0.01,n=10)
+  p=90 rel_err=1.28e-03 t=0.0468s(±0.006,n=10)
+  p=128 rel_err=6.53e-04 t=0.06s(±0.007,n=10)
+  p=182 rel_err=3.31e-04 t=0.158s(±0.2,n=10)
+  p=256 rel_err=1.66e-04 t=0.213s(±0.2,n=10)
+  p=362 rel_err=8.52e-05 t=0.264s(±0.1,n=8)
+  p=512 rel_err=4.17e-05 t=0.296s(±0.2,n=7)
+  p=724 rel_err=2.12e-05 t=0.553s(±0.2,n=4)
+
+[beam] RK4
+  p=6 rel_err=3.08e+24 t=0.00735s(±0.0009,n=10)
+  p=8 rel_err=2.35e+29 t=0.0192s(±0.03,n=10)
+  p=12 rel_err=3.08e+36 t=0.0734s(±0.1,n=10)
+  p=16 rel_err=1.00e+41 t=0.0184s(±0.007,n=10)
+  p=22 rel_err=1.54e+44 t=0.0268s(±0.003,n=10)
+  p=32 rel_err=2.89e+42 t=0.0423s(±0.008,n=10)
+  p=46 rel_err=3.17e+29 t=0.0881s(±0.02,n=10)
+  p=64 rel_err=1.03e+01 t=0.159s(±0.2,n=10)
+  p=90 rel_err=3.30e-06 t=0.21s(±0.1,n=10)
+  p=128 rel_err=1.16e-06 t=0.305s(±0.2,n=7)
+  p=182 rel_err=3.06e-07 t=0.449s(±0.3,n=5)
+  p=256 rel_err=1.27e-07 t=0.695s(±0.4,n=4)
+  p=362 rel_err=2.59e-08 t=0.804s(±0.3,n=4)
+  p=512 rel_err=1.82e-08 t=1.94s(±0.5,n=4)
+  p=724 rel_err=9.63e-08 t=3.27s(±0.4,n=3)
+
+[beam] RK5
+  p=6 rel_err=2.34e+31 t=0.129s(±0.2,n=10)
+  p=8 rel_err=1.83e+36 t=0.0248s(±0.009,n=10)
+  p=12 rel_err=4.73e+41 t=0.0378s(±0.006,n=10)
+  p=16 rel_err=3.28e+42 t=0.0368s(±0.004,n=10)
+  p=22 rel_err=3.43e+36 t=0.0612s(±0.008,n=10)
+  p=32 rel_err=7.57e+02 t=0.202s(±0.2,n=10)
+  p=46 rel_err=7.73e-05 t=0.201s(±0.2,n=10)
+  p=64 rel_err=4.08e-05 t=0.279s(±0.2,n=9)
+  p=90 rel_err=2.09e-05 t=0.396s(±0.2,n=6)
+  p=128 rel_err=1.04e-05 t=0.626s(±0.3,n=4)
+  p=182 rel_err=5.18e-06 t=0.871s(±0.3,n=4)
+  p=256 rel_err=2.60e-06 t=1.74s(±0.6,n=4)
+  p=362 rel_err=1.24e-06 t=1.92s(±0.4,n=4)
+  p=512 rel_err=6.10e-07 t=3.65s(±0.6,n=3)
+  p=724 rel_err=2.85e-07 t=7.46s(±0.9,n=2)
+
+[beam] GL1
+  p=6 rel_err=3.13e-01 t=0.00486s(±0.0009,n=10)
+  p=8 rel_err=1.62e-01 t=0.00615s(±0.002,n=10)
+  p=12 rel_err=6.83e-02 t=0.0272s(±0.06,n=10)
+  p=16 rel_err=3.77e-02 t=0.0163s(±0.02,n=10)
+  p=22 rel_err=1.97e-02 t=0.0173s(±0.01,n=10)
+  p=32 rel_err=9.26e-03 t=0.0206s(±0.01,n=10)
+  p=46 rel_err=4.47e-03 t=0.028s(±0.007,n=10)
+  p=64 rel_err=2.30e-03 t=0.0374s(±0.006,n=10)
+  p=90 rel_err=1.16e-03 t=0.0617s(±0.003,n=10)
+  p=128 rel_err=5.75e-04 t=0.0805s(±0.008,n=10)
+  p=182 rel_err=2.85e-04 t=0.135s(±0.01,n=10)
+  p=256 rel_err=1.44e-04 t=0.259s(±0.2,n=8)
+  p=362 rel_err=7.20e-05 t=0.246s(±0.2,n=9)
+  p=512 rel_err=3.60e-05 t=0.34s(±0.2,n=6)
+  p=724 rel_err=1.81e-05 t=0.466s(±0.2,n=5)
+
+[beam] GL2
+  p=6 rel_err=4.50e-03 t=0.00319s(±0.0002,n=10)
+  p=8 rel_err=1.39e-03 t=0.0164s(±0.04,n=10)
+  p=12 rel_err=2.69e-04 t=0.00879s(±0.008,n=10)
+  p=16 rel_err=8.46e-05 t=0.00744s(±0.002,n=10)
+  p=22 rel_err=2.35e-05 t=0.011s(±0.002,n=10)
+  p=32 rel_err=5.24e-06 t=0.0156s(±0.002,n=10)
+  p=46 rel_err=1.11e-06 t=0.0229s(±0.002,n=10)
+  p=64 rel_err=2.77e-07 t=0.0367s(±0.007,n=10)
+  p=90 rel_err=5.28e-08 t=0.0482s(±0.002,n=10)
+  p=128 rel_err=1.62e-08 t=0.136s(±0.1,n=10)
+  p=182 rel_err=2.23e-09 t=0.12s(±0.006,n=10)
+  p=256 rel_err=4.77e-08 t=0.223s(±0.2,n=9)
+  p=362 rel_err=5.59e-08 t=0.34s(±0.2,n=6)
+  p=512 rel_err=7.04e-08 t=0.428s(±0.2,n=5)
+  p=724 rel_err=6.51e-08 t=0.603s(±0.3,n=4)
+
+[beam] GL3
+  p=6 rel_err=3.08e-05 t=0.00518s(±0.0006,n=10)
+  p=8 rel_err=5.43e-06 t=0.00705s(±0.001,n=10)
+  p=12 rel_err=4.89e-07 t=0.0126s(±0.002,n=10)
+  p=16 rel_err=1.34e-07 t=0.0215s(±0.02,n=10)
+  p=22 rel_err=1.86e-07 t=0.021s(±0.009,n=10)
+  p=32 rel_err=2.09e-08 t=0.0293s(±0.006,n=10)
+  p=46 rel_err=6.23e-08 t=0.0438s(±0.007,n=10)
+  p=64 rel_err=4.46e-08 t=0.0611s(±0.01,n=10)
+  p=90 rel_err=4.18e-08 t=0.0914s(±0.009,n=10)
+  p=128 rel_err=7.48e-09 t=0.126s(±0.02,n=10)
+  p=182 rel_err=4.82e-08 t=0.268s(±0.2,n=8)
+  p=256 rel_err=8.13e-08 t=0.422s(±0.3,n=5)
+  p=362 rel_err=6.66e-08 t=0.612s(±0.3,n=4)
+  p=512 rel_err=4.09e-08 t=0.957s(±0.3,n=4)
+  p=724 rel_err=6.53e-08 t=1.46s(±0.3,n=4)
+[work-precision] beam done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\work_precision_beam.csv
+
+======================================================================
+ SWEET SPOT
+======================================================================
+
+[mathieu] GL1 (order 2)
+  p=1 rel_err=1.82e+00 t=8.46e-05s nnzL=4 bw=0
+  p=2 rel_err=1.65e+00 t=8.99e-05s nnzL=16 bw=7
+  p=3 rel_err=1.68e+00 t=0.000114s nnzL=28 bw=7
+  p=4 rel_err=1.79e+00 t=0.00011s nnzL=40 bw=7
+  p=6 rel_err=1.66e+00 t=0.000164s nnzL=64 bw=7
+  p=10 rel_err=1.06e+00 t=0.000296s nnzL=112 bw=7
+  p=16 rel_err=5.77e-01 t=0.000432s nnzL=184 bw=7
+  p=25 rel_err=2.94e-01 t=0.000713s nnzL=292 bw=7
+  p=40 rel_err=1.34e-01 t=0.000983s nnzL=472 bw=7
+  p=63 rel_err=5.84e-02 t=0.00169s nnzL=748 bw=7
+  p=100 rel_err=2.41e-02 t=0.00275s nnzL=1192 bw=7
+  p=158 rel_err=9.82e-03 t=0.00377s nnzL=1888 bw=7
+  p=251 rel_err=3.92e-03 t=0.00544s nnzL=3004 bw=7
+  p=398 rel_err=1.56e-03 t=0.0102s nnzL=4768 bw=7
+  p=631 rel_err=6.22e-04 t=0.0376s nnzL=7564 bw=7
+  p=1000 rel_err=2.48e-04 t=0.0253s nnzL=11992 bw=7
+  p=1585 rel_err=9.86e-05 t=0.0347s nnzL=19012 bw=7
+
+[mathieu] GL2 (order 4)
+  p=1 rel_err=1.70e+00 t=0.00012s nnzL=6 bw=0
+  p=2 rel_err=1.79e+00 t=0.000183s nnzL=24 bw=11
+  p=3 rel_err=1.27e+00 t=0.000235s nnzL=42 bw=11
+  p=4 rel_err=7.41e-01 t=0.000314s nnzL=60 bw=11
+  p=6 rel_err=2.59e-01 t=0.000393s nnzL=96 bw=11
+  p=10 rel_err=4.56e-02 t=0.000675s nnzL=168 bw=11
+  p=16 rel_err=7.48e-03 t=0.00103s nnzL=276 bw=11
+  p=25 rel_err=1.28e-03 t=0.00162s nnzL=438 bw=11
+  p=40 rel_err=1.97e-04 t=0.00242s nnzL=708 bw=11
+  p=63 rel_err=3.21e-05 t=0.00346s nnzL=1122 bw=11
+  p=100 rel_err=5.07e-06 t=0.00541s nnzL=1788 bw=11
+  p=158 rel_err=8.13e-07 t=0.00847s nnzL=2832 bw=11
+  p=251 rel_err=1.28e-07 t=0.0219s nnzL=4506 bw=11
+  p=398 rel_err=2.02e-08 t=0.0184s nnzL=7152 bw=11
+  p=631 rel_err=3.20e-09 t=0.0366s nnzL=11346 bw=11
+  p=1000 rel_err=5.07e-10 t=0.0507s nnzL=17988 bw=11
+  p=1585 rel_err=8.03e-11 t=0.0801s nnzL=28518 bw=11
+
+[mathieu] GL3 (order 6)
+  p=1 rel_err=1.79e+00 t=0.000136s nnzL=8 bw=0
+  p=2 rel_err=1.01e+00 t=0.000214s nnzL=32 bw=15
+  p=3 rel_err=2.84e-01 t=0.000312s nnzL=56 bw=15
+  p=4 rel_err=7.54e-02 t=0.000398s nnzL=80 bw=15
+  p=6 rel_err=8.08e-03 t=0.00072s nnzL=128 bw=15
+  p=10 rel_err=4.10e-04 t=0.000968s nnzL=224 bw=15
+  p=16 rel_err=2.51e-05 t=0.00146s nnzL=368 bw=15
+  p=25 rel_err=1.75e-06 t=0.00218s nnzL=584 bw=15
+  p=40 rel_err=1.05e-07 t=0.00345s nnzL=944 bw=15
+  p=63 rel_err=6.86e-09 t=0.00515s nnzL=1496 bw=15
+  p=100 rel_err=4.29e-10 t=0.013s nnzL=2384 bw=15
+  p=158 rel_err=2.76e-11 t=0.0124s nnzL=3776 bw=15
+  p=251 rel_err=1.72e-12 t=0.0232s nnzL=6008 bw=15
+  p=398 rel_err=1.11e-13 t=0.0358s nnzL=9536 bw=15
+  p=631 rel_err=4.58e-15 t=0.0569s nnzL=15128 bw=15
+
+[mathieu] GL4 (order 8)
+  p=1 rel_err=1.71e+00 t=0.000206s nnzL=10 bw=0
+  p=2 rel_err=2.70e-01 t=0.000361s nnzL=40 bw=19
+  p=3 rel_err=2.05e-02 t=0.000598s nnzL=70 bw=19
+  p=4 rel_err=2.44e-03 t=0.000683s nnzL=100 bw=19
+  p=6 rel_err=1.07e-04 t=0.00106s nnzL=160 bw=19
+  p=10 rel_err=1.91e-06 t=0.00154s nnzL=280 bw=19
+  p=16 rel_err=4.55e-08 t=0.00235s nnzL=460 bw=19
+  p=25 rel_err=1.29e-09 t=0.00356s nnzL=730 bw=19
+  p=40 rel_err=3.01e-11 t=0.00571s nnzL=1180 bw=19
+  p=63 rel_err=7.97e-13 t=0.0122s nnzL=1870 bw=19
+  p=100 rel_err=2.54e-14 t=0.0136s nnzL=2980 bw=19
+  p=158 rel_err=2.69e-15 t=0.0235s nnzL=4720 bw=19
+
+[mathieu] GL5 (order 10)
+  p=1 rel_err=1.20e+00 t=0.000258s nnzL=12 bw=0
+  p=2 rel_err=2.77e-02 t=0.000515s nnzL=48 bw=23
+  p=3 rel_err=7.21e-04 t=0.000737s nnzL=84 bw=23
+  p=4 rel_err=4.67e-05 t=0.000978s nnzL=120 bw=23
+  p=6 rel_err=8.96e-07 t=0.00148s nnzL=192 bw=23
+  p=10 rel_err=5.70e-09 t=0.00309s nnzL=336 bw=23
+  p=16 rel_err=5.28e-11 t=0.00394s nnzL=552 bw=23
+  p=25 rel_err=6.14e-13 t=0.00536s nnzL=876 bw=23
+  p=40 rel_err=4.74e-15 t=0.0161s nnzL=1416 bw=23
+
+[mathieu] GL6 (order 12)
+  p=1 rel_err=5.79e-01 t=0.000373s nnzL=14 bw=0
+  p=2 rel_err=1.55e-03 t=0.000685s nnzL=56 bw=27
+  p=3 rel_err=1.79e-05 t=0.00102s nnzL=98 bw=27
+  p=4 rel_err=6.50e-07 t=0.00151s nnzL=140 bw=27
+  p=6 rel_err=5.53e-09 t=0.00214s nnzL=224 bw=27
+  p=10 rel_err=1.27e-11 t=0.00534s nnzL=392 bw=27
+  p=16 rel_err=4.34e-14 t=0.0137s nnzL=644 bw=27
+  p=25 rel_err=1.26e-15 t=0.00794s nnzL=1022 bw=27
+
+[mathieu] GL7 (order 14)
+  p=1 rel_err=1.40e-01 t=0.000546s nnzL=16 bw=0
+  p=2 rel_err=6.86e-05 t=0.000875s nnzL=64 bw=31
+  p=3 rel_err=3.77e-07 t=0.00168s nnzL=112 bw=31
+  p=4 rel_err=7.80e-09 t=0.0018s nnzL=160 bw=31
+  p=6 rel_err=2.97e-11 t=0.00264s nnzL=256 bw=31
+  p=10 rel_err=2.31e-14 t=0.00422s nnzL=448 bw=31
+  p=16 rel_err=1.74e-15 t=0.00676s nnzL=736 bw=31
+
+[mathieu] GL8 (order 16)
+  p=1 rel_err=6.61e-03 t=0.00059s nnzL=18 bw=0
+  p=2 rel_err=2.91e-06 t=0.00125s nnzL=72 bw=35
+  p=3 rel_err=7.79e-09 t=0.002s nnzL=126 bw=35
+  p=4 rel_err=9.21e-11 t=0.00266s nnzL=180 bw=35
+  p=6 rel_err=1.57e-13 t=0.0038s nnzL=288 bw=35
+  p=10 rel_err=3.16e-16 t=0.00607s nnzL=504 bw=35
+
+[mathieu] GL9 (order 18)
+  p=1 rel_err=6.22e-04 t=0.000693s nnzL=20 bw=0
+  p=2 rel_err=1.30e-07 t=0.00149s nnzL=80 bw=39
+  p=3 rel_err=1.60e-10 t=0.00242s nnzL=140 bw=39
+  p=4 rel_err=1.07e-12 t=0.00303s nnzL=200 bw=39
+  p=6 rel_err=7.90e-16 t=0.00461s nnzL=320 bw=39
+
+[mathieu] GL10 (order 20)
+  p=1 

@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using SemiDiscretizationMethod
 using StaticArrays
 using KrylovKit
@@ -10,13 +10,13 @@ using LinearAlgebra
 T = 2π
 τ = 2π
 
-# MFCM Problem
+# SOSD Problem
 function create_mathieu_mfcm(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, sin(4π / T * t)])
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, sin(4π / T * t)])
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 # SDM Problem
@@ -45,12 +45,12 @@ function get_mu_sdm(p)
     return spectralRadiusOfMapping(DiscreteMapping_LR(prob_sdm, method, τ, n_steps=p))
 end
 
-println("Comparing MFCM and SDM Results:")
+println("Comparing SOSD and SDM Results:")
 ps = [40, 80, 160, 320, 640]
 
 for p in ps
     mu_sdm = get_mu_sdm(p)
     mu_gl2 = get_mu_mfcm(p, GL(2))
     mu_gl4 = get_mu_mfcm(p, GL(4))
-    @printf("p=%3d | SDM: %.10f | MFCM GL2: %.10f | MFCM GL4: %.10f\n", p, mu_sdm, mu_gl2, mu_gl4)
+    @printf("p=%3d | SDM: %.10f | SOSD GL2: %.10f | SOSD GL4: %.10f\n", p, mu_sdm, mu_gl2, mu_gl4)
 end

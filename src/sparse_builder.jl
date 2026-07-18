@@ -18,7 +18,7 @@ function build_explicit_matrices(m::MonodromyMap{D, S, T, W, BSIZE, CE}) where {
         for k in 1:length(sys_mats.M_del)
             for j in 1:S
                 m_idx = sys_mats.delay_indices[k][n][j]; weights = sys_mats.delay_weights[k][n][j]; M_kj = sys_mats.M_del[k][n][j]
-                if strategy == MFCM.collocation || strategy == MFCM.denseoutput
+                if strategy == SOSD.collocation || strategy == SOSD.denseoutput
                     for block_rel in [0, 1]
                         b_idx = m_idx + block_rel - (r + 1)
                         if block_rel == 0

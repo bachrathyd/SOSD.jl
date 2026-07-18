@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Plots
 using LinearAlgebra
 

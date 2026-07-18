@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Plots
 using LinearAlgebra
 using StaticArrays
@@ -20,7 +20,7 @@ function verify_ie_interpolation()
     # Step 1:
     y2 = f_ref(2*h)
     
-    grid = MFCM.TimeGrid([h, 2*h, 3*h])
+    grid = SOSD.TimeGrid([h, 2*h, 3*h])
     prob = LDDEProblem{1, Float64}(ProportionalMX(t->zeros(1,1)), DelayMX[], Additive(t->zeros(1)))
     sys_mats = build_system_matrices(prob, grid, tableau, r)
     
@@ -58,7 +58,7 @@ function verify_ie_interpolation()
         theta = rel_idx - m_idx
         
         weights = m.tableau.ce(theta)
-        y = MFCM.fetch_delayed_state(m_idx, weights, history, BSIZE, Val(1), Val(1))[1]
+        y = SOSD.fetch_delayed_state(m_idx, weights, history, BSIZE, Val(1), Val(1))[1]
         push!(y_interp, y)
     end
     

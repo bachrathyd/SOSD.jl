@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Test
 using StaticArrays
 using LinearAlgebra

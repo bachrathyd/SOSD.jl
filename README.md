@@ -1,6 +1,15 @@
-# Multiplication-Free Collocation Method (MFCM)
+# SOSD.jl — Solution-Operator Semi-Discretization
 
 A high-performance Julia package for the stability analysis of time-periodic Delayed Differential Equations (DDEs).
+
+SOSD generalizes the multiplication-free semi-discretization method (MFSD) to
+arbitrary per-step order: the one-period **solution operator** is represented as a
+sparse, banded pair (Φ_R, Φ_L) whose per-step blocks embed any Runge–Kutta or
+collocation scheme through its Butcher tableau — from the classical
+piecewise-constant semi-discretization step up to superconvergent Gauss stages —
+while keeping O(p) time complexity.
+
+*(Package formerly developed under the working name MFCM.)*
 
 ## Features
 - **O(p^1) Time Complexity:** Avoids explicit construction of dense monodromy matrices
@@ -38,7 +47,7 @@ Pkg.activate(".")
 
 ## Quick Start
 ```julia
-using MFCM
+using SOSD
 using StaticArrays
 using KrylovKit
 

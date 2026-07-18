@@ -6,7 +6,7 @@
 # Also includes the single-step "spectral corner" (p = 1, s large): the
 # degenerate case where one collocation step spans the whole period.
 
-(@isdefined MFCM_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); MFCM_HARNESS_LOADED = true)
+(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
 
 even_p(x) = max(2, 2 * round(Int, x / 2))
 
@@ -26,7 +26,7 @@ function sweep_ps(sys::BenchSystem, ss::Vector{Int}, ps_of_s::Function; time_cap
             print("  p=$p ")
             local mu, tm, ts, nrep, stats
             try
-                mu, tm, ts, nrep = time_stats(() -> mfcm_mu(sys, p, tab); budget=1.5, min_reps=3, max_reps=8)
+                mu, tm, ts, nrep = time_stats(() -> sosd_mu(sys, p, tab); budget=1.5, min_reps=3, max_reps=8)
                 stats = matrix_stats(sys, p, tab)
             catch e
                 println("FAILED: ", sprint(showerror, e)[1:min(end,160)])
@@ -60,7 +60,7 @@ let sys = sys_m
         local mu, tm, ts, nrep
         try
             tab = GL(s)
-            mu, tm, ts, nrep = time_stats(() -> mfcm_mu(sys, 1, tab); budget=1.5, min_reps=3, max_reps=8)
+            mu, tm, ts, nrep = time_stats(() -> sosd_mu(sys, 1, tab); budget=1.5, min_reps=3, max_reps=8)
         catch e
             println("  s=$s FAILED: ", sprint(showerror, e)[1:min(end,160)])
             continue

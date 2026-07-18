@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using Plots
 using StaticArrays
 using KrylovKit

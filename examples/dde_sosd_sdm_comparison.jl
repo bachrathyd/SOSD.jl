@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using SemiDiscretizationMethod
 using Plots
 using StaticArrays
@@ -12,13 +12,13 @@ using DataInterpolations
 using LinearMaps
 using Serialization
 
-# --- Mathieu Problem Definition (MFCM) ---
-function createMathieuProblem_MFCM(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+# --- Mathieu Problem Definition (SOSD) ---
+function createMathieuProblem_SOSD(δ, ε, b0, a1; T=2π)
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, 0.0])
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, 0.0])
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 # --- Mathieu Problem Definition (SDM) ---
@@ -143,11 +143,11 @@ function run_comprehensive_benchmark()
     δ, ε, b0, a1, τ, T = 3.0, 0.2, -0.15, 0.1, 2π, 2π
     params = (δ, ε, b0, a1, τ, T); D = 2
     filename = "matrix_free_benchmark.png"
-    main_title = "Progressive Benchmark: DDE Solvers vs MFCM vs SDM"
+    main_title = "Progressive Benchmark: DDE Solvers vs SOSD vs SDM"
 
     println("Computing high-precision reference values...")
     p_ref = 1000; tableau_ref = GL(10)
-    prob_ref = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T); grid_ref = TimeGrid(collect(range(0.0, T, length=p_ref+1)))
+    prob_ref = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T); grid_ref = TimeGrid(collect(range(0.0, T, length=p_ref+1)))
     sys_ref = build_system_matrices(prob_ref, grid_ref, tableau_ref, p_ref)
     m_ref = SparseMonodromyMap(MonodromyMap(prob_ref, grid_ref, tableau_ref, sys_ref, p_ref, p_ref, (p_ref+1)*11*D))
     vals_ref, _ = eigsolve(m_ref, rand(ComplexF64, m_ref.state_size), 1, :LM)
@@ -157,9 +157,9 @@ function run_comprehensive_benchmark()
     
     all_solvers = [
         ("SDM (O2)", :SDM, 2, false),
-        ("MFCM GL1 (O1)", :MFCM_GL1, 1, true),
-        ("MFCM GL3 (O6)", :MFCM_GL3, 6, true),
-        ("MFCM RK4 (O4)", :MFCM_RK4, 4, false),
+        ("SOSD GL1 (O1)", :SOSD_GL1, 1, true),
+        ("SOSD GL3 (O6)", :SOSD_GL3, 6, true),
+        ("SOSD RK4 (O4)", :SOSD_RK4, 4, false),
         # DDE Explicit
         ("DDE Euler (O1)", DifferentialEquations.Euler(), 1, false),
         ("DDE Heun (O2)", DifferentialEquations.Heun(), 2, false),
@@ -208,23 +208,23 @@ function run_comprehensive_benchmark()
                     t = @belapsed run_sdm_bench($p, $prob_s, $method, $T)
                     stats = @timed run_sdm_bench(p, prob_s, method, T)
                     val = stats.value; bts = stats.bytes
-                elseif alg == :MFCM_GL1
-                    prob = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
+                elseif alg == :SOSD_GL1
+                    prob = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
                     run_mfcm_bench(p, p, prob, grid, GL(1), 4) 
                     t = @belapsed run_mfcm_bench($p, $p, $prob, $grid, $(GL(1)), 4)
                     stats = @timed run_mfcm_bench(p, p, prob, grid, GL(1), 4)
                     val = stats.value; bts = stats.bytes
-                elseif alg == :MFCM_GL3
-                    prob = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
+                elseif alg == :SOSD_GL3
+                    prob = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
                     run_mfcm_bench(p, p, prob, grid, GL(3), 8)
                     t = @belapsed run_mfcm_bench($p, $p, $prob, $grid, $(GL(3)), 8)
                     stats = @timed run_mfcm_bench(p, p, prob, grid, GL(3), 8)
                     val = stats.value; bts = stats.bytes
-                elseif alg == :MFCM_RK4
-                    prob = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
-                    run_mfcm_bench(p, p, prob, grid, MFCM.RK4(), 10)
-                    t = @belapsed run_mfcm_bench($p, $p, $prob, $grid, $(MFCM.RK4()), 10)
-                    stats = @timed run_mfcm_bench(p, p, prob, grid, MFCM.RK4(), 10)
+                elseif alg == :SOSD_RK4
+                    prob = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T); grid = TimeGrid(collect(range(0.0, T, length=p+1)))
+                    run_mfcm_bench(p, p, prob, grid, SOSD.RK4(), 10)
+                    t = @belapsed run_mfcm_bench($p, $p, $prob, $grid, $(SOSD.RK4()), 10)
+                    stats = @timed run_mfcm_bench(p, p, prob, grid, SOSD.RK4(), 10)
                     val = stats.value; bts = stats.bytes
                 else
                     run_dde_bench(p, params, alg, s_order, is_implicit) 
@@ -254,7 +254,7 @@ function run_comprehensive_benchmark()
             if isempty(ps_v); continue; end
             c = color_palette[idx]; lw = 1.0; ls = :solid
             if name == "SDM (O2)"; c = :black; lw = 3.0; end
-            if contains(name, "MFCM"); lw = 2.0; end
+            if contains(name, "SOSD"); lw = 2.0; end
             if contains(name, "Imp") || contains(name, "Radau") || contains(name, "Rodas") || contains(name, "Trap") || contains(name, "Rosen"); ls = :dash; end
             v_idx = findall(x -> x > 0, es_v); ps_p, ts_p, es_p, ms_p = ps_v[v_idx], ts_v[v_idx], max.(es_v[v_idx], 1e-16), ms_v[v_idx]
             label = name

@@ -1,6 +1,6 @@
-name = "MFCM"
-uuid = "e93c12a4-b5d7-4f8a-9e6b-0c1d2e3f4a5b"
-version = "0.1.1"
+name = "SOSD"
+uuid = "a8518967-a96f-44f7-81cf-f0e26ec34142"
+version = "0.2.0"
 authors = ["Daniel Bachrathy", "HTSykora"]
 
 [deps]

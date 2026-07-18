@@ -5,7 +5,7 @@
 # Usage:  julia --project=benchmark benchmark/run_all.jl
 
 include(joinpath(@__DIR__, "harness.jl"))
-MFCM_HARNESS_LOADED = true
+SOSD_HARNESS_LOADED = true
 
 write_env_report()
 t0 = time()

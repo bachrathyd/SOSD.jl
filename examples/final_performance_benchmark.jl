@@ -1,4 +1,4 @@
-using MFCM
+using SOSD
 using SemiDiscretizationMethod
 using Plots
 using StaticArrays
@@ -9,12 +9,12 @@ using LinearAlgebra
 using Printf
 
 # --- Mathieu Problem Definition ---
-function createMathieuProblem_MFCM(δ, ε, b0, a1; T=2π)
-    AMx = MFCM.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
+function createMathieuProblem_SOSD(δ, ε, b0, a1; T=2π)
+    AMx = SOSD.ProportionalMX(t -> @SMatrix [0.0 1.0; -δ-ε*cos(2π / T * t) -a1])
     τ1 = t -> 2π
-    BMx1 = MFCM.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
-    cVec = MFCM.Additive(t -> @SVector [0.0, 0.0]) # No additive term for stability
-    MFCM.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
+    BMx1 = SOSD.DelayMX(τ1, t -> @SMatrix [0.0 0.0; b0 0.0])
+    cVec = SOSD.Additive(t -> @SVector [0.0, 0.0]) # No additive term for stability
+    SOSD.LDDEProblem{2, Float64}(AMx, [BMx1], cVec)
 end
 
 function createMathieuProblem_SDM(δ, ε, b0, a1; T=2π)
@@ -46,13 +46,13 @@ function run_final_benchmark()
     D = 2
     
     filename = "matrix_free_benchmark.png"
-    main_title = "MFCM vs SDM Performance & Complexity Analysis"
+    main_title = "SOSD vs SDM Performance & Complexity Analysis"
 
     println("Computing high-precision reference values...")
     p_ref = 1000
     r_ref = p_ref
     tableau_ref = GL(10)
-    prob_ref = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T)
+    prob_ref = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T)
     grid_ref = TimeGrid(collect(range(0.0, T, length=p_ref+1)))
     sys_ref = build_system_matrices(prob_ref, grid_ref, tableau_ref, r_ref)
     m_ref_lazy = MonodromyMap(prob_ref, grid_ref, tableau_ref, sys_ref, p_ref, r_ref, (r_ref+1)*(11)*D)
@@ -66,11 +66,11 @@ function run_final_benchmark()
     ps = unique(sort([10, 15, 20, 25, 30, round.(Int, 10 .^ (1.5:0.25:5))...]))
     
     solvers = [
-        ("MFCM RK4", RK4(), 4),
-        ("MFCM GL1 (IE)", GL(1), 1),
-        ("MFCM GL2", GL(2), 2),
-        ("MFCM GL3", GL(3), 3),
-        ("MFCM GL5", GL(5), 5),
+        ("SOSD RK4", RK4(), 4),
+        ("SOSD GL1 (IE)", GL(1), 1),
+        ("SOSD GL2", GL(2), 2),
+        ("SOSD GL3", GL(3), 3),
+        ("SOSD GL5", GL(5), 5),
     ]
     
     results = Dict()
@@ -108,7 +108,7 @@ function run_final_benchmark()
     println()
     results["SDM (O2)"] = (Float64.(sdm_ps), Float64.(sdm_times), Float64.(sdm_errors), Float64.(sdm_mems))
 
-    # --- 2. Benchmark MFCM Solvers ---
+    # --- 2. Benchmark SOSD Solvers ---
     for (name, tab, S) in solvers
         println("\nBenchmarking $name...")
         times, errors, p_vals, mems = [], [], [], []
@@ -119,7 +119,7 @@ function run_final_benchmark()
             print("$p ")
             try
                 h = T / p; r = p
-                prob = createMathieuProblem_MFCM(δ, ε, b0, a1, T=T)
+                prob = createMathieuProblem_SOSD(δ, ε, b0, a1, T=T)
                 grid = TimeGrid(collect(range(0.0, T, length=p+1)))
                 BSIZE = (S + 1) * D
                 

@@ -528,12 +528,18 @@ $\varepsilon \propto (T/p)^{2s}$, predicts the optimum
   \label{eq:sweetspot}
 \end{equation}
 i.e.\ even a $10^{-12}$ accuracy target asks for only $s^\ast \approx 5$
-Gauss stages --- moderate order, many steps. The measured optima
-(\TODOnum{Mathieu: $s^\ast=\ldots$; beam: $s^\ast=\ldots$ at
-$\varepsilon = 10^{-5},10^{-8},10^{-11}$}) confirm both the U-shape and its
-logarithmic drift with $\varepsilon$, and the beam shifts the optimum to
-lower order than the small Mathieu system, as predicted by the
-$d^2$-scaling of the fill.
+Gauss stages --- moderate order, many steps. This asymptotic model applies
+when the fill actually binds. For the small, smooth Mathieu system it does
+not: the measured optima sit at $s^\ast = 5$--$8$ with as few as
+$p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $3.8$\,ms with
+$s = 8$, $p = 6$, $\mathrm{nnz}(\mathbf{\Phi}_\mathrm{L}) = 288$) --- for
+low-demand problems the whole matrix is tiny and the near-spectral corner is
+optimal. The fill term takes over exactly in the contrast cases:
+the measured per-step fill grows from $12$ nonzeros at $s=1$ to $112$ at
+$s=20$ already on the Mathieu system, and for the high-demand and
+high-dimensional systems of Section~\ref{sec:contrast} the optimum falls
+back to moderate order.
+\TODOnum{beam + turning optima from final CSVs}
 
 \subsection{Contrasting resolution demands: where the banded route wins}
 \label{sec:contrast}
@@ -578,8 +584,14 @@ $q$, i.e.\ additional stages and fill, whereas the collocation families carry
 their matching-order continuous extension for free. In the measured
 work--precision curves the explicit methods are therefore competitive only in
 the low-accuracy regime ($\varepsilon \gtrsim 10^{-4}$), and Gauss stages
-dominate everywhere beyond it. \TODOnum{quantify crossover from
-work-precision CSVs after suite completion}
+dominate everywhere beyond it. On the FEM beam the contrast is stark:
+GL3 reaches $\varepsilon = 10^{-4}$ in $5$\,ms and $10^{-6}$ in $13$\,ms,
+where the order-2 baseline needs $126$\,ms and $735$\,ms
+($25\times$--$57\times$), explicit RK5 needs $3.7$\,s for $10^{-6}$
+($280\times$ slower than GL3), and $\varepsilon = 10^{-8}$ is reached by the
+Gauss variants alone --- the explicit family is additionally barred from
+coarse grids by its CFL-like stability bound on this stiff system
+(Appendix~\ref{app:morewp}).
 
 \subsection{Remark on scope: smooth systems}
 \label{sec:nonsmooth}

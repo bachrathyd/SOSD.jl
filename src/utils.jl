@@ -80,7 +80,10 @@ back to the heap-allocated [`build_system_matrices_dense`](@ref) above that
 (StaticArrays inversion of large `SMatrix` types is prohibitively slow to compile).
 """
 function build_system_matrices(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, tableau::RKTableau{S, T, CE}, r::Int; static_threshold::Int=32) where {D, T, S, CE}
-    if S * D > static_threshold
+    # Dense fallback when either the stage-coupled dimension is large or the
+    # state dimension alone is (StaticArrays inv/unrolling compile cost grows
+    # steeply with D even for few stages).
+    if S * D > static_threshold || D > 12
         return build_system_matrices_dense(problem, grid, tableau, r)
     end
     n_steps = length(grid.h)

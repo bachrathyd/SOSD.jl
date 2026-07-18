@@ -57,7 +57,7 @@ function chart(make_sys, xs, ys, s, p, name, xlab, ylab, ttl_base)
     n = length(xs) * length(ys)
 
     L = log10.(max.(R, 1e-12))
-    ttl = @sprintf("%s — total CPU: %.0f s (%.1f ms/point)", ttl_base, wall, 1000wall/n)
+    ttl = @sprintf("%s — %.0f s (%.1f ms/pt)", ttl_base, wall, 1000wall/n)
     # reversed RdBu: blue = stable (rho < 1), red = unstable
     plt = heatmap(xs, ys, L, c=cgrad(:RdBu, rev=true), colorbar_title="\nlog10 rho",
                   xlabel=xlab, ylabel=ylab, title=ttl, clims=(-2, 2))
@@ -75,7 +75,7 @@ w1, n1 = chart((δ, b) -> make_mathieu(δ=δ, ε=1.0, b0=b, a1=0.1),
                collect(range(-1.0, 5.0, length=301)),
                collect(range(-2.0, 1.5, length=301)),
                7, 2, "mathieu", "delta", "b",
-               "Delayed Mathieu — 301×301, GL7, p=2")
+               "Delayed Mathieu, GL7, p=2")
 
 # --- SSV turning, intricate: zeta=0.02, A_SSV=0.3, adaptive p(Omega) --------
 p_ssv(Ω) = clamp(ceil(Int, 16.0 / Ω), 60, 400)
@@ -83,7 +83,7 @@ w2, n2 = chart((Ω, kw) -> make_turning_ssv(kw=kw, Ω=Ω, ζ=0.02, ASSV=0.3),
                collect(range(0.08, 0.40, length=151)),
                collect(range(0.001, 0.20, length=151)),
                4, p_ssv, "turning", "Omega", "k_w",
-               "SSV turning (ζ=0.02, A=0.3) — 151×151, GL4, p=p(Ω)")
+               "SSV turning (ζ=0.02, A=0.3), GL4, p=p(Ω)")
 
 open(joinpath(PAPER_FIGS, "chart_times.tex"), "w") do io
     @printf(io, "\\newcommand{\\chartTimeMathieu}{%.0f}\n", w1)

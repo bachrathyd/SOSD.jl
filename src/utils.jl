@@ -79,12 +79,14 @@ the stage-coupled dimension `S*D ≤ static_threshold`, and automatically falls
 back to the heap-allocated [`build_system_matrices_dense`](@ref) above that
 (StaticArrays inversion of large `SMatrix` types is prohibitively slow to compile).
 """
-function build_system_matrices(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, tableau::RKTableau{S, T, CE}, r::Int; static_threshold::Int=32) where {D, T, S, CE}
+function build_system_matrices(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, tableau::RKTableau{S, T, CE}, r::Int; static_threshold::Int=32,
+                               mass_matrix::Union{Nothing, AbstractMatrix}=nothing) where {D, T, S, CE}
     # Dense fallback when either the stage-coupled dimension is large or the
     # state dimension alone is (StaticArrays inv/unrolling compile cost grows
-    # steeply with D even for few stages).
-    if S * D > static_threshold || D > 12
-        return build_system_matrices_dense(problem, grid, tableau, r)
+    # steeply with D even for few stages). Mass matrices are only supported by
+    # the dense path.
+    if S * D > static_threshold || D > 12 || mass_matrix !== nothing
+        return build_system_matrices_dense(problem, grid, tableau, r; mass_matrix=mass_matrix)
     end
     n_steps = length(grid.h)
     BSIZE = (S + 1) * D
@@ -172,20 +174,41 @@ function build_system_matrices(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, ta
 end
 
 """
-    build_system_matrices_dense(problem, grid, tableau, r)
+    build_system_matrices_dense(problem, grid, tableau, r; mass_matrix=nothing)
 
 Heap-allocated (`Matrix`-based) variant of [`build_system_matrices`](@ref) for
 systems whose stage-coupled dimension `S*D` is too large for StaticArrays
 (high-dimensional FEM models, very high collocation orders). Mathematically
 identical to the static path; uses an LU factorization of the stage-coupling
 matrix instead of an explicit `SMatrix` inverse.
+
+With `mass_matrix = M` the descriptor form `M ẋ = A(t)x + Σ B_k x(t-τ_k) + c`
+is assembled: `M` replaces the identity blocks of the stage system. A regular
+`M` works with any tableau (one extra LU solve per step for the update row);
+a **singular** `M` (delay differential-algebraic system) requires a stiffly
+accurate tableau (Radau IIA, Lobatto IIIA), for which the update row
+`x_{n+1} = Y_s` needs no inversion of `M` at all.
 """
-function build_system_matrices_dense(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, tableau::RKTableau{S, T, CE}, r::Int) where {D, T, S, CE}
+function build_system_matrices_dense(problem::LDDEProblem{D, T}, grid::TimeGrid{T}, tableau::RKTableau{S, T, CE}, r::Int;
+                                     mass_matrix::Union{Nothing, AbstractMatrix}=nothing) where {D, T, S, CE}
     n_steps = length(grid.h)
     BSIZE = (S + 1) * D
     W = (tableau.strategy == endpoint) ? tableau.order : S + 2
     SD = S * D
     n_del = length(problem.B)
+
+    has_mass = mass_matrix !== nothing
+    Mm = has_mass ? Matrix{T}(mass_matrix) : Matrix{T}(I, D, D)
+    stiffly_accurate = abs(tableau.c[end] - 1) < 1e-12 &&
+                       all(abs.(collect(tableau.a[end, :]) .- collect(tableau.b)) .< 1e-12)
+    FM = nothing
+    if has_mass && !stiffly_accurate
+        # regular-M update row needs M^{-1}; refuse silently-singular cases
+        FM = lu(Mm; check=false)
+        issuccess(FM) || error("Singular mass matrix requires a stiffly accurate tableau " *
+                               "(Radau IIA or Lobatto IIIA), whose update row x_{n+1} = Y_s " *
+                               "avoids inverting M.")
+    end
 
     M_prop = Vector{Matrix{T}}(undef, n_steps)
     M_del = [Vector{Vector{Matrix{T}}}(undef, n_steps) for _ in 1:n_del]
@@ -210,18 +233,27 @@ function build_system_matrices_dense(problem::LDDEProblem{D, T}, grid::TimeGrid{
                 @views M_local[(i-1)*D+1:i*D, (j-1)*D+1:j*D] .= (-aij) .* A_stages[j]
             end
         end
-        for idx in 1:SD; M_local[idx, idx] += one(T); end
+        for j in 1:S
+            @views M_local[(j-1)*D+1:j*D, (j-1)*D+1:j*D] .+= Mm
+        end
         F = lu!(M_local)
 
         # Proportional block: response of [y_{n+1}; Y_1..Y_S] to y_n
         RHS_y = zeros(T, SD, D)
-        for i in 1:S, d in 1:D; RHS_y[(i-1)*D + d, d] = one(T); end
+        for i in 1:S
+            @views RHS_y[(i-1)*D+1:i*D, :] .= Mm
+        end
         Y_from_y = F \ RHS_y
 
         M_p = zeros(T, BSIZE, D)
-        y_next_from_y = Matrix{T}(I, D, D)
-        for j in 1:S
-            @views y_next_from_y .+= (h_n * tableau.b[j]) .* (A_stages[j] * Y_from_y[(j-1)*D+1:j*D, :])
+        y_next_from_y = if stiffly_accurate && has_mass
+            copy(Y_from_y[(S-1)*D+1:S*D, :])          # x_{n+1} = Y_s, no M-solve
+        else
+            acc = zeros(T, D, D)
+            for j in 1:S
+                @views acc .+= (h_n * tableau.b[j]) .* (A_stages[j] * Y_from_y[(j-1)*D+1:j*D, :])
+            end
+            Matrix{T}(I, D, D) .+ (has_mass ? (FM \ acc) : acc)
         end
         M_p[1:D, :] .= y_next_from_y
         M_p[D+1:end, :] .= Y_from_y
@@ -242,11 +274,16 @@ function build_system_matrices_dense(problem::LDDEProblem{D, T}, grid::TimeGrid{
                     end
                 end
                 Y_from_del = F \ RHS_del
-                y_next_from_del = zeros(T, D, D)
-                for j in 1:S
-                    term = A_stages[j] * @view Y_from_del[(j-1)*D+1:j*D, :]
-                    if j == stage_idx; term .+= B_stage; end
-                    y_next_from_del .+= (h_n * tableau.b[j]) .* term
+                y_next_from_del = if stiffly_accurate && has_mass
+                    copy(Y_from_del[(S-1)*D+1:S*D, :])
+                else
+                    acc = zeros(T, D, D)
+                    for j in 1:S
+                        term = A_stages[j] * @view Y_from_del[(j-1)*D+1:j*D, :]
+                        if j == stage_idx; term .+= B_stage; end
+                        acc .+= (h_n * tableau.b[j]) .* term
+                    end
+                    has_mass ? (FM \ acc) : acc
                 end
                 M_d = zeros(T, BSIZE, D)
                 M_d[1:D, :] .= y_next_from_del
@@ -283,9 +320,14 @@ function build_system_matrices_dense(problem::LDDEProblem{D, T}, grid::TimeGrid{
             end
         end
         Y_from_c = F \ RHS_c
-        y_next_from_c = zeros(T, D)
-        for j in 1:S
-            y_next_from_c .+= (h_n * tableau.b[j]) .* (A_stages[j] * @view(Y_from_c[(j-1)*D+1:j*D]) .+ cs[j])
+        y_next_from_c = if stiffly_accurate && has_mass
+            copy(Y_from_c[(S-1)*D+1:S*D])
+        else
+            acc = zeros(T, D)
+            for j in 1:S
+                acc .+= (h_n * tableau.b[j]) .* (A_stages[j] * @view(Y_from_c[(j-1)*D+1:j*D]) .+ cs[j])
+            end
+            has_mass ? (FM \ acc) : acc
         end
         c_vec = zeros(T, BSIZE)
         c_vec[1:D] .= y_next_from_c

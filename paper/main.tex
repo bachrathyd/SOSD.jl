@@ -51,7 +51,7 @@ interpolated by the continuous extension of the same scheme. In the limit of
 a single ultra-high-order step, the framework degenerates to the known global
 spectral method; between the two extremes lies a continuum in which per-step
 order is traded against matrix sparsity. Because the cost at fixed step count
-grows polynomially with the stage number (measured exponents $1.3$--$1.6$
+grows polynomially with the stage number (measured exponents $1.3$--$1.8$
 for the rank-one delay couplings typical of machining and feedback systems,
 up to cubic for dense coupling) while the $h$-refinement cost is exactly
 linear, the CPU-time optimum for a prescribed accuracy is a problem-dependent
@@ -397,9 +397,6 @@ positive prescription:
 \section{Numerical results}
 \label{sec:results}
 
-\TODOnum{This section is populated from benchmark/results/*.csv; numbers
-below marked in red are placeholders until the full suite finishes.}
-
 \subsection{Test systems}
 \label{sec:systems}
 
@@ -472,8 +469,7 @@ Lobatto IIIA, $s{=}4$ & 6 & 6.0 & \\
   \figok{width=\linewidth}{figures/order_verification.pdf}
   \caption{Order verification on the delayed Mathieu equation: eigenvalue
   error versus resolution $p$ (log--log), one curve per method, dashed lines
-  showing fitted slopes. \TODOnum{regenerate from
-  results/order\_verification\_mathieu.csv}}
+  showing fitted slopes.}
   \label{fig:order}
 \end{figure}
 
@@ -491,8 +487,9 @@ this is decisive: GL5 and GL8 reach relative errors of $10^{-14}$ within
 milliseconds, whereas the order-2 baseline spends an order of magnitude more
 time to reach only $10^{-6}$. The same qualitative picture holds for the
 scalar seasonal model and for the spindle-speed-variation turning system
-(time-periodic delay, $p \gg r$ partitioning); the beam is discussed with
-the sweet-spot study below. \TODOnum{beam WP numbers after suite completes}
+(time-periodic delay, $p \gg r$ partitioning); the beam work--precision
+numbers appear in Section~\ref{sec:expl-impl} and
+Appendix~\ref{app:morewp}.
 
 For baseline parity with the predecessor \citep{Bachrathy2026},
 Figure~\ref{fig:classic} reproduces, in the present environment, the
@@ -530,9 +527,9 @@ order $s$ while choosing the smallest resolution $p$ that reaches
 $\varepsilon$ produces a U-shaped CPU-time curve: low orders need excessive
 $p$, high orders pay polynomially growing per-step cost --- stage
 elimination $\mathcal{O}\bigl((sd)^3\bigr)$ plus fill, with measured
-fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$) to $1.6$
-(beam, $d=28$) for rank-one delay coupling, and $k \to 3$ in the
-dense-coupling limit. A first-order cost model,
+fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$), $1.6$
+(beam, $d=28$) and $1.8$ (turning at $p = 6310$) for rank-one delay
+coupling, and $k \to 3$ in the dense-coupling limit. A first-order cost model,
 $\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (T/p)^{2s}$,
 predicts the optimum
 \begin{equation}
@@ -593,11 +590,11 @@ range:
         $T/T_\mathrm{osc} \approx 36$ (natural frequency high relative to
         the period), so \emph{any} method needs $p \gtrsim 500$ to resolve
         the dynamics at all. Here the banded moderate-order route wins
-        decisively: the fill of a high-order or single-step variant is
-        prohibitive at such $p$, while the $\mathcal{O}(p)$ banded solve is
-        unaffected. \TODOnum{turning sweet-spot numbers: optimal $(s^\ast,
-        p^\ast)$ and CPU vs high-order alternative, from
-        sweet\_spot\_turning\_ssv.csv}
+        decisively: the measured optima are $(s^\ast, p^\ast) = (4, 158)$
+        for $\varepsilon = 10^{-4}$ ($23$\,ms), $(4, 251)$ for $10^{-6}$
+        ($37$\,ms) and $(8, 251)$ for $10^{-12}$ ($229$\,ms) --- always
+        \emph{hundreds of steps}, never few, and the single-step corner is
+        not even computable within the CPU budget.
 \end{itemize}
 The resolution demand can be estimated a priori by a sampling (Shannon-type)
 argument. The discretization carries $N = p\,(s{+}1)$ solution samples per
@@ -622,8 +619,37 @@ CPU-optimal, and the single-step spectral corner (all $N$ samples in one
 dense block) is maximally penalized. Conversely, when the problem is
 easy ($N$ shrinks exponentially with growing $s$), higher order pays until
 the fill takes over. The same contrast governs high-dimensional systems: for
-the FEM beam ($d = 28$), memory --- the $d^2 s^3$ per-step fill --- caps the
+the FEM beam ($d = 28$), memory --- the per-step fill --- caps the
 affordable stage number before CPU time does.
+
+An important caveat on super-convergence follows.
+Figure~\ref{fig:cliff} shows the $p$-refinement direction explicitly: the
+error versus the total sample count $N = p(s{+}1)$ at several \emph{fixed}
+step counts, for the easy and the hard system. Super-convergence does
+\emph{not} mean that a handful of stages always suffices: below the
+resolution bound \eqref{eq:nyquist} the discrete spectrum is simply wrong
+(relative errors of order one), and the celebrated steep decay only begins
+\emph{after} $N$ crosses the bound --- a cliff whose position is set by the
+natural-oscillation content $\omega_{\max}T/2\pi$ of the system, not by the
+order of the method. All fixed-$p$ curves collapse onto the same cliff in
+$N$: for the Mathieu system it sits at $N \approx 10$--$30$, for the turning
+system at $N \approx 200$--$400$. Raising the order buys nothing until the
+sampling limit is met; after it, it buys everything. The order-verification
+and work--precision figures (error versus $p$ at fixed $s$,
+Figures~\ref{fig:order} and \ref{fig:wp-mathieu}, and
+Appendix~\ref{app:morewp} for the hard case) show the complementary
+$h$-refinement direction of the same surface.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/p_refinement_cliff.pdf}
+  \caption{$p$-refinement at fixed step counts: relative error versus total
+  sample count $N = p(s{+}1)$ for the easy (left) and hard (right) system.
+  The shaded band is the sampling estimate \eqref{eq:nyquist} with
+  $c = 5$--$10$. Super-convergent decay starts only beyond the band; its
+  position scales with $\omega_{\max}T/2\pi$, not with the method order.}
+  \label{fig:cliff}
+\end{figure}
 
 \subsection{Explicit versus implicit steps}
 \label{sec:expl-impl}
@@ -680,10 +706,10 @@ The measurements condense into a short decision rule for practitioners.
         cost is linear in $p$, so overshooting $p$ is cheap, whereas
         overshooting $s$ inflates the per-step cost polynomially.
   \item \textbf{Large systems: cap the order earlier.} The per-step fill
-        scales with $d^2 s^3$; for FEM-scale models ($d \gtrsim 20$) the
-        measured optima sit at $s = 2$--$3$ \TODOnum{confirm exact beam
-        optima}, and memory, not CPU, becomes the binding constraint for
-        $s \gtrsim 5$.
+        grows with $d^2$ and polynomially with $s$; for the FEM-scale beam
+        ($d = 28$) the measured optima sit at $s^\ast = 4$--$5$ with
+        $p^\ast \le 6$, and memory, not CPU, becomes the binding constraint
+        for larger stage numbers.
   \item \textbf{Avoid the spectral corner for engineering models.} The
         single-step (global collocation) mode is elegant for small, smooth,
         low-accuracy-run-count problems, but it abandons sparsity
@@ -766,7 +792,8 @@ gain $P\,E/(L/N)$, $P = 0.2$; wave speed $c = \sqrt{E/\rho}$,
 $T_\mathrm{sp} = L/c$, delay $\tau = 0.2\,T_\mathrm{sp}$, period
 $T = 0.4\,T_\mathrm{sp}$ ($\tau/T = 1/2$); constant unit force at the free
 end. In the act-and-wait configuration the feedback matrix is active only for
-$t < 0.8\,T$. \TODOnum{beam reference $\mu$ from final CSV}
+$t < 0.8\,T$. Reference multipliers: $\mu = 373.008322$ (smooth) and
+$\mu = 319.636074$ (act-and-wait, aligned-grid reference).
 
 \section{Additional work--precision studies}
 \label{app:morewp}
@@ -832,6 +859,64 @@ moderate-order variants.
   \label{fig:nonsmooth}
 \end{figure}
 
+\section{Structural remarks: delay--period ratios, sub-step delays, and mass
+matrices}
+\label{app:structure}
+
+\paragraph{Period-to-delay ratio.} The ratio $T/\tau_{\max}$ (i.e.\ $p$
+versus $r$) does \emph{not} affect the triangularity of
+$\mathbf{\Phi}_\mathrm{L}$; it only selects the splitting of the assembled
+system into the left/right pair (the $p-1 \gtrless r$ partitioning of
+\citealp{Bachrathy2026}). For $\tau_{\max} > T$ the output history window
+overlaps the input window and the map wraps part of the history through
+unchanged --- handled in the assembly, still triangular. The turning example
+($T/\tau \approx 9$) exercises the $p \gg r$ case throughout this paper.
+
+\paragraph{Sub-step delays.} What \emph{does} change the structure is the
+delay relative to the \emph{step}: if $\tau_k(t) \ge \Delta t$ everywhere,
+every delayed lookup references strictly earlier blocks and
+$\mathbf{\Phi}_\mathrm{L}$ is unit block-lower-triangular. If
+$\Delta t > \tau_k$ (steps coarser than a delay), stage lookups reach into
+the \emph{current} step: couplings appear inside the diagonal block, which
+becomes a non-identity (but small and invertible) matrix --- block forward
+substitution still applies at linear cost, but even an explicit tableau then
+requires a per-step solve (the classical ``overlapping'' phenomenon of DDE
+integration). Entries \emph{above} the diagonal would require advanced-type
+arguments ($\tau < 0$) and never arise for retarded systems.
+
+\paragraph{Mass matrices and differential--algebraic systems.} The
+descriptor form $\mathbf{M}\dot{\mathbf{x}} = \mathbf{A}(t)\mathbf{x} +
+\sum_k \mathbf{B}_k \mathbf{x}(t-\tau_k) + \mathbf{c}(t)$ replaces the
+identity blocks of the stage system \eqref{eq:kron} by $\mathbf{M}$:
+\begin{equation}
+  \Bigl[\mathbf{I}_{s}\otimes\mathbf{M}
+        - \Delta t\,(\mathbf{a}\otimes\mathbf{I}_d)\,
+        \boldsymbol{\mathcal{A}}_n\Bigr]\mathbf{Y}
+  = (\mathbf{1}_{s}\otimes\mathbf{M})\,\mathbf{x}_n + \ldots
+\end{equation}
+For regular $\mathbf{M}$ this is a drop-in replacement (the per-step LU
+absorbs $\mathbf{M}$; no explicit inverse is ever formed). For
+\emph{singular} $\mathbf{M}$ --- a delay differential--algebraic system ---
+the update row would require $\mathbf{M}^{-1}$, unless the tableau is
+\emph{stiffly accurate} ($c_s = 1$, $b_j = a_{sj}$: Radau~IIA,
+Lobatto~IIIA), in which case $\mathbf{x}_{n+1} = \mathbf{Y}_s$ and no
+inversion occurs; the generalized eigenvalue formulation also absorbs the
+infinite spectrum of the algebraic part naturally. As a minimal validation
+(implemented in \texttt{examples/dae\_mass\_matrix.jl}), the index-1 system
+\begin{equation*}
+  \dot{x}_1 = -x_1 + x_2 + \tfrac12 x_1(t-1), \qquad
+  \varepsilon \dot{x}_2 = \sin(t)\,x_1 - x_2,
+\end{equation*}
+with $\mathbf{M} = \mathrm{diag}(1, \varepsilon)$, reduces for
+$\varepsilon = 0$ to a scalar LDDE whose multiplier serves as reference.
+Radau~IIA ($s = 3$) applied to the \emph{singular} problem converges to this
+reference at high order (relative errors $3.8\cdot10^{-8}$,
+$4.0\cdot10^{-9}$, $3.4\cdot10^{-10}$, $1.6\cdot10^{-11}$ for
+$p = 25, 50, 100, 200$), and the singularly perturbed case
+$\varepsilon = 10^{-6}$ converges stably to the DAE limit within the
+expected $\mathcal{O}(\varepsilon)$ offset ($\approx 10^{-6}$). A full
+convergence theory for delay DAEs is beyond the scope of this paper.
+
 \section{Reproducibility}
 \label{app:repro}
 
@@ -846,8 +931,9 @@ accepted only when two resolutions of a GL(10) (small systems) or lazy GL(5)
 cross-validated against \textsf{SemiDiscretizationMethod.jl} on every system.
 Every figure regenerates via
 \texttt{julia --project=benchmark benchmark/run\_all.jl} followed by
-\texttt{benchmark/make\_figures.jl}. \TODOnum{repository URL + commit hash at
-submission}
+\texttt{benchmark/make\_figures.jl}. Repository:
+\url{https://github.com/bachrathyd/SOSD.jl}
+\TODOnum{insert commit hash at submission}.
 
 \bibliographystyle{SageH}
 \bibliography{references}

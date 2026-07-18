@@ -1,0 +1,263 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+======================================================================
+ SWEET SPOT — BEAM
+======================================================================
+
+[beam] GL1 (order 2)
+  p=2 rel_err=1.46e+01 t=0.00646s nnzL=1736 nnzR=1624
+  p=4 rel_err=8.97e-01 t=0.0011s nnzL=5096 nnzR=1848
+  p=6 rel_err=3.13e-01 t=0.00182s nnzL=8344 nnzR=1848
+  p=8 rel_err=1.62e-01 t=0.00436s nnzL=11760 nnzR=1904
+  p=12 rel_err=6.83e-02 t=0.00768s nnzL=18256 nnzR=2016
+  p=16 rel_err=3.77e-02 t=0.0102s nnzL=24864 nnzR=2016
+  p=22 rel_err=1.97e-02 t=0.00984s nnzL=34776 nnzR=2520
+  p=32 rel_err=9.26e-03 t=0.013s nnzL=51856 nnzR=2688
+  p=46 rel_err=4.47e-03 t=0.0126s nnzL=75040 nnzR=3360
+  p=64 rel_err=2.30e-03 t=0.0181s nnzL=104552 nnzR=4088
+  p=90 rel_err=1.16e-03 t=0.0328s nnzL=148232 nnzR=4872
+  p=128 rel_err=5.75e-04 t=0.0745s nnzL=210000 nnzR=5712
+  p=182 rel_err=2.85e-04 t=0.0618s nnzL=299880 nnzR=8120
+  p=256 rel_err=1.44e-04 t=0.106s nnzL=425152 nnzR=9968
+  p=362 rel_err=7.19e-05 t=0.136s nnzL=598935 nnzR=17304
+
+[beam] GL2 (order 4)
+  p=2 rel_err=4.94e-01 t=0.000968s nnzL=2688 nnzR=2688
+  p=4 rel_err=2.44e-02 t=0.00171s nnzL=7980 nnzR=3108
+  p=6 rel_err=4.50e-03 t=0.00355s nnzL=13188 nnzR=3444
+  p=8 rel_err=1.39e-03 t=0.00497s nnzL=18396 nnzR=3780
+  p=12 rel_err=2.69e-04 t=0.00721s nnzL=28812 nnzR=4452
+  p=16 rel_err=8.46e-05 t=0.00985s nnzL=39228 nnzR=5124
+  p=22 rel_err=2.35e-05 t=0.0102s nnzL=54852 nnzR=6132
+  p=32 rel_err=5.24e-06 t=0.0169s nnzL=80892 nnzR=7812
+  p=46 rel_err=1.11e-06 t=0.0242s nnzL=117348 nnzR=10164
+  p=64 rel_err=2.77e-07 t=0.0671s nnzL=164220 nnzR=13188
+  p=90 rel_err=5.28e-08 t=0.0445s nnzL=231924 nnzR=17556
+  p=128 rel_err=1.62e-08 t=0.109s nnzL=330820 nnzR=23939
+  p=182 rel_err=2.23e-09 t=0.157s nnzL=471487 nnzR=33012
+  p=256 rel_err=4.77e-08 t=0.258s nnzL=663924 nnzR=45444
+  p=362 rel_err=5.59e-08 t=0.349s nnzL=939828 nnzR=63249
+
+[beam] GL3 (order 6)
+  p=2 rel_err=2.98e-02 t=0.00165s nnzL=3696 nnzR=3696
+  p=4 rel_err=3.66e-04 t=0.00263s nnzL=10864 nnzR=4368
+  p=6 rel_err=3.08e-05 t=0.00457s nnzL=17920 nnzR=4928
+  p=8 rel_err=5.43e-06 t=0.00694s nnzL=24976 nnzR=5488
+  p=12 rel_err=4.89e-07 t=0.0101s nnzL=39088 nnzR=6608
+  p=16 rel_err=1.34e-07 t=0.0135s nnzL=53200 nnzR=7728
+  p=22 rel_err=1.86e-07 t=0.018s nnzL=74368 nnzR=9408
+  p=32 rel_err=2.09e-08 t=0.0293s nnzL=109648 nnzR=12208
+  p=46 rel_err=6.23e-08 t=0.0858s nnzL=159040 nnzR=16128
+  p=64 rel_err=4.46e-08 t=0.0942s nnzL=222544 nnzR=21168
+  p=90 rel_err=4.18e-08 t=0.117s nnzL=314187 nnzR=28447
+  p=128 rel_err=7.48e-09 t=0.183s nnzL=448247 nnzR=39087
+  p=182 rel_err=4.82e-08 t=0.277s nnzL=638816 nnzR=54208
+  p=256 rel_err=8.13e-08 t=0.439s nnzL=899760 nnzR=74926
+  p=362 rel_err=6.66e-08 t=0.654s nnzL=1272983 nnzR=104606
+
+[beam] GL4 (order 8)
+  p=2 rel_err=9.64e-04 t=0.003s nnzL=4760 nnzR=4760
+  p=4 rel_err=3.12e-06 t=0.00655s nnzL=13860 nnzR=5740
+  p=6 rel_err=9.00e-08 t=0.00893s nnzL=22820 nnzR=6580
+  p=8 rel_err=9.80e-08 t=0.0176s nnzL=31780 nnzR=7420
+  p=12 rel_err=3.53e-09 t=0.0171s nnzL=49700 nnzR=9100
+  p=16 rel_err=7.38e-08 t=0.02s nnzL=67620 nnzR=10780
+  p=22 rel_err=4.46e-08 t=0.0334s nnzL=94500 nnzR=13300
+  p=32 rel_err=2.73e-08 t=0.0486s nnzL=139300 nnzR=17500
+  p=46 rel_err=8.17e-08 t=0.12s nnzL=202020 nnzR=23380
+  p=64 rel_err=8.94e-08 t=0.144s nnzL=282642 nnzR=30940
+  p=90 rel_err=5.48e-09 t=0.201s nnzL=399140 nnzR=41860
+  p=128 rel_err=6.04e-09 t=0.325s nnzL=569191 nnzR=57818
+  p=182 rel_err=5.60e-08 t=0.743s nnzL=810786 nnzR=80498
+  p=256 rel_err=2.73e-09 t=0.97s nnzL=1142422 nnzR=111579
+  p=362 rel_err=5.23e-08 t=1.29s nnzL=1617126 nnzR=156094
+
+[beam] GL5 (order 10)
+  p=2 rel_err=2.03e-05 t=0.00379s nnzL=5880 nnzR=5880
+  p=4 rel_err=9.51e-08 t=0.00905s nnzL=16968 nnzR=7224
+  p=6 rel_err=3.72e-09 t=0.0114s nnzL=27888 nnzR=8400
+  p=8 rel_err=3.23e-08 t=0.0159s nnzL=38808 nnzR=9576
+  p=12 rel_err=4.00e-08 t=0.0255s nnzL=60648 nnzR=11928
+  p=16 rel_err=1.08e-07 t=0.0335s nnzL=82488 nnzR=14280
+  p=22 rel_err=5.44e-08 t=0.0892s nnzL=115248 nnzR=17808
+  p=32 rel_err=8.36e-08 t=0.11s nnzL=169848 nnzR=23688
+  p=46 rel_err=6.15e-08 t=0.147s nnzL=246286 nnzR=31920
+  p=64 rel_err=1.14e-08 t=0.19s nnzL=344568 nnzR=42504
+  p=90 rel_err=1.94e-07 t=0.318s nnzL=486528 nnzR=57792
+  p=128 rel_err=4.68e-09 t=0.553s nnzL=693899 nnzR=80136
+  p=182 rel_err=1.50e-08 t=0.778s nnzL=988225 nnzR=111886
+  p=256 rel_err=9.89e-08 t=1.57s nnzL=1391850 nnzR=155399
+  p=362 rel_err=4.66e-08 t=1.95s nnzL=1970444 nnzR=217721
+
+[beam] GL6 (order 12)
+  p=2 rel_err=3.75e-07 t=0.00929s nnzL=7056 nnzR=7056
+  p=4 rel_err=9.13e-09 t=0.0291s nnzL=20188 nnzR=8820
+  p=6 rel_err=4.01e-08 t=0.063s nnzL=33124 nnzR=10388
+  p=8 rel_err=6.44e-08 t=0.0232s nnzL=46060 nnzR=11956
+  p=12 rel_err=7.35e-08 t=0.0758s nnzL=71932 nnzR=15092
+  p=16 rel_err=6.00e-08 t=0.0453s nnzL=97804 nnzR=18228
+  p=22 rel_err=3.09e-08 t=0.106s nnzL=136612 nnzR=22932
+  p=32 rel_err=1.80e-08 t=0.183s nnzL=201292 nnzR=30772
+  p=46 rel_err=5.79e-08 t=0.238s nnzL=291840 nnzR=41748
+  p=64 rel_err=6.19e-08 t=0.347s nnzL=408267 nnzR=55860
+  p=90 rel_err=3.70e-08 t=0.537s nnzL=576431 nnzR=76244
+  p=128 rel_err=3.28e-08 t=0.758s nnzL=822174 nnzR=106036
+  p=182 rel_err=4.74e-08 t=1.34s nnzL=1171302 nnzR=148370
+  p=256 rel_err=2.29e-08 t=2.31s nnzL=1649852 nnzR=206387
+  p=362 rel_err=6.15e-08 t=3.98s nnzL=2334566 nnzR=289490
+[sweet-spot] beam done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\sweet_spot_beam.csv
+
+======================================================================
+ NON-SMOOTH STRESS TEST
+======================================================================
+[nonsmooth] computing aligned-grid reference (GL3, p=1500/2000, lazy)...
+[nonsmooth] ref agree: 1.535e-08
+
+[nonsmooth] GL1, aligned grids
+  p=  20 rel_err=2.09e-02
+  p=  40 rel_err=5.22e-03
+  p=  80 rel_err=1.31e-03
+  p= 160 rel_err=3.26e-04
+  p= 320 rel_err=8.16e-05
+  p= 640 rel_err=2.04e-05
+[nonsmooth] GL1 aligned: fitted slope 2.00 (nominal 2)
+
+[nonsmooth] GL1, offgrid grids
+  p=  16 rel_err=4.18e-02
+  p=  32 rel_err=1.68e-02
+  p=  64 rel_err=7.41e-05
+  p= 128 rel_err=1.60e-03
+  p= 256 rel_err=6.55e-04
+  p= 512 rel_err=5.60e-04
+[nonsmooth] GL1 offgrid: fitted slope 1.16 (nominal 2)
+
+[nonsmooth] GL2, aligned grids
+  p=  20 rel_err=2.24e-05
+  p=  40 rel_err=1.40e-06
+  p=  80 rel_err=5.74e-08
+  p= 160 rel_err=3.93e-09
+  p= 320 rel_err=2.08e-09
+  p= 640 rel_err=3.86e-11
+[nonsmooth] GL2 aligned: fitted slope 3.65 (nominal 4)
+
+[nonsmooth] GL2, offgrid grids
+  p=  16 rel_err=8.45e-03
+  p=  32 rel_err=2.08e-03
+  p=  64 rel_err=2.11e-03
+  p= 128 rel_err=5.29e-04
+  p= 256 rel_err=5.28e-04
+  p= 512 rel_err=1.32e-04
+[nonsmooth] GL2 offgrid: fitted slope 1.08 (nominal 4)
+
+[nonsmooth] GL3, aligned grids
+  p=  20 rel_err=5.44e-08
+  p=  40 rel_err=1.83e-08
+  p=  80 rel_err=2.30e-08
+  p= 160 rel_err=1.37e-08
+  p= 320 rel_err=5.82e-09
+  p= 640 rel_err=7.83e-09
+[nonsmooth] GL3 aligned: fitted slope 0.56 (nominal 6)
+
+[nonsmooth] GL3, offgrid grids
+  p=  16 rel_err=3.23e-03
+  p=  32 rel_err=2.59e-03
+  p=  64 rel_err=8.24e-04
+  p= 128 rel_err=6.44e-04
+  p= 256 rel_err=2.05e-04
+  p= 512 rel_err=1.61e-04
+[nonsmooth] GL3 offgrid: fitted slope 0.94 (nominal 6)
+[nonsmooth] done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\nonsmooth_beam_aaw.csv
+
+======================================================================
+ SWEET SPOT — TURNING (large-p showcase)
+======================================================================
+
+[turning_ssv] GL1 (order 2)
+  p=100 rel_err=5.64e-03 t=0.00188s nnzL=2256 nnzR=144
+  p=158 rel_err=9.09e-01 t=0.00281s nnzL=3576 nnzR=216
+  p=251 rel_err=9.11e-01 t=0.00409s nnzL=5688 nnzR=336
+  p=398 rel_err=5.43e-01 t=0.00623s nnzL=9036 nnzR=516
+  p=631 rel_err=2.40e-01 t=0.0115s nnzL=14328 nnzR=816
+  p=1000 rel_err=9.75e-02 t=0.0212s nnzL=22716 nnzR=1284
+  p=1585 rel_err=3.88e-02 t=0.0278s nnzL=36004 nnzR=2028
+  p=2512 rel_err=1.54e-02 t=0.0454s nnzL=57072 nnzR=3216
+  p=3981 rel_err=6.10e-03 t=0.0689s nnzL=90456 nnzR=5088
+  p=6310 rel_err=2.45e-03 t=0.114s nnzL=143388 nnzR=8052
+
+[turning_ssv] GL2 (order 4)
+  p=100 rel_err=6.29e-01 t=0.00434s nnzL=4602 nnzR=390
+  p=158 rel_err=1.44e-01 t=0.00685s nnzL=7992 nnzR=588
+  p=251 rel_err=2.64e-02 t=0.0114s nnzL=12504 nnzR=954
+  p=398 rel_err=4.11e-03 t=0.0195s nnzL=19392 nnzR=1392
+  p=631 rel_err=6.80e-04 t=0.0299s nnzL=30312 nnzR=2292
+  p=1000 rel_err=1.05e-04 t=0.0473s nnzL=48054 nnzR=3558
+  p=1585 rel_err=1.84e-05 t=0.0724s nnzL=77580 nnzR=5676
+  p=2512 rel_err=2.63e-06 t=0.117s nnzL=122172 nnzR=9090
+  p=3981 rel_err=3.85e-07 t=0.182s nnzL=195030 nnzR=14346
+  p=6310 rel_err=6.44e-08 t=0.375s nnzL=305262 nnzR=22614
+
+[turning_ssv] GL3 (order 6)
+  p=100 rel_err=3.94e-02 t=0.00908s nnzL=7728 nnzR=720
+  p=158 rel_err=2.43e-03 t=0.0122s nnzL=13248 nnzR=1088
+  p=251 rel_err=1.55e-04 t=0.0214s nnzL=20816 nnzR=1744
+  p=398 rel_err=1.38e-05 t=0.034s nnzL=32816 nnzR=2640
+  p=631 rel_err=7.50e-07 t=0.0572s nnzL=51568 nnzR=4272
+  p=1000 rel_err=6.52e-08 t=0.089s nnzL=80752 nnzR=6736
+  p=1585 rel_err=1.43e-08 t=0.142s nnzL=130336 nnzR=10688
+  p=2512 rel_err=2.55e-10 t=0.223s nnzL=205872 nnzR=16976
+  p=3981 rel_err=6.89e-11 t=0.412s nnzL=327664 nnzR=26864
+  p=6310 rel_err=2.46e-11 t=0.644s nnzL=511800 nnzR=42440
+
+[turning_ssv] GL4 (order 8)
+  p=100 rel_err=1.11e-03 t=0.019s nnzL=11410 nnzR=1090
+  p=158 rel_err=1.94e-05 t=0.0233s nnzL=19670 nnzR=1700
+  p=251 rel_err=2.97e-08 t=0.0368s nnzL=30890 nnzR=2800
+  p=398 rel_err=1.44e-08 t=0.0571s nnzL=48860 nnzR=4210
+  p=631 rel_err=3.50e-10 t=0.0887s nnzL=76940 nnzR=6800
+  p=1000 rel_err=5.69e-11 t=0.18s nnzL=119900 nnzR=10700
+  p=1585 rel_err=1.74e-11 t=0.269s nnzL=194180 nnzR=16920
+  p=2512 rel_err=1.37e-12 t=0.437s nnzL=308280 nnzR=27000
+  p=3981 rel_err=9.19e-14 t=0.676s nnzL=489280 nnzR=42610
+  p=6310 rel_err=5.50e-14 t=1.27s nnzL=768060 nnzR=67340
+
+[turning_ssv] GL5 (order 10)
+  p=100 rel_err=1.70e-05 t=0.0274s nnzL=16152 nnzR=1608
+  p=158 rel_err=3.23e-07 t=0.076s nnzL=27144 nnzR=2472
+  p=251 rel_err=1.95e-08 t=0.0601s nnzL=42864 nnzR=3960
+  p=398 rel_err=1.39e-09 t=0.0886s nnzL=67656 nnzR=6168
+  p=631 rel_err=5.34e-11 t=0.14s nnzL=107124 nnzR=9852
+  p=1000 rel_err=6.63e-13 t=0.301s nnzL=167064 nnzR=15432
+  p=1585 rel_err=8.91e-14 t=0.442s nnzL=269496 nnzR=24456
+  p=2512 rel_err=2.44e-14 t=0.683s nnzL=427512 nnzR=38952
+  p=3981 rel_err=4.96e-15 t=1.16s nnzL=678024 nnzR=61704
+
+[turning_ssv] GL6 (order 12)
+  p=100 rel_err=1.43e-07 t=0.0418s nnzL=21084 nnzR=2156
+  p=158 rel_err=1.25e-08 t=0.0547s nnzL=35616 nnzR=3318
+  p=251 rel_err=8.57e-11 t=0.0923s nnzL=56364 nnzR=5418
+  p=398 rel_err=8.46e-12 t=0.13s nnzL=89362 nnzR=8386
+  p=631 rel_err=7.59e-13 t=0.276s nnzL=141260 nnzR=13440
+  p=1000 rel_err=2.58e-14 t=0.424s nnzL=219590 nnzR=20846
+  p=1585 rel_err=7.74e-15 t=0.642s nnzL=355754 nnzR=33474
+
+[turning_ssv] GL7 (order 14)
+  p=100 rel_err=6.15e-09 t=0.0986s nnzL=27168 nnzR=2784
+  p=158 rel_err=7.18e-10 t=0.0907s nnzL=45504 nnzR=4288
+  p=251 rel_err=4.52e-11 t=0.143s nnzL=72032 nnzR=7008
+  p=398 rel_err=9.09e-14 t=0.268s nnzL=114080 nnzR=10976
+  p=631 rel_err=1.61e-14 t=0.468s nnzL=180304 nnzR=17392
+  p=1000 rel_err=1.81e-14 t=0.583s nnzL=281376 nnzR=27616
+  p=1585 rel_err=2.92e-14 t=0.963s nnzL=453888 nnzR=43328
+  p=2512 rel_err=4.78e-14 t=1.45s nnzL=718880 nnzR=69088
+  p=3981 rel_err=6.05e-14 t=2.35s nnzL=1140768 nnzR=109088
+  p=6310 rel_err=5.83e-14 t=4.34s nnzL=1801952 nnzR=173216
+  (time cap)
+
+[turning_ssv] GL8 (order 16)
+  p=100 rel_err=4.38e-10 t=0.0882s nnzL=33516 nnzR=3492
+  p=158 rel_err=1.46e-11 t=0.114s nnzL=56376 nnzR=5382
+  p=251 rel_err=1.85e-13 t=0.229s nnzL=89298 nnzR=8964
+  p=398 rel_err=1.77e-14 t=0.314s nnzL=141390 nnzR=13788
+  p=631 rel_err=5.56e-15 t=0.463s nnzL=223974 nnzR=22014
+[sweet-spot] turning_ssv done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\sweet_spot_turning_ssv.csv
+
+Remaining studies finished in 7.7 minutes.

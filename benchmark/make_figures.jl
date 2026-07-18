@@ -265,6 +265,38 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
 end
 
 # ---------------------------------------------------------------------------
+# 5c. p-refinement cliff: error vs total sample count N = p(s+1) at fixed p.
+#     Superconvergence only starts once N crosses the Shannon-type resolution
+#     bound; the cliff position collapses in N across all fixed-p curves.
+# ---------------------------------------------------------------------------
+function fig_cliff()
+    paths = [("mathieu", "easy: delayed Mathieu", 1.7), ("turning_ssv", "hard: turning SSV", 36.0)]
+    panels = []
+    for (sysname, ttl, osc) in paths
+        path = joinpath(RESULTS, "p_refinement_cliff_$sysname.csv")
+        isfile(path) || continue
+        d = load_csv(path)
+        ps = Int.(d["p"]); ss = Int.(d["s"]); Ns = Int.(d["N"])
+        errs = max.(fnum(d["rel_error"]), 1e-16)
+        plt = plot(xscale=:log10, yscale=:log10, xlabel="total samples  N = p(s+1)",
+                   ylabel="relative error", legend=:bottomleft, title=ttl)
+        # Shannon-type band: N = c * osc for c in [5, 10]
+        vspan!(plt, [5osc, 10osc], fillalpha=0.15, color=:gray, label="N = (5–10)·ω_maxT/2π")
+        for (i, p) in enumerate(sort(unique(ps)))
+            idx = findall(==(p), ps)
+            ord = sortperm(Ns[idx])
+            plot!(plt, Ns[idx][ord], errs[idx][ord], marker=:circle, ms=3, lw=1.8,
+                  label="p = $p (s = $(minimum(ss[idx]))…$(maximum(ss[idx])))")
+        end
+        push!(panels, plt)
+    end
+    isempty(panels) && (println("skip cliff"); return)
+    plt = plot(panels..., layout=(1, length(panels)), size=(1200, 460),
+               left_margin=8Plots.mm, bottom_margin=8Plots.mm)
+    saveboth(plt, "p_refinement_cliff")
+end
+
+# ---------------------------------------------------------------------------
 # 6. SD-classic vs MFSD baseline parity
 # ---------------------------------------------------------------------------
 function fig_classic()
@@ -300,6 +332,7 @@ fig_sweet_spot("turning_ssv"; tols=[1e-4, 1e-6, 1e-8])
 fig_ph_map("mathieu")
 fig_ph_map("beam")
 fig_ph_map("turning_ssv")
+fig_cliff()
 fig_spectral_corner()
 fig_nonsmooth()
 println("Done.")

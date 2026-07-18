@@ -1,0 +1,75 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+
+[mathieu] fixed p = 1
+  s=1 N=2 rel_err=1.82e+00 t=9.81s
+  (time cap)
+
+[mathieu] fixed p = 2
+  s=1 N=4 rel_err=1.65e+00 t=0.988s
+  s=2 N=6 rel_err=1.79e+00 t=4.94s
+  (time cap)
+
+[mathieu] fixed p = 4
+  s=1 N=8 rel_err=1.79e+00 t=0.671s
+  s=2 N=12 rel_err=7.41e-01 t=0.719s
+  s=3 N=16 rel_err=7.54e-02 t=7.72s
+  (time cap)
+
+[mathieu] fixed p = 8
+  s=1 N=16 rel_err=1.34e+00 t=0.748s
+  s=2 N=24 rel_err=1.02e-01 t=0.699s
+  s=3 N=32 rel_err=1.53e-03 t=0.714s
+  s=4 N=40 rel_err=1.12e-05 t=6.42s
+  (time cap)
+[cliff] mathieu done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\p_refinement_cliff_mathieu.csv
+
+[turning_ssv] fixed p = 10
+  s=1 N=20 rel_err=7.96e-01 t=1.49s
+  s=2 N=30 rel_err=7.90e-01 t=2.15s
+  s=3 N=40 rel_err=9.33e-01 t=2.92s
+  s=4 N=50 rel_err=6.63e-01 t=2.86s
+  s=5 N=60 rel_err=9.81e-01 t=7.16s
+  (time cap)
+
+[turning_ssv] fixed p = 25
+  s=1 N=50 rel_err=9.32e-01 t=0.751s
+  s=2 N=75 rel_err=8.88e-01 t=0.728s
+  s=3 N=100 rel_err=7.14e-01 t=0.673s
+  s=4 N=125 rel_err=9.89e-01 t=0.692s
+  s=5 N=150 rel_err=9.29e-01 t=0.741s
+  s=6 N=175 rel_err=4.13e-01 t=8.93s
+  (time cap)
+
+[turning_ssv] fixed p = 50
+  s=1 N=100 rel_err=2.70e-01 t=0.671s
+  s=2 N=150 rel_err=8.23e-01 t=0.672s
+  s=3 N=200 rel_err=8.11e-01 t=0.759s
+  s=4 N=250 rel_err=1.52e-01 t=0.695s
+  s=5 N=300 rel_err=1.26e-02 t=0.723s
+  s=6 N=350 rel_err=4.10e-04 t=0.812s
+  s=7 N=400 rel_err=5.22e-06 t=10.7s
+  (time cap)
+
+[turning_ssv] fixed p = 100
+  s=1 N=200 rel_err=5.64e-03 t=0.674s
+  s=2 N=300 rel_err=6.29e-01 t=0.656s
+  s=3 N=400 rel_err=3.94e-02 t=0.675s
+  s=4 N=500 rel_err=1.11e-03 t=1.06s
+  s=5 N=600 rel_err=1.70e-05 t=0.775s
+  s=6 N=700 rel_err=1.43e-07 t=0.792s
+  s=7 N=800 rel_err=6.15e-09 t=0.845s
+  s=8 N=900 rel_err=4.38e-10 t=6.63s
+  (time cap)
+
+[turning_ssv] fixed p = 200
+  s=1 N=400 rel_err=9.86e-01 t=0.703s
+  s=2 N=600 rel_err=6.12e-02 t=0.793s
+  s=3 N=800 rel_err=7.46e-04 t=0.745s
+  s=4 N=1000 rel_err=5.32e-06 t=0.744s
+  s=5 N=1200 rel_err=3.79e-08 t=0.786s
+  s=6 N=1400 rel_err=4.88e-10 t=0.791s
+  s=7 N=1600 rel_err=1.75e-11 t=0.823s
+  s=8 N=1800 rel_err=5.87e-13 t=0.961s
+  s=9 N=2000 rel_err=2.98e-14 t=6.38s
+  (time cap)
+[cliff] turning_ssv done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\p_refinement_cliff_turning_ssv.csv

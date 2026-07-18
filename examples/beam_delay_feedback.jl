@@ -76,16 +76,18 @@ function beam_problem(; E=210e9, A=1e-4, ρ=7800.0, L=100.0, η=0.01, N=15,
     F = zeros(Nm1); F[Nm1] = 1.0
     Ffirst = vcat(zeros(Nm1), F)
 
-    AMx = ProportionalMX(t -> A_sys)
+    # NOTE: names are qualified so this file can be included alongside
+    # SemiDiscretizationMethod (which exports the same type names).
+    AMx = MFCM.ProportionalMX(t -> A_sys)
     τ1 = t -> τ
     BMx1 = if act_and_wait
-        DelayMX(τ1, t -> B .* (mod(t, Tper) < 0.8 * Tper))
+        MFCM.DelayMX(τ1, t -> B .* (mod(t, Tper) < 0.8 * Tper))
     else
-        DelayMX(τ1, t -> B)
+        MFCM.DelayMX(τ1, t -> B)
     end
-    cVec = Additive(t -> Ffirst)
+    cVec = MFCM.Additive(t -> Ffirst)
 
-    prob = LDDEProblem{D, Float64}(AMx, [BMx1], cVec)
+    prob = MFCM.LDDEProblem{D, Float64}(AMx, [BMx1], cVec)
     return prob, D, τ, Tper
 end
 

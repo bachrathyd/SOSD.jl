@@ -1,0 +1,9 @@
+# Reference copies of other repositories (SemiDiscretizationMethod.jl, DDE-Biftool,
+# GO_SB_spectrum prototypes) — kept locally for comparison, not part of this package.
+oldstuff/
+
+# Editor state
+.vscode/
+
+# Julia scratch
+*.cov

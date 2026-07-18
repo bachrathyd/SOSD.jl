@@ -1,0 +1,37 @@
+name = "MFCM"
+uuid = "e93c12a4-b5d7-4f8a-9e6b-0c1d2e3f4a5b"
+version = "0.1.1"
+authors = ["Daniel Bachrathy", "HTSykora"]
+
+[deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LinearMaps = "7a12625a-238d-50fd-b39a-03d52299707e"
+RungeKutta = "fb486d5c-30a0-4a8a-8415-a8b4ace5a6f7"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[extras]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+MDBM = "dd61e66b-39ce-57b0-8813-509f78be4b4d"
+SemiDiscretizationMethod = "a6865705-0aff-55fc-a8e1-34d7b6815716"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test", "SemiDiscretizationMethod", "BenchmarkTools"]
+
+[compat]
+BenchmarkTools = "1.8.0"
+ForwardDiff = "1.3"
+KrylovKit = "0.10"
+LaTeXStrings = "1.4.0"
+LinearAlgebra = "1.0"
+LinearMaps = "3.11"
+MDBM = "0.2"
+RungeKutta = "0.5.20"
+SparseArrays = "1.0"
+StaticArrays = "1.9"
+Test = "1.0"
+julia = "1.10"

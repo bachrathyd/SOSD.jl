@@ -906,36 +906,42 @@ moderate-order variants.
 \IfFileExists{figures/chart_times.tex}{\input{figures/chart_times.tex}}{%
   \newcommand{\chartTimeMathieu}{--}\newcommand{\chartPtsMathieu}{--}%
   \newcommand{\chartMsMathieu}{--}\newcommand{\chartTimeTurning}{--}%
-  \newcommand{\chartPtsTurning}{--}\newcommand{\chartMsTurning}{--}}
+  \newcommand{\chartPtsTurning}{--}\newcommand{\chartMsTurning}{--}%
+  \newcommand{\chartMdbmMathieu}{--}\newcommand{\chartMdbmTurning}{--}}
 
 As an end-to-end demonstration of the sweet-spot guidance, high-resolution
 stability charts are computed by brute force --- one eigenvalue solve per
 grid point, single-threaded, using the CPU-optimal setting of each system.
 Figure~\ref{fig:charts} shows the results, coloured by the logarithm of the
-spectral radius (blue: stable, red: unstable) with the stability boundary
-$\rho = 1$ drawn in black. The delayed Mathieu chart
-($301\times301 = \chartPtsMathieu$ points, GL7, $p = 2$) completes in
-$\chartTimeMathieu$\,s (\chartMsMathieu\,ms per point); the strongly
-modulated SSV turning chart ($151\times151 = \chartPtsTurning$ points, GL4,
-step count chosen per point by the sampling recipe --- a resolution-pinned
-hard system) in $\chartTimeTurning$\,s (\chartMsTurning\,ms per point). No
-parallelization or continuation tricks are used; the per-point cost is
-simply the optimally chosen solution-operator solve.
+spectral radius (blue: stable, red: unstable); the stability boundary
+$\rho = 1$ is refined to sub-cell accuracy by the multi-dimensional
+bisection method (MDBM, \citealp{Bachrathy2012}) on top of the colour map.
+The grid evaluation is trivially parallel (every point is an independent
+solution-operator solve) and is executed on 16 threads. The delayed Mathieu
+chart ($100\times100 = \chartPtsMathieu$ points, GL7, $p = 2$) completes in
+$\chartTimeMathieu$\,s wall time plus $\chartMdbmMathieu$\,s for the MDBM
+boundary; the strongly modulated SSV turning chart
+($100\times100 = \chartPtsTurning$ points, GL4, step count chosen per point
+by the sampling recipe --- a resolution-pinned hard system) in
+$\chartTimeTurning$\,s wall time plus $\chartMdbmTurning$\,s for the
+boundary. No continuation tricks are used; the per-point cost is simply the
+optimally chosen solution-operator solve.
 
 \begin{figure*}[t]
   \centering
   \figok{width=0.49\linewidth}{figures/stability_chart_mathieu.pdf}
   \figok{width=0.49\linewidth}{figures/stability_chart_turning.pdf}
   \caption{Brute-force stability charts at the optimal settings, coloured by
-  $\log_{10}\rho$ (blue: stable, red: unstable), black curve: stability
-  boundary $\rho = 1$; the measured total CPU time appears in each title.
-  Left: delayed Mathieu equation in the $(\delta, b)$ plane
+  $\log_{10}\rho$ (blue: stable, red: unstable); black dots: the
+  $\rho = 1$ boundary refined by MDBM; the measured CPU times appear in
+  each title. Left: delayed Mathieu equation in the $(\delta, b)$ plane
   ($\varepsilon = 1$, $a_1 = 0.1$, $\tau = T = 2\pi$), GL7 with $p = 2$.
   Right: SSV turning in the $(\Omega, k_w)$ plane with strong modulation
   ($\zeta = 0.02$, $A_\mathrm{SSV} = 0.3$, $N_T = 10$); here the step count
   follows the sampling recipe of Section~\ref{sec:discussion} per point,
   $p(\Omega) = \lceil 16/\Omega \rceil$ --- the paper's own rule applied in
-  production. All computations single-threaded.}
+  production. Grid evaluation on 16 threads (wall times in the titles);
+  the MDBM refinement is serial.}
   \label{fig:charts}
 \end{figure*}
 

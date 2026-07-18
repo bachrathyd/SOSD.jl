@@ -6,6 +6,7 @@ using Plots
 using DelimitedFiles
 using Printf
 using Statistics
+using LaTeXStrings
 
 ENV["GKSwstype"] = "100"
 gr()
@@ -60,8 +61,8 @@ function fig_order()
     isfile(path) || (println("skip fig_order"); return)
     d = load_csv(path)
     methods = unique(String.(d["method"]))
-    plt = plot(xscale=:log10, yscale=:log10, xlabel="resolution  p",
-               ylabel="|Δμ| (dominant multiplier error)", legend=:bottomleft,
+    plt = plot(xscale=:log10, yscale=:log10, xlabel=L"p",
+               ylabel=L"|\Delta\mu|", legend=:bottomleft,
                title="Order verification — delayed Mathieu")
     for m in methods
         idx = findall(==(m), String.(d["method"]))
@@ -84,10 +85,10 @@ function fig_work_precision(sysname)
     methods = unique(String.(d["method"]))
     # error axes are clipped at 3e0: pre-resolution "nonsense" values (up to
     # 1e43 for explicit methods on the stiff beam) carry no information
-    p1 = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="relative error",
+    p1 = plot(xscale=:log10, yscale=:log10, xlabel=L"p", ylabel=L"\varepsilon",
               legend=:bottomleft, ylims=(1e-16, 3.0))
-    p2 = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="CPU time [s]", legend=:topleft)
-    p3 = plot(xscale=:log10, yscale=:log10, xlabel="CPU time [s]", ylabel="relative error",
+    p2 = plot(xscale=:log10, yscale=:log10, xlabel=L"p", ylabel=L"T_\mathrm{CPU}\;[\mathrm{s}]", legend=:topleft)
+    p3 = plot(xscale=:log10, yscale=:log10, xlabel=L"T_\mathrm{CPU}\;[\mathrm{s}]", ylabel=L"\varepsilon",
               legend=:bottomleft, ylims=(1e-16, 3.0))
     for m in methods
         idx = findall(==(m), String.(d["method"]))
@@ -123,7 +124,7 @@ function fig_sweet_spot(sysname; tols=[1e-4, 1e-6, 1e-8, 1e-10])
     tms = fnum(d["t_mean"]); nnzs = fnum(d["nnz_L"]); bws = fnum(d["bandwidth_L"])
     svals = sort(unique(ss))
 
-    pU = plot(xlabel="Gauss stages  s  (order 2s)", ylabel="CPU time to target [s]",
+    pU = plot(xlabel=L"s\;(\mathrm{order}\;2s)", ylabel=L"T_\mathrm{CPU}\;\mathrm{to\;target}\;[\mathrm{s}]",
               yscale=:log10, legend=:topright, title="Sweet spot — $sysname")
     for tol in tols
         xs = Int[]; ys = Float64[]; popt = Int[]
@@ -141,7 +142,7 @@ function fig_sweet_spot(sysname; tols=[1e-4, 1e-6, 1e-8, 1e-10])
         annotate!(pU, [(xs[i0], ys[i0] * 0.7, Plots.text("p=$(popt[i0])", 6, :gray30))])
     end
 
-    pS = plot(xlabel="Gauss stages  s", ylabel="nnz(Φ_L) per step", yscale=:log10,
+    pS = plot(xlabel=L"s", ylabel=L"\mathrm{nnz}(\Phi_L)/p", yscale=:log10,
               legend=:topleft, title="Fill growth — $sysname")
     nnz_per_step = Float64[]; bw_s = Float64[]
     for s in svals
@@ -155,7 +156,7 @@ function fig_sweet_spot(sysname; tols=[1e-4, 1e-6, 1e-8, 1e-10])
     plot!(pS, svals, nnz_per_step[end] .* (svals ./ svals[end]).^3, ls=:dash, color=:gray,
           label="∝ s³")
     plot!(twinx(pS), svals, bw_s, marker=:diamond, ms=3, lw=1.5, color=:darkred,
-          yscale=:log10, ylabel="bandwidth(Φ_L)", label="bandwidth", legend=:bottomright)
+          yscale=:log10, ylabel=L"\mathrm{bandwidth}(\Phi_L)", label="bandwidth", legend=:bottomright)
 
     plt = plot(pU, pS, layout=(1, 2), size=(1100, 440), left_margin=8Plots.mm, bottom_margin=8Plots.mm)
     saveboth(plt, "sweet_spot_$sysname")
@@ -172,7 +173,7 @@ function fig_spectral_corner()
     p1 = plot(ss, errs, yscale=:log10, xlabel="stages s (single step, p = 1)",
               ylabel="relative error", marker=:circle, lw=2, color=:mediumblue,
               label="error", title="Single-step (global collocation) limit")
-    p2 = plot(ss, tms, yscale=:log10, xlabel="stages s", ylabel="CPU time [s]",
+    p2 = plot(ss, tms, yscale=:log10, xlabel=L"s", ylabel=L"T_\mathrm{CPU}\;[\mathrm{s}]",
               marker=:circle, lw=2, color=:darkred, label="time")
     plt = plot(p1, p2, layout=(1, 2), size=(1000, 420), left_margin=8Plots.mm, bottom_margin=8Plots.mm)
     saveboth(plt, "spectral_corner")
@@ -186,7 +187,7 @@ function fig_nonsmooth()
     isfile(path) || (println("skip nonsmooth"); return)
     d = load_csv(path)
     ss = Int.(d["s"]); fams = String.(d["family"]); ps = fnum(d["p"]); errs = max.(fnum(d["rel_error"]), 1e-16)
-    plt = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="relative error",
+    plt = plot(xscale=:log10, yscale=:log10, xlabel=L"p", ylabel=L"\varepsilon",
                legend=:bottomleft, title="Act-and-wait beam: grid-aligned vs off-grid switching")
     colors = Dict(1 => :steelblue, 2 => :royalblue, 3 => :navy)
     for s in sort(unique(ss)), fam in ("aligned", "offgrid")
@@ -223,32 +224,32 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
     ylog = log10.(pvals)
     yt = unique(round.(Int, range(minimum(ylog), maximum(ylog), length=5)))
     yticks = (Float64.(yt), ["10^{$k}" for k in yt])
-    xl = "stages s (order 2s)"
+    xl = L"s\;(\mathrm{order}\;2s)"
 
     # Panel 1: colour = CPU time (with colorbar, no contours)
     pT = heatmap(svals, ylog, Tm, c=:plasma, colorbar=true,
-                 colorbar_title="\nlog10 T_CPU [s]",
-                 xlabel=xl, ylabel="steps p", yticks=yticks,
+                 colorbar_title=L"\log_{10} T_\mathrm{CPU}\;[\mathrm{s}]",
+                 xlabel=xl, ylabel=L"p", yticks=yticks,
                  title="CPU time  T_CPU", right_margin=8Plots.mm)
 
     # Panel 2: colour = error (with colorbar, no contours)
     pE = heatmap(svals, ylog, E, c=:viridis, colorbar=true,
-                 colorbar_title="\nlog10 ε (relative error)",
-                 xlabel=xl, ylabel="steps p", yticks=yticks,
+                 colorbar_title=L"\log_{10}\varepsilon",
+                 xlabel=xl, ylabel=L"p", yticks=yticks,
                  title="eigenvalue error  ε", right_margin=8Plots.mm)
 
     # Panel 3: both contour families + optimum stars.
     # Following e.g. the ε = 1e-5 contour, the smallest CPU-time contour it
     # touches identifies the optimal setup (starred).
-    pC = plot(xlabel=xl, ylabel="steps p", yticks=yticks,
+    pC = plot(xlabel=xl, ylabel=L"p", yticks=yticks,
               title="ε (solid) and T_CPU (dashed) contours",
               legend=:topright)
     contour!(pC, svals, ylog, E, levels=err_levels, lc=:royalblue, lw=1.8,
              clabels=true, cbar=false)
     contour!(pC, svals, ylog, Tm, levels=time_levels, lc=:darkred, lw=1.4,
              ls=:dash, clabels=true, cbar=false)
-    plot!(pC, [], [], lc=:royalblue, lw=1.8, label="log10 ε")
-    plot!(pC, [], [], lc=:darkred, lw=1.4, ls=:dash, label="log10 T_CPU [s]")
+    plot!(pC, [], [], lc=:royalblue, lw=1.8, label=L"\log_{10}\varepsilon")
+    plot!(pC, [], [], lc=:darkred, lw=1.4, ls=:dash, label=L"\log_{10} T_\mathrm{CPU}")
     # a single example optimum: the CPU-cheapest cell meeting ε = 1e-6
     let tol = 1e-6
         best_t = Inf; bi = 0
@@ -302,9 +303,9 @@ function fig_cliff()
         ps = Int.(d["p"]); ss = Int.(d["s"])
         errs = clamp.(fnum(d["rel_error"]), 1e-16, 3.0)
         tms = fnum(d["t_min"])
-        pE = plot(xscale=:log10, yscale=:log10, xlabel="stages s", ylabel="relative error",
+        pE = plot(xscale=:log10, yscale=:log10, xlabel=L"s", ylabel=L"\varepsilon",
                   legend=:bottomleft, title=ttl, ylims=(1e-16, 3.0))
-        pT = plot(xscale=:log10, yscale=:log10, xlabel="stages s", ylabel="CPU time [s]",
+        pT = plot(xscale=:log10, yscale=:log10, xlabel=L"s", ylabel=L"T_\mathrm{CPU}\;[\mathrm{s}]",
                   legend=:topleft, title="CPU time — $ttl")
         for p in sort(unique(ps))
             idx = findall(==(p), ps)
@@ -340,7 +341,7 @@ function fig_classic()
     ok = isfinite.(t_cl)
     k_lr = ([log10.(ps) ones(length(ps))] \ log10.(t_lr))[1]
     k_cl = sum(ok) > 1 ? ([log10.(ps[ok]) ones(sum(ok))] \ log10.(t_cl[ok]))[1] : NaN
-    plt = plot(xscale=:log10, yscale=:log10, xlabel="resolution  p", ylabel="CPU time [s]",
+    plt = plot(xscale=:log10, yscale=:log10, xlabel=L"p", ylabel=L"T_\mathrm{CPU}\;[\mathrm{s}]",
                legend=:topleft, title="SD-classic vs multiplication-free LR mapping")
     plot!(plt, ps[ok], t_cl[ok], marker=:circle, ms=3.5, lw=2.5, color=:firebrick,
           label="SD-classic (t ~ p^$(round(k_cl, digits=2)))")

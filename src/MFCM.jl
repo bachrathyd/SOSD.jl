@@ -6,9 +6,9 @@ using SparseArrays
 using KrylovKit
 using LinearMaps
 
-export RKTableau, TimeGrid, SystemMatrices, MonodromyMap
+export RKTableau, TimeGrid, SystemMatrices, SystemMatricesDense, MonodromyMap
 export LDDEProblem, ProportionalMX, DelayMX, Additive
-export extract_SDM_system, build_system_matrices
+export extract_SDM_system, build_system_matrices, build_system_matrices_dense
 export GL, GL2Tableau, GL3Tableau, ExplicitEuler, Heun, RK3, RK4, RK5, RK8, ImplicitEuler, ImplicitTrapezoidal
 export solve_periodic_solution, inhomogeneous_sweep, SparseMonodromyMap
 export build_explicit_matrices, get_explicit_transition_matrix
@@ -78,6 +78,8 @@ end
 
 """
     SystemMatrices{D, S, T, W, BSIZE}
+
+StaticArrays-backed per-step transition blocks (fast path for small `S*D`).
 """
 struct SystemMatrices{D, S, T, W, BSIZE}
     M_prop::Vector{SMatrix{BSIZE, D, T}}
@@ -87,11 +89,26 @@ struct SystemMatrices{D, S, T, W, BSIZE}
     c_vector::Vector{SVector{BSIZE, T}}
 end
 
-struct MonodromyMap{D, S, T, W, BSIZE, CE} <: LinearMaps.LinearMap{T}
+"""
+    SystemMatricesDense{D, S, T, W, BSIZE}
+
+Heap-allocated (`Matrix`-backed) per-step transition blocks for systems whose
+stage-coupled dimension `S*D` is too large for StaticArrays (e.g. FEM models,
+very high collocation orders). Same layout and indexing as [`SystemMatrices`](@ref).
+"""
+struct SystemMatricesDense{D, S, T, W, BSIZE}
+    M_prop::Vector{Matrix{T}}
+    M_del::Vector{Vector{Vector{Matrix{T}}}}
+    delay_indices::Vector{Vector{SVector{S, Int}}}
+    delay_weights::Vector{Vector{SVector{S, SVector{W, T}}}}
+    c_vector::Vector{Vector{T}}
+end
+
+struct MonodromyMap{D, S, T, W, BSIZE, CE, SM} <: LinearMaps.LinearMap{T}
     problem::LDDEProblem{D, T}
     grid::TimeGrid{T}
     tableau::RKTableau{S, T, CE}
-    sys_mats::SystemMatrices{D, S, T, W, BSIZE}
+    sys_mats::SM
     p::Int
     r::Int
     state_size::Int
@@ -101,7 +118,7 @@ end
 function MonodromyMap(prob, grid, tableau::RKTableau{S, T, CE}, sys_mats, p, r, state_size) where {S, T, CE}
     D, W, BSIZE = typeof(sys_mats).parameters[1], typeof(sys_mats).parameters[4], typeof(sys_mats).parameters[5]
     h_buf = Vector{T}(undef, (p + r + 1) * BSIZE)
-    return MonodromyMap{D, S, T, W, BSIZE, CE}(prob, grid, tableau, sys_mats, p, r, state_size, h_buf)
+    return MonodromyMap{D, S, T, W, BSIZE, CE, typeof(sys_mats)}(prob, grid, tableau, sys_mats, p, r, state_size, h_buf)
 end
 
 Base.size(m::MonodromyMap) = (m.state_size, m.state_size)

@@ -82,13 +82,17 @@ function fig_work_precision(sysname)
     isfile(path) || (println("skip wp $sysname"); return)
     d = load_csv(path)
     methods = unique(String.(d["method"]))
-    p1 = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="relative error", legend=:bottomleft)
+    # error axes are clipped at 3e0: pre-resolution "nonsense" values (up to
+    # 1e43 for explicit methods on the stiff beam) carry no information
+    p1 = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="relative error",
+              legend=:bottomleft, ylims=(1e-16, 3.0))
     p2 = plot(xscale=:log10, yscale=:log10, xlabel="p", ylabel="CPU time [s]", legend=:topleft)
-    p3 = plot(xscale=:log10, yscale=:log10, xlabel="CPU time [s]", ylabel="relative error", legend=:bottomleft)
+    p3 = plot(xscale=:log10, yscale=:log10, xlabel="CPU time [s]", ylabel="relative error",
+              legend=:bottomleft, ylims=(1e-16, 3.0))
     for m in methods
         idx = findall(==(m), String.(d["method"]))
-        ps = fnum(d["p"][idx]); errs = max.(fnum(d["rel_error"][idx]), 1e-16)
-        tm = fnum(d["t_mean"][idx]); ts = fnum(d["t_std"][idx])
+        ps = fnum(d["p"][idx]); errs = clamp.(fnum(d["rel_error"][idx]), 1e-16, 3.0)
+        tm = fnum(d["t_mean"][idx])
         k = -fit_slope_window(ps, errs)
         lble = isfinite(k) ? "$m (k=$(round(k, digits=1)))" : m
         # time-scaling exponent from the upper half of the p range
@@ -96,9 +100,9 @@ function fig_work_precision(sysname)
         kt = sum(half) > 1 ? ([log10.(ps[half]) ones(sum(half))] \ log10.(tm[half]))[1] : NaN
         lblt = isfinite(kt) ? "$m (t~p^$(round(kt, digits=1)))" : m
         plot!(p1, ps, errs, marker=:circle, ms=2.5, lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lble)
-        # ribbon lower bound must stay positive on the log axis
-        rib_lo = min.(ts, tm .* 0.9)
-        plot!(p2, ps, tm, ribbon=(rib_lo, ts), fillalpha=0.25, marker=:circle, ms=2.5,
+        # CPU times are means of repeated warm-started measurements (scatter < ~5%);
+        # no uncertainty band is drawn (noted in the paper captions)
+        plot!(p2, ps, tm, marker=:circle, ms=2.5,
               lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lblt)
         plot!(p3, tm, errs, marker=:circle, ms=2.5, lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lble)
     end
@@ -218,27 +222,40 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
     ylog = log10.(pvals)
     yt = unique(round.(Int, range(minimum(ylog), maximum(ylog), length=5)))
     yticks = (Float64.(yt), ["10^{$k}" for k in yt])
+    xl = "stages s (order 2s)"
 
-    pA = heatmap(svals, ylog, E, c=:viridis, colorbar_title="log10 rel. error",
-                 xlabel="stages s (order 2s)", ylabel="steps p", yticks=yticks,
-                 title="Error over the (s, p) plane — $sysname")
-    contour!(pA, svals, ylog, Tm, levels=time_levels, lc=:white, lw=1.2,
-             clabels=true, cbar=false)
+    # Panel 1: colour = CPU time (with colorbar, no contours)
+    pT = heatmap(svals, ylog, Tm, c=:plasma, colorbar=true,
+                 colorbar_title="\nlog10 T_CPU [s]",
+                 xlabel=xl, ylabel="steps p", yticks=yticks,
+                 title="CPU time  T_CPU", right_margin=8Plots.mm)
 
-    pB = heatmap(svals, ylog, Tm, c=:plasma, colorbar_title="log10 CPU time [s]",
-                 xlabel="stages s (order 2s)", ylabel="steps p", yticks=yticks,
-                 title="CPU time — white: error contours")
-    contour!(pB, svals, ylog, E, levels=err_levels, lc=:white, lw=1.2,
+    # Panel 2: colour = error (with colorbar, no contours)
+    pE = heatmap(svals, ylog, E, c=:viridis, colorbar=true,
+                 colorbar_title="\nlog10 ε (relative error)",
+                 xlabel=xl, ylabel="steps p", yticks=yticks,
+                 title="eigenvalue error  ε", right_margin=8Plots.mm)
+
+    # Panel 3: both contour families + optimum stars.
+    # Following e.g. the ε = 1e-5 contour, the smallest CPU-time contour it
+    # touches identifies the optimal setup (starred).
+    pC = plot(xlabel=xl, ylabel="steps p", yticks=yticks,
+              title="ε (solid) and T_CPU (dashed) contours",
+              legend=:topright)
+    contour!(pC, svals, ylog, E, levels=err_levels, lc=:royalblue, lw=1.8,
              clabels=true, cbar=false)
-    # optimal (min CPU meeting target) markers
-    for (tol, mk) in zip((1e-4, 1e-8, 1e-12), (:circle, :star5, :diamond))
+    contour!(pC, svals, ylog, Tm, levels=time_levels, lc=:darkred, lw=1.4,
+             ls=:dash, clabels=true, cbar=false)
+    plot!(pC, [], [], lc=:royalblue, lw=1.8, label="log10 ε")
+    plot!(pC, [], [], lc=:darkred, lw=1.4, ls=:dash, label="log10 T_CPU [s]")
+    for (tol, mk) in zip((1e-4, 1e-8, 1e-12), (:star5, :circle, :diamond))
         best_t = Inf; bi = 0
         for i in eachindex(ss)
             if errs[i] <= tol && tms[i] < best_t; best_t = tms[i]; bi = i; end
         end
         bi == 0 && continue
-        scatter!(pB, [ss[bi]], [log10(ps[bi])], marker=mk, ms=7, color=:white,
-                 msc=:black, label="opt @ 1e$(round(Int, log10(tol)))")
+        scatter!(pC, [ss[bi]], [log10(ps[bi])], marker=mk, ms=9, color=:gold,
+                 msc=:black, label="optimum @ ε=1e$(round(Int, log10(tol)))")
     end
 
     # measured complexity laws
@@ -259,8 +276,8 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
     end
     ttl = @sprintf("h-refinement t ∝ p^{%.1f}   |   p-refinement t ∝ s^{%.1f}",
                    isempty(kh) ? NaN : median(kh), kp)
-    plt = plot(pA, pB, layout=(1, 2), size=(1250, 480), plot_title=ttl,
-               left_margin=8Plots.mm, bottom_margin=8Plots.mm)
+    plt = plot(pT, pE, pC, layout=(1, 3), size=(1950, 500), plot_title=ttl,
+               left_margin=8Plots.mm, bottom_margin=9Plots.mm)
     saveboth(plt, "ph_map_$sysname")
 end
 
@@ -279,7 +296,8 @@ function fig_cliff()
         ps = Int.(d["p"]); ss = Int.(d["s"]); Ns = Int.(d["N"])
         errs = max.(fnum(d["rel_error"]), 1e-16)
         plt = plot(xscale=:log10, yscale=:log10, xlabel="total samples  N = p(s+1)",
-                   ylabel="relative error", legend=:bottomleft, title=ttl)
+                   ylabel="relative error", legend=:bottomleft, title=ttl,
+                   ylims=(1e-16, 3.0))   # clip pre-resolution nonsense at 3e0
         # Shannon-type band: N = c * osc for c in [5, 10]
         vspan!(plt, [5osc, 10osc], fillalpha=0.15, color=:gray, label="N = (5–10)·ω_maxT/2π")
         for (i, p) in enumerate(sort(unique(ps)))

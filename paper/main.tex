@@ -1,4 +1,4 @@
-\documentclass[sagev]{sagej}
+\documentclass[Afour,sageh,times]{sagej}
 
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb,bm}
@@ -15,19 +15,22 @@
 
 \begin{document}
 
-\runninghead{Bachrathy}
+\runninghead{Bachrathy D.}
 
 \title{Solution-Operator Semi-Discretization: General-Order
 Multiplication-Free Stability Analysis of Time-Periodic Delayed Systems and
 the Accuracy--Sparsity Trade-off}
 
-\author{D\'aniel Bachrathy\affilnum{1}}
+\author{Daniel Bachrathy\affilnum{1}}
 
 \affiliation{\affilnum{1}Department of Applied Mechanics, Faculty of Mechanical
-Engineering, Budapest University of Technology and Economics, Budapest, Hungary}
+Engineering, Budapest University of Technology and Economics, M\H{u}egyetem
+rkp.~3., H-1111 Budapest, Hungary.\\
+    Tel.: +36-1-463-1369\\
+    Email: bachrathy@mm.bme.hu}
 
-\corrauth{D\'aniel Bachrathy, Department of Applied Mechanics, Budapest
-University of Technology and Economics, M\H{u}egyetem rkp.~3., H-1111
+\corrauth{Daniel Bachrathy, Department of Applied Mechanics, Faculty of
+Mechanical Engineering, Budapest University of Technology and Economics,
 Budapest, Hungary.}
 
 \email{bachrathy@mm.bme.hu}
@@ -503,9 +506,12 @@ multiplication-free route is already $2500\times$ faster.
   \centering
   \figok{width=\linewidth}{figures/work_precision_mathieu.pdf}
   \caption{Work-precision study on the delayed Mathieu equation. Left:
-  eigenvalue error vs.\ resolution $p$; middle: CPU time vs.\ $p$ (mean of
-  repeated runs, shaded $\pm1\sigma$), all fitted exponents $\approx 1.0$;
-  right: the work--precision plane (down and left is better).}
+  eigenvalue error vs.\ resolution $p$ (clipped at $3\cdot10^{0}$ ---
+  pre-resolution values carry no information); middle: CPU time vs.\ $p$,
+  all fitted exponents $\approx 1.0$; right: the work--precision plane
+  (down and left is better). CPU times are means of repeated warm-started
+  benchmark measurements; their relative scatter is below a few per cent
+  and is therefore not drawn.}
   \label{fig:wp-mathieu}
 \end{figure}
 
@@ -564,11 +570,12 @@ moderate order.
 \begin{figure}[t]
   \centering
   \figok{width=\linewidth}{figures/ph_map_turning_ssv.pdf}
-  \caption{The $(s, p)$-map for the high-resolution-demand turning system:
-  relative error (left, with white CPU-time contours) and CPU time (right,
-  with white error contours and per-target optima). $h$-refinement (vertical)
-  is linear in cost, $p$-refinement (horizontal) polynomial; blank cells
-  exceed the CPU budget. The corresponding maps for the low-demand Mathieu
+  \caption{The $(s, p)$-map for the high-resolution-demand turning system.
+  Left: colour encodes CPU time, labelled white contours the error limits,
+  markers the CPU-optimal cells per accuracy target; right: inverse logic
+  (colour = error, contours = CPU time). $h$-refinement (vertical) is linear
+  in cost, $p$-refinement (horizontal) polynomial; blank cells exceed the
+  $4$\,s CPU budget. The corresponding maps for the low-demand Mathieu
   system are in Appendix~\ref{app:morewp}.}
   \label{fig:phmap}
 \end{figure}
@@ -745,9 +752,12 @@ towards lower order for larger system dimension and non-smooth coefficients.
 This unifies and clarifies, rather than reinvents; the actionable outputs are
 the sweet-spot guidance and the open-source \textsf{SOSD.jl} implementation.
 
-\begin{acks}
-\TODOnum{funding, computing acknowledgements}
-\end{acks}
+\section*{Funding}
+The research leading to these results was supported by the Hungarian
+Scientific Research Fund (NKFIH-152125).
+% NOTE for Daniel: your published MFSD paper (JVC-26-0126.R1) uses exactly
+% "NKFIH-152125" (there together with NKFIH 138500). If the official
+% Advanced-Grant mark ("AG") must appear, please give the exact format.
 
 \begin{dci}
 The author declares no conflict of interest.
@@ -809,10 +819,12 @@ while the A-stable Gauss stages converge from the coarsest grids.
 \begin{figure}[t]
   \centering
   \figok{width=\linewidth}{figures/ph_map_mathieu.pdf}
-  \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation
-  (compare Figure~\ref{fig:phmap}): here deep accuracy is reached in the
-  high-order/low-$p$ region as well, and the optima sit near the spectral
-  corner because the matrices stay tiny.}
+  \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation,
+  with the same panel logic as Figure~\ref{fig:phmap} (colour = CPU time
+  with labelled error contours; inverse on the right): here deep accuracy is
+  reached in the high-order/low-$p$ region as well, and the optima sit near
+  the spectral corner because the matrices stay tiny; the polynomial CPU
+  growth along $s$ is nevertheless visible at the extended stage orders.}
   \label{fig:phmap-mathieu}
 \end{figure}
 
@@ -833,7 +845,11 @@ while the A-stable Gauss stages converge from the coarsest grids.
 \begin{figure}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_beam.pdf}
-  \caption{Work-precision — FEM beam with delayed boundary feedback.}
+  \caption{Work-precision — FEM beam with delayed boundary feedback. The
+  error axis is clipped at $3\cdot10^{0}$: below the CFL-like stability
+  bound the explicit methods produce meaningless values (up to $10^{43}$),
+  which carry no information beyond ``unstable''. CPU times are means of
+  repeated benchmark measurements (scatter below a few per cent).}
   \label{fig:wp-beam}
 \end{figure}
 

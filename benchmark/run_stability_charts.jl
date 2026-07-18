@@ -25,18 +25,30 @@ function mu_point(sys::BenchSystem, p::Int, tab)
 end
 
 function chart(make_sys, xs, ys, s, p, name, xlab, ylab, ttl)
-    tab = GL(s)
-    # warm-up (compile) outside the timed region
-    mu_point(make_sys(xs[1], ys[1]), p, tab)
-    R = Matrix{Float64}(undef, length(ys), length(xs))
-    wall = @elapsed for (j, x) in enumerate(xs), (i, y) in enumerate(ys)
-        R[i, j] = mu_point(make_sys(x, y), p, tab)
+    using_cache = false
+    Rfile = joinpath(RESULTS_DIR, "chart_$(name)_R.csv")
+    local R, wall
+    if isfile(Rfile)
+        R = readdlm(Rfile, ',')          # replot without recomputation
+        wall = NaN; using_cache = true
+        println("$name: replotting from cached data")
+    else
+        tab = GL(s)
+        # warm-up (compile) outside the timed region
+        mu_point(make_sys(xs[1], ys[1]), p, tab)
+        R = Matrix{Float64}(undef, length(ys), length(xs))
+        wall = @elapsed for (j, x) in enumerate(xs), (i, y) in enumerate(ys)
+            R[i, j] = mu_point(make_sys(x, y), p, tab)
+        end
+        writedlm(Rfile, R, ',')
+        n = length(xs) * length(ys)
+        @printf("%s: %d points in %.1f s  (%.2f ms/point)\n", name, n, wall, 1000wall/n)
     end
     n = length(xs) * length(ys)
-    @printf("%s: %d points in %.1f s  (%.2f ms/point)\n", name, n, wall, 1000wall/n)
 
     L = log10.(max.(R, 1e-12))
-    plt = heatmap(xs, ys, L, c=:RdBu, colorbar_title="\nlog10 rho(mu)",
+    # reversed RdBu: red = unstable (rho > 1), blue = stable
+    plt = heatmap(xs, ys, L, c=cgrad(:RdBu, rev=true), colorbar_title="\nlog10 rho(mu)",
                   xlabel=xlab, ylabel=ylab, title=ttl, clims=(-2, 2))
     contour!(plt, xs, ys, L, levels=[0.0], lc=:black, lw=2.5, cbar=false)
     for ext in ("png", "pdf")
@@ -61,12 +73,14 @@ w2, n2 = chart((Ω, kw) -> make_turning_ssv(kw=kw, Ω=Ω),
                4, 158, "turning", "Omega", "k_w",
                "SSV turning — 151x151, GL4, p=158")
 
-open(joinpath(PAPER_FIGS, "chart_times.tex"), "w") do io
-    @printf(io, "\\newcommand{\\chartTimeMathieu}{%.0f}\n", w1)
-    @printf(io, "\\newcommand{\\chartPtsMathieu}{%d}\n", n1)
-    @printf(io, "\\newcommand{\\chartMsMathieu}{%.1f}\n", 1000w1/n1)
-    @printf(io, "\\newcommand{\\chartTimeTurning}{%.0f}\n", w2)
-    @printf(io, "\\newcommand{\\chartPtsTurning}{%d}\n", n2)
-    @printf(io, "\\newcommand{\\chartMsTurning}{%.1f}\n", 1000w2/n2)
+if isfinite(w1) && isfinite(w2)   # keep previously measured times when replotting from cache
+    open(joinpath(PAPER_FIGS, "chart_times.tex"), "w") do io
+        @printf(io, "\\newcommand{\\chartTimeMathieu}{%.0f}\n", w1)
+        @printf(io, "\\newcommand{\\chartPtsMathieu}{%d}\n", n1)
+        @printf(io, "\\newcommand{\\chartMsMathieu}{%.1f}\n", 1000w1/n1)
+        @printf(io, "\\newcommand{\\chartTimeTurning}{%.0f}\n", w2)
+        @printf(io, "\\newcommand{\\chartPtsTurning}{%d}\n", n2)
+        @printf(io, "\\newcommand{\\chartMsTurning}{%.1f}\n", 1000w2/n2)
+    end
 end
 println("STABILITY CHARTS DONE")

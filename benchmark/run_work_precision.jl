@@ -20,19 +20,19 @@ function run_work_precision(sys::BenchSystem; p_max_time::Float64=20.0,
         floor_count = 0
         for p in ps
             print("  p=$p ")
-            local mu, tm, ts, nrep
+            local mu, tm, ts, nrep, tmin
             try
                 f = tab === :sdm2 ? (() -> sdm_mu(sys, p; order=2)) : (() -> sosd_mu(sys, p, tab))
-                mu, tm, ts, nrep = time_stats(f; budget=2.0, min_reps=4, max_reps=10)
+                mu, tm, ts, nrep, tmin = time_stats(f; budget=2.0, min_reps=4, max_reps=10)
             catch e
                 println("FAILED: ", sprint(showerror, e)[1:min(end,200)])
                 break
             end
             err = abs(mu - mu_ref)
             rel_err = err / abs(mu_ref)
-            @printf("rel_err=%.2e t=%.3gs(±%.1g,n=%d)\n", rel_err, tm, ts, nrep)
-            append_csv(csv, "method,nominal_order,p,abs_error,rel_error,t_mean,t_std,n_reps",
-                       [(label, nominal, p, err, rel_err, tm, ts, nrep)])
+            @printf("rel_err=%.2e t_min=%.3gs(n=%d)\n", rel_err, tmin, nrep)
+            append_csv(csv, "method,nominal_order,p,abs_error,rel_error,t_mean,t_std,n_reps,t_min",
+                       [(label, nominal, p, err, rel_err, tm, ts, nrep, tmin)])
             # stopping rules
             rel_err < 5e-15 ? (floor_count += 1) : (floor_count = 0)
             if floor_count >= 3 && p > 30

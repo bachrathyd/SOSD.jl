@@ -195,7 +195,9 @@ function time_stats(f; min_reps::Int=5, max_reps::Int=15, budget::Float64=3.0)
         (total > budget && length(times) >= min_reps) && break
         (total > 4 * budget) && break   # single very slow rep: stop early
     end
-    return value, mean(times), (length(times) > 1 ? std(times) : 0.0), length(times)
+    # the MINIMUM of repeated measurements (BenchmarkTools practice) is the
+    # robust estimate — immune to GC pauses and OS scheduling spikes
+    return value, mean(times), (length(times) > 1 ? std(times) : 0.0), length(times), minimum(times)
 end
 
 # ---------------------------------------------------------------------------

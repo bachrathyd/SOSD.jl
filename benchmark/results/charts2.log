@@ -1,0 +1,4 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+mathieu: 90601 points in 122.3 s  (1.35 ms/point)
+turning: 22801 points in 689.4 s  (30.24 ms/point)
+STABILITY CHARTS DONE

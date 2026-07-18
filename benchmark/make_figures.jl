@@ -92,7 +92,8 @@ function fig_work_precision(sysname)
     for m in methods
         idx = findall(==(m), String.(d["method"]))
         ps = fnum(d["p"][idx]); errs = clamp.(fnum(d["rel_error"][idx]), 1e-16, 3.0)
-        tm = fnum(d["t_mean"][idx])
+        # prefer minimum-of-repeats timing when available (robust to GC spikes)
+        tm = haskey(d, "t_min") ? fnum(d["t_min"][idx]) : fnum(d["t_mean"][idx])
         k = -fit_slope_window(ps, errs)
         lble = isfinite(k) ? "$m (k=$(round(k, digits=1)))" : m
         # time-scaling exponent from the upper half of the p range
@@ -248,14 +249,16 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
              ls=:dash, clabels=true, cbar=false)
     plot!(pC, [], [], lc=:royalblue, lw=1.8, label="log10 ε")
     plot!(pC, [], [], lc=:darkred, lw=1.4, ls=:dash, label="log10 T_CPU [s]")
-    for (tol, mk) in zip((1e-4, 1e-8, 1e-12), (:star5, :circle, :diamond))
+    # a single example optimum: the CPU-cheapest cell meeting ε = 1e-6
+    let tol = 1e-6
         best_t = Inf; bi = 0
         for i in eachindex(ss)
             if errs[i] <= tol && tms[i] < best_t; best_t = tms[i]; bi = i; end
         end
-        bi == 0 && continue
-        scatter!(pC, [ss[bi]], [log10(ps[bi])], marker=mk, ms=9, color=:gold,
-                 msc=:black, label="optimum @ ε=1e$(round(Int, log10(tol)))")
+        if bi != 0
+            scatter!(pC, [ss[bi]], [log10(ps[bi])], marker=:star5, ms=11, color=:gold,
+                     msc=:black, label="optimum @ ε = 1e-6 (s=$(ss[bi]), p=$(ps[bi]))")
+        end
     end
 
     # measured complexity laws
@@ -287,29 +290,41 @@ end
 #     bound; the cliff position collapses in N across all fixed-p curves.
 # ---------------------------------------------------------------------------
 function fig_cliff()
+    # redesigned: x-axis is the stage number s at fixed p in {1, 10, 100};
+    # top row: error vs s (cliff at the Shannon bound); bottom row: CPU vs s
+    # (the empirical s-complexity, incl. where the (sd)^3 term takes over)
     paths = [("mathieu", "easy: delayed Mathieu", 1.7), ("turning_ssv", "hard: turning SSV", 36.0)]
-    panels = []
+    top = []; bottom = []
     for (sysname, ttl, osc) in paths
-        path = joinpath(RESULTS, "p_refinement_cliff_$sysname.csv")
+        path = joinpath(RESULTS, "s_complexity_$sysname.csv")
         isfile(path) || continue
         d = load_csv(path)
-        ps = Int.(d["p"]); ss = Int.(d["s"]); Ns = Int.(d["N"])
-        errs = max.(fnum(d["rel_error"]), 1e-16)
-        plt = plot(xscale=:log10, yscale=:log10, xlabel="total samples  N = p(s+1)",
-                   ylabel="relative error", legend=:bottomleft, title=ttl,
-                   ylims=(1e-16, 3.0))   # clip pre-resolution nonsense at 3e0
-        # Shannon-type band: N = c * osc for c in [5, 10]
-        vspan!(plt, [5osc, 10osc], fillalpha=0.15, color=:gray, label="N = (5–10)·ω_maxT/2π")
-        for (i, p) in enumerate(sort(unique(ps)))
+        ps = Int.(d["p"]); ss = Int.(d["s"])
+        errs = clamp.(fnum(d["rel_error"]), 1e-16, 3.0)
+        tms = fnum(d["t_min"])
+        pE = plot(xscale=:log10, yscale=:log10, xlabel="stages s", ylabel="relative error",
+                  legend=:bottomleft, title=ttl, ylims=(1e-16, 3.0))
+        pT = plot(xscale=:log10, yscale=:log10, xlabel="stages s", ylabel="CPU time [s]",
+                  legend=:topleft, title="CPU time — $ttl")
+        for p in sort(unique(ps))
             idx = findall(==(p), ps)
-            ord = sortperm(Ns[idx])
-            plot!(plt, Ns[idx][ord], errs[idx][ord], marker=:circle, ms=3, lw=1.8,
-                  label="p = $p (s = $(minimum(ss[idx]))…$(maximum(ss[idx])))")
+            ord = sortperm(ss[idx])
+            sv = ss[idx][ord]
+            # cliff position predicted by the sampling bound: s* = c*osc/p - 1
+            plot!(pE, sv, errs[idx][ord], marker=:circle, ms=3, lw=1.8, label="p = $p")
+            scliff = 7.5osc / p - 1
+            scliff > 1 && vline!(pE, [scliff], ls=:dot, lc=:gray, label=false)
+            # CPU: fit the large-s tail exponent
+            tt = tms[idx][ord]
+            large = sv .>= max(8, 0.4maximum(sv))
+            kt = sum(large) > 2 ? ([log10.(Float64.(sv[large])) ones(sum(large))] \ log10.(tt[large]))[1] : NaN
+            plot!(pT, sv, tt, marker=:circle, ms=3, lw=1.8,
+                  label=isfinite(kt) ? "p = $p (t ~ s^$(round(kt, digits=1)))" : "p = $p")
         end
-        push!(panels, plt)
+        push!(top, pE); push!(bottom, pT)
     end
-    isempty(panels) && (println("skip cliff"); return)
-    plt = plot(panels..., layout=(1, length(panels)), size=(1200, 460),
+    isempty(top) && (println("skip cliff"); return)
+    plt = plot(top..., bottom..., layout=(2, length(top)), size=(1300, 850),
                left_margin=8Plots.mm, bottom_margin=8Plots.mm)
     saveboth(plt, "p_refinement_cliff")
 end
@@ -321,19 +336,23 @@ function fig_classic()
     path = joinpath(RESULTS, "classic_sd_vs_mfsd.csv")
     isfile(path) || (println("skip classic"); return)
     d = load_csv(path)
-    ps = fnum(d["p"]); t_lr = fnum(d["t_mfsd"]); s_lr = fnum(d["t_mfsd_std"])
-    t_cl = fnum(d["t_classic"]); s_cl = fnum(d["t_classic_std"])
+    ps = fnum(d["p"]); t_lr = fnum(d["t_mfsd"]); t_cl = fnum(d["t_classic"])
     ok = isfinite.(t_cl)
     k_lr = ([log10.(ps) ones(length(ps))] \ log10.(t_lr))[1]
     k_cl = sum(ok) > 1 ? ([log10.(ps[ok]) ones(sum(ok))] \ log10.(t_cl[ok]))[1] : NaN
     plt = plot(xscale=:log10, yscale=:log10, xlabel="resolution  p", ylabel="CPU time [s]",
                legend=:topleft, title="SD-classic vs multiplication-free LR mapping")
-    plot!(plt, ps[ok], t_cl[ok], ribbon=(min.(s_cl[ok], t_cl[ok] .* 0.9), s_cl[ok]),
-          fillalpha=0.25, marker=:circle, ms=3, lw=2.5, color=:firebrick,
+    plot!(plt, ps[ok], t_cl[ok], marker=:circle, ms=3.5, lw=2.5, color=:firebrick,
           label="SD-classic (t ~ p^$(round(k_cl, digits=2)))")
-    plot!(plt, ps, t_lr, ribbon=(min.(s_lr, t_lr .* 0.9), s_lr), fillalpha=0.25,
-          marker=:circle, ms=3, lw=2.5, color=:royalblue,
+    plot!(plt, ps, t_lr, marker=:circle, ms=3.5, lw=2.5, color=:royalblue,
           label="MFSD LR (t ~ p^$(round(k_lr, digits=2)))")
+    # dashed fitted lines (predecessor style)
+    fit_l = 10 .^ (k_lr .* log10.(ps) .+ ([log10.(ps) ones(length(ps))] \ log10.(t_lr))[2])
+    plot!(plt, ps, fit_l, ls=:dash, lc=:gray30, label=false)
+    if sum(ok) > 1
+        c_cl = ([log10.(ps[ok]) ones(sum(ok))] \ log10.(t_cl[ok]))[2]
+        plot!(plt, ps[ok], 10 .^ (k_cl .* log10.(ps[ok]) .+ c_cl), ls=:dash, lc=:gray30, label=false)
+    end
     saveboth(plt, "classic_sd_vs_mfsd")
 end
 

@@ -197,6 +197,74 @@ function fig_nonsmooth()
 end
 
 # ---------------------------------------------------------------------------
+# 5b. The p-h map: error and CPU time over the (s, p) plane
+#     (h-refinement = up along p at fixed s: linear cost;
+#      p-refinement = right along s at fixed p: polynomial cost)
+#     Missing cells = NaN (not computed / beyond the time cap).
+# ---------------------------------------------------------------------------
+function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, -1, 0])
+    path = joinpath(RESULTS, "sweet_spot_$sysname.csv")
+    isfile(path) || (println("skip ph-map $sysname"); return)
+    d = load_csv(path)
+    ss = Int.(d["s"]); ps = Int.(d["p"])
+    errs = fnum(d["rel_error"]); tms = fnum(d["t_mean"])
+    svals = sort(unique(ss)); pvals = sort(unique(ps))
+    E = fill(NaN, length(pvals), length(svals))
+    Tm = fill(NaN, length(pvals), length(svals))
+    for i in eachindex(ss)
+        r = findfirst(==(ps[i]), pvals); c = findfirst(==(ss[i]), svals)
+        E[r, c] = log10(max(errs[i], 1e-16)); Tm[r, c] = log10(tms[i])
+    end
+    ylog = log10.(pvals)
+    yt = unique(round.(Int, range(minimum(ylog), maximum(ylog), length=5)))
+    yticks = (Float64.(yt), ["10^{$k}" for k in yt])
+
+    pA = heatmap(svals, ylog, E, c=:viridis, colorbar_title="log10 rel. error",
+                 xlabel="stages s (order 2s)", ylabel="steps p", yticks=yticks,
+                 title="Error over the (s, p) plane — $sysname")
+    contour!(pA, svals, ylog, Tm, levels=time_levels, lc=:white, lw=1.2,
+             clabels=true, cbar=false)
+
+    pB = heatmap(svals, ylog, Tm, c=:plasma, colorbar_title="log10 CPU time [s]",
+                 xlabel="stages s (order 2s)", ylabel="steps p", yticks=yticks,
+                 title="CPU time — white: error contours")
+    contour!(pB, svals, ylog, E, levels=err_levels, lc=:white, lw=1.2,
+             clabels=true, cbar=false)
+    # optimal (min CPU meeting target) markers
+    for (tol, mk) in zip((1e-4, 1e-8, 1e-12), (:circle, :star5, :diamond))
+        best_t = Inf; bi = 0
+        for i in eachindex(ss)
+            if errs[i] <= tol && tms[i] < best_t; best_t = tms[i]; bi = i; end
+        end
+        bi == 0 && continue
+        scatter!(pB, [ss[bi]], [log10(ps[bi])], marker=mk, ms=7, color=:white,
+                 msc=:black, label="opt @ 1e$(round(Int, log10(tol)))")
+    end
+
+    # measured complexity laws
+    kh = Float64[]
+    for s in svals
+        idx = findall(==(s), ss)
+        length(idx) < 4 && continue
+        push!(kh, ([log10.(Float64.(ps[idx])) ones(length(idx))] \ log10.(tms[idx]))[1])
+    end
+    # p-refinement: fit across s at the largest p with >= 4 stage values
+    kp = NaN
+    for p in reverse(pvals)
+        idx = findall(==(p), ps)
+        if length(idx) >= 4
+            kp = ([log10.(Float64.(ss[idx])) ones(length(idx))] \ log10.(tms[idx]))[1]
+            break
+        end
+    end
+    ttl = @sprintf("h-refinement t ∝ p^{%.1f}   |   p-refinement t ∝ s^{%.1f}",
+                   isempty(kh) ? NaN : median(kh), kp)
+    plt = plot(pA, pB, layout=(1, 2), size=(1250, 480), plot_title=ttl,
+               left_margin=8Plots.mm, bottom_margin=8Plots.mm)
+    saveboth(plt, "ph_map_$sysname")
+end
+
+# ---------------------------------------------------------------------------
 # 6. SD-classic vs MFSD baseline parity
 # ---------------------------------------------------------------------------
 function fig_classic()
@@ -228,6 +296,10 @@ for s in ("mathieu", "bio", "turning_ssv", "beam")
 end
 fig_sweet_spot("mathieu")
 fig_sweet_spot("beam")
+fig_sweet_spot("turning_ssv"; tols=[1e-4, 1e-6, 1e-8])
+fig_ph_map("mathieu")
+fig_ph_map("beam")
+fig_ph_map("turning_ssv")
 fig_spectral_corner()
 fig_nonsmooth()
 println("Done.")

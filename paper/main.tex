@@ -50,9 +50,11 @@ for $s$-stage Gauss quadrature points --- provided the delayed terms are
 interpolated by the continuous extension of the same scheme. In the limit of
 a single ultra-high-order step, the framework degenerates to the known global
 spectral method; between the two extremes lies a continuum in which per-step
-order is traded against matrix sparsity. Because the number of nonzeros grows
-cubically with the stage number while the error decreases only exponentially,
-the CPU-time optimum for a prescribed accuracy is a problem-dependent
+order is traded against matrix sparsity. Because the cost at fixed step count
+grows polynomially with the stage number (measured exponents $1.3$--$1.6$
+for the rank-one delay couplings typical of machining and feedback systems,
+up to cubic for dense coupling) while the $h$-refinement cost is exactly
+linear, the CPU-time optimum for a prescribed accuracy is a problem-dependent
 \emph{sweet spot} at moderate order and many steps: its location is measured
 for systems requiring only tens of points per period and for systems --- high
 natural frequency relative to the period --- requiring many hundreds, where
@@ -372,10 +374,17 @@ positive prescription:
         exponents.
   \item \textbf{Variance-reported timing.} Every timed point is a warm-started
         mean over repeated runs with its standard deviation.
-  \item \textbf{Both refinement families on the same axes.} Every method is
-        shown under $h$-refinement, and the per-step order $s$ is swept
-        separately (Section~\ref{sec:sweetspot}) so the full
-        $(p,s)$-surface is visible, not a single slice.
+  \item \textbf{Both refinement families, both complexity laws.} Every
+        method is shown under $h$-refinement (fixed order, growing $p$),
+        where the cost of the banded assembly is \emph{linear},
+        $t \propto p^{1}$, \emph{and} under $p$-refinement (fixed $p$,
+        growing stage number $s$), where the cost is \emph{polynomial} in
+        the order --- per-step elimination $\mathcal{O}\bigl((sd)^3\bigr)$
+        plus stage-quadratic fill. A comparison that shows only one
+        direction hides one of the two laws. The complete picture is the
+        $(s, p)$-map of Section~\ref{sec:sweetspot}: error and CPU time
+        rendered over the whole plane, with cells beyond a CPU budget left
+        uncomputed (NaN).
   \item \textbf{Fixed environment.} One machine, one BLAS thread
         configuration, pinned package versions, deterministic start vectors;
         all reported alongside the results.
@@ -519,16 +528,19 @@ multiplication-free route is already $2500\times$ faster.
 For a fixed relative accuracy target $\varepsilon$, sweeping the per-step
 order $s$ while choosing the smallest resolution $p$ that reaches
 $\varepsilon$ produces a U-shaped CPU-time curve: low orders need excessive
-$p$, high orders pay cubically growing per-step fill,
-$\mathrm{nnz}(\mathbf{\Phi}_\mathrm{L}) \sim p\,d^2 s^3$. A first-order
-cost model, $\mathrm{cost} \propto p\,s^3$ with
-$\varepsilon \propto (T/p)^{2s}$, predicts the optimum
+$p$, high orders pay polynomially growing per-step cost --- stage
+elimination $\mathcal{O}\bigl((sd)^3\bigr)$ plus fill, with measured
+fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$) to $1.6$
+(beam, $d=28$) for rank-one delay coupling, and $k \to 3$ in the
+dense-coupling limit. A first-order cost model,
+$\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (T/p)^{2s}$,
+predicts the optimum
 \begin{equation}
-  s^\ast \approx \tfrac{1}{6}\ln(1/\varepsilon),
+  s^\ast \approx \tfrac{1}{2k}\ln(1/\varepsilon),
   \label{eq:sweetspot}
 \end{equation}
-i.e.\ even a $10^{-12}$ accuracy target asks for only $s^\ast \approx 5$
-Gauss stages --- moderate order, many steps. This asymptotic model applies
+i.e.\ even a $10^{-12}$ accuracy target asks for only
+$s^\ast \approx 5$--$10$ Gauss stages --- moderate order, many steps. This asymptotic model applies
 when the fill actually binds. For the small, smooth Mathieu system it does
 not: the measured optima sit at $s^\ast = 5$--$8$ with as few as
 $p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $3.8$\,ms with
@@ -540,6 +552,28 @@ $s=20$ already on the Mathieu system, and for the high-demand and
 high-dimensional systems of Section~\ref{sec:contrast} the optimum falls
 back to moderate order.
 \TODOnum{beam + turning optima from final CSVs}
+
+Figure~\ref{fig:phmap} renders the full picture: relative error and CPU time
+as colour maps over the $(s, p)$ plane, with the two complexity laws visible
+as the gradient directions --- along $p$ at fixed $s$ the cost grows
+linearly, along $s$ at fixed $p$ polynomially --- and the per-target optima
+marked. Cells whose cost exceeds the CPU budget are not computed (blank).
+For a given error contour, the cheapest cell is never the
+single-step/ultra-high-order corner once the resolution demand or the system
+dimension is nontrivial: the polynomial $s$-law meets the linear $p$-law at
+moderate order.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/ph_map_turning_ssv.pdf}
+  \caption{The $(s, p)$-map for the high-resolution-demand turning system:
+  relative error (left, with white CPU-time contours) and CPU time (right,
+  with white error contours and per-target optima). $h$-refinement (vertical)
+  is linear in cost, $p$-refinement (horizontal) polynomial; blank cells
+  exceed the CPU budget. The corresponding maps for the low-demand Mathieu
+  system are in Appendix~\ref{app:morewp}.}
+  \label{fig:phmap}
+\end{figure}
 
 \subsection{Contrasting resolution demands: where the banded route wins}
 \label{sec:contrast}
@@ -564,9 +598,31 @@ range:
         p^\ast)$ and CPU vs high-order alternative, from
         sweet\_spot\_turning\_ssv.csv}
 \end{itemize}
-The same contrast governs high-dimensional systems: for the FEM beam
-($d = 28$), memory --- the $d^2 s^3$ per-step fill --- caps the affordable
-stage number before CPU time does.
+The resolution demand can be estimated a priori by a sampling (Shannon-type)
+argument. The discretization carries $N = p\,(s{+}1)$ solution samples per
+period; resolving the fastest natural oscillation of the system,
+$\omega_{\max}$, requires at least the Nyquist floor of two samples per
+oscillation period and, for engineering accuracy, empirically
+$c \approx 5$--$10$:
+\begin{equation}
+  N \;=\; p\,(s{+}1) \;\gtrsim\; c\,\frac{\omega_{\max} T}{2\pi}.
+  \label{eq:nyquist}
+\end{equation}
+For the turning system ($\omega_{\max}T/2\pi \approx 36$) this predicts
+$N \gtrsim 200$--$400$, matching the observed onset of convergence, and the
+measured garbage below it (both methods at $p = 50$, $s = 2$, i.e.\
+$N = 150$, return multipliers off by orders of magnitude). The bound
+\eqref{eq:nyquist} sharpens the sweet-spot analysis: when $N$ is pinned by
+the oscillation content rather than by the accuracy target, the cost of the
+banded route scales as $p\,s^{k} \approx N\,s^{k-1}$ --- \emph{still
+increasing in the order at fixed sample count} for every measured exponent
+$k$ --- so the smallest stage number that meets the accuracy target is
+CPU-optimal, and the single-step spectral corner (all $N$ samples in one
+dense block) is maximally penalized. Conversely, when the problem is
+easy ($N$ shrinks exponentially with growing $s$), higher order pays until
+the fill takes over. The same contrast governs high-dimensional systems: for
+the FEM beam ($d = 28$), memory --- the $d^2 s^3$ per-step fill --- caps the
+affordable stage number before CPU time does.
 
 \subsection{Explicit versus implicit steps}
 \label{sec:expl-impl}
@@ -621,7 +677,7 @@ The measurements condense into a short decision rule for practitioners.
         even $\varepsilon = 10^{-12}$ asks only for $s \approx 5$. Then pick
         $p$ by one or two refinement steps until the target is met --- the
         cost is linear in $p$, so overshooting $p$ is cheap, whereas
-        overshooting $s$ inflates the fill cubically.
+        overshooting $s$ inflates the per-step cost polynomially.
   \item \textbf{Large systems: cap the order earlier.} The per-step fill
         scales with $d^2 s^3$; for FEM-scale models ($d \gtrsim 20$) the
         measured optima sit at $s = 2$--$3$ \TODOnum{confirm exact beam
@@ -721,6 +777,16 @@ every embedded integrator, Gauss stages dominating beyond
 $\varepsilon \approx 10^{-4}$. On the stiff beam the explicit methods are
 unstable below a CFL-like resolution bound (errors up to $10^{43}$),
 while the A-stable Gauss stages converge from the coarsest grids.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/ph_map_mathieu.pdf}
+  \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation
+  (compare Figure~\ref{fig:phmap}): here deep accuracy is reached in the
+  high-order/low-$p$ region as well, and the optima sit near the spectral
+  corner because the matrices stay tiny.}
+  \label{fig:phmap-mathieu}
+\end{figure}
 
 \begin{figure}[t]
   \centering

@@ -1,12 +1,15 @@
-# Large-p CPU showcase (Daniel's request): the turning-SSV system needs at
-# least several hundred points per period (T/T_osc ≈ 36), in contrast to the
-# delayed Mathieu equation where p ≈ 10–30 suffices. Sweep (p, s) exactly as
-# in run_sweet_spot.jl; the banded moderate-order route should win decisively
-# here, while the single-step spectral corner is not even feasible.
+# Remaining studies after the main suite (restarted with the D>12 dense-path
+# fix): beam sweet-spot, non-smooth stress test, turning sweet-spot showcase.
 
-(@isdefined SOSD_HARNESS_LOADED) || (include(joinpath(@__DIR__, "harness.jl")); SOSD_HARNESS_LOADED = true)
+include(joinpath(@__DIR__, "harness.jl"))
+SOSD_HARNESS_LOADED = true
 
-function sweep_ps_turning(sys::BenchSystem, ss::Vector{Int}, ps_of_s::Function; time_cap=30.0)
+t0 = time()
+
+println("="^70, "\n SWEET SPOT — BEAM\n", "="^70)
+even_p(x) = max(2, 2 * round(Int, x / 2))
+# reuse the sweep from run_sweet_spot.jl without re-running mathieu:
+function sweep_ps(sys::BenchSystem, ss::Vector{Int}, ps_of_s::Function; time_cap=25.0)
     mu_ref = reference_mu(sys)
     csv = joinpath(RESULTS_DIR, "sweet_spot_$(sys.name).csv")
     isfile(csv) && rm(csv)
@@ -29,14 +32,18 @@ function sweep_ps_turning(sys::BenchSystem, ss::Vector{Int}, ps_of_s::Function; 
                        [(s, 2s, p, rel_err, tm, ts, nrep, stats.n_L, stats.nnz_L, stats.nnz_R,
                          stats.density_L, stats.bandwidth_L)])
             tm > time_cap && (println("  (time cap)"); break)
-            rel_err < 1e-14 && p > 200 && break
+            rel_err < 1e-14 && p > 4 && break
         end
     end
     println("[sweet-spot] $(sys.name) done -> $csv")
 end
 
-# per Daniel: cap ~4 s so the p-h map simply has NaN where cost explodes
-sweep_ps_turning(make_turning_ssv(),
-                 collect(1:8),
-                 s -> unique(round.(Int, 10 .^ (2.0:0.2:3.8)));
-                 time_cap=4.0)
+sweep_ps(make_beam(), collect(1:6), s -> unique(even_p.(2 .^ (1.5:0.5:8.5))); time_cap=4.0)
+
+println("\n", "="^70, "\n NON-SMOOTH STRESS TEST\n", "="^70)
+include(joinpath(@__DIR__, "run_nonsmooth.jl"))
+
+println("\n", "="^70, "\n SWEET SPOT — TURNING (large-p showcase)\n", "="^70)
+include(joinpath(@__DIR__, "run_sweet_spot_turning.jl"))
+
+@printf("\nRemaining studies finished in %.1f minutes.\n", (time() - t0) / 60)

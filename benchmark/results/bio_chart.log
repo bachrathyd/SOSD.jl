@@ -1,0 +1,8 @@
+Generating Biological Stability Chart...
+  interpolate! :    0.105524 seconds (1.37 M allocations: 36.947 MiB, 6.95% compilation time: <1% of which was recompilation)
+  1 refine! & interpolate! :    0.193325 seconds (1.89 M allocations: 51.215 MiB, 19.31% gc time)
+  2 refine! & interpolate! :    0.272423 seconds (3.34 M allocations: 90.591 MiB, 7.14% gc time)
+  3 refine! & interpolate! :    0.495039 seconds (6.24 M allocations: 169.310 MiB, 2.76% gc time)
+           checkneighbour! :    0.222255 seconds (2.86 M allocations: 77.916 MiB, 5.59% gc time)
+total time:  :    1.370578 seconds (15.78 M allocations: 429.323 MiB, 6.04% gc time, 6.50% compilation time: <1% of which was recompilation)
+Biological chart saved to bio_stability_chart.png

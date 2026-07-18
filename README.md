@@ -3,12 +3,32 @@
 A high-performance Julia package for the stability analysis of time-periodic Delayed Differential Equations (DDEs).
 
 ## Features
-- **O(p^1) Time Complexity:** Avoids explicit construction of dense monodromy matrices.
-- **Spectral Accuracy:** Supports high-order Gauss-Legendre collocation (up to 6th order and beyond).
-- **Lazy Operator:** Uses `LinearMaps.jl` for memory-efficient Floquet multiplier calculation via `KrylovKit.jl`.
-- **Automatic Linearization:** Extract system matrices $A(t)$ and $B_i(t)$ automatically from DDE RHS functions.
-- **Explicit Sparse Support:** Includes tools to build explicit sparse representations for validation or custom solvers.
+- **O(p^1) Time Complexity:** Avoids explicit construction of dense monodromy matrices
+  (verified vs. the traditional monodromy build, which measures ~O(p^2.9)).
+- **Arbitrary-order collocation steps:** Gauss–Legendre `GL(s)` with verified
+  superconvergent order `2s` (GL5 → observed order 9.96), plus Radau IIA (`2s−1`)
+  and Lobatto IIIA (`2s−2`) via `from_rkjl`. Explicit RK1–RK8 are available, but
+  their observed order is capped by their dense-output (continuous-extension) order.
+- **Time-periodic delays** `τ(t)` supported (e.g. spindle-speed variation).
+- **Large systems:** automatic heap-allocated assembly path for `S*D > 32`
+  (`build_system_matrices_dense`) — FEM-scale models (d ≈ 30+) work out of the box.
+- **Lazy Operator:** `LinearMaps.jl` + `KrylovKit.jl` memory-efficient route.
+- **Explicit Sparse Support:** banded `(Φ_R, Φ_L)` pair with unit block-lower-triangular
+  `Φ_L` (`SparseMonodromyMap`), validated against the lazy operator to ~1e-16.
+- **Automatic Linearization:** extract `A(t)`, `B_k(t)` from a DDE RHS function; delay
+  lags are auto-detected from the history calls, or passed explicitly via
+  `extract_SDM_system(rhs, p, Val(D); delays=[τ1, ...])`. Out-of-window delayed
+  lookups raise an error instead of silently clamping.
 - **MDBM Integration:** Ready for multi-dimensional stability chart generation.
+
+## Benchmark suite & paper
+`benchmark/` contains the full fair-comparison harness (order verification,
+work-precision, sweet-spot, non-smooth stress test, SD-classic parity) used by the
+manuscript in `paper/` — see `benchmark/run_all.jl` and `benchmark/make_figures.jl`.
+Baselines are cross-validated against
+[SemiDiscretizationMethod.jl](https://github.com/bachrathyd/SemiDiscretizationMethod.jl)
+on all four test systems (delayed Mathieu, seasonal scalar model, SSV turning,
+FEM beam with delayed boundary feedback).
 
 ## Installation
 ```julia

@@ -422,8 +422,10 @@ the sweet-spot study below. \TODOnum{beam WP numbers after suite completes}
 For baseline parity with the predecessor \citep{Bachrathy2026},
 Figure~\ref{fig:classic} reproduces, in the present environment, the
 time-complexity contrast between the traditional monodromy construction
-(SD-classic, fitted exponent $\approx$ \TODOnum{x.x}) and the banded LR
-mapping ($\approx 1.0$); the crossover already lies below $p = 100$.
+(SD-classic, fitted exponent $2.7$, in line with the $\approx\!2.8$ reported
+in \citealp{Bachrathy2026}) and the banded LR mapping (fitted exponent
+$1.1$); both agree in the multiplier to $10^{-15}$, and at $p = 1778$ the
+multiplication-free route is already $2500\times$ faster.
 
 \begin{figure}[t]
   \centering
@@ -500,12 +502,38 @@ engineering systems --- reinforcing, not weakening, the sweet-spot message.
 \section{Discussion: practical guidance}
 \label{sec:discussion}
 
-\TODOnum{Decision rule finalized after numbers: given dimension $d$,
-resolution demand (period-to-delay ratio, coefficient smoothness) and target
-accuracy, recommend Gauss stages $s \approx \max(2, \lceil \ln(1/\varepsilon)/6
-\rceil)$ capped by the $d^2 s^3$ fill, explicit RK4 for very cheap
-moderate-accuracy sweeps, and warn against single-step spectral mode for
-$d \gtrsim 10$ or non-smooth coefficients.}
+The measurements condense into a short decision rule for practitioners.
+
+\begin{enumerate}
+  \item \textbf{Default: Gauss stages, moderate order.} Choose
+        $s \approx \max\bigl(2,\ \lceil\ln(1/\varepsilon)/6\rceil\bigr)$ for a
+        relative accuracy target $\varepsilon$ (Equation~\ref{eq:sweetspot});
+        even $\varepsilon = 10^{-12}$ asks only for $s \approx 5$. Then pick
+        $p$ by one or two refinement steps until the target is met --- the
+        cost is linear in $p$, so overshooting $p$ is cheap, whereas
+        overshooting $s$ inflates the fill cubically.
+  \item \textbf{Large systems: cap the order earlier.} The per-step fill
+        scales with $d^2 s^3$; for FEM-scale models ($d \gtrsim 20$) the
+        measured optima sit at $s = 2$--$3$ \TODOnum{confirm exact beam
+        optima}, and memory, not CPU, becomes the binding constraint for
+        $s \gtrsim 5$.
+  \item \textbf{Avoid the spectral corner for engineering models.} The
+        single-step (global collocation) mode is elegant for small, smooth,
+        low-accuracy-run-count problems, but it abandons sparsity
+        ($\mathrm{nnz} \sim d^2 s^3$ in one dense block) and loses its order
+        advantage entirely for non-smooth coefficients (act-and-wait,
+        interrupted cutting).
+  \item \textbf{Explicit steps only for cheap low-accuracy sweeps on
+        non-stiff systems.} Their observed order is capped by the available
+        dense output ($\approx 3$ for classical RK4), and on stiff
+        high-dimensional systems they are unusable below a CFL-like
+        resolution bound, where the A-stable Gauss stages converge from the
+        coarsest grids.
+  \item \textbf{Non-smooth coefficients: align or refine.} If switching
+        instants can be placed on grid nodes, full order is retained; if
+        not, expect order collapse and prefer moderate order with more
+        steps.
+\end{enumerate}
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -537,21 +565,58 @@ The author declares no conflict of interest.
 \section{Model parameters}
 \label{app:params}
 
-\TODOnum{Full parameter tables for the four systems, copied from
-benchmark/harness.jl definitions: Mathieu ($\delta=3$, $\varepsilon=0.2$,
-$b_0=-0.15$, $a_1=0.1$, $\tau=T=2\pi$); seasonal ($a=1$, $b=1$, $\tau=2$,
-$T=2\pi$); turning SSV ($k_w=0.2$, $\zeta=0.1$, $\Omega=0.3$,
-$A_\mathrm{SSV}=0.1$, $N_T=10$); beam ($E=210$\,GPa, $A=10^{-4}$\,m$^2$,
-$\rho=7800$\,kg/m$^3$, $L=100$\,m, $\eta=0.01$, $N=15$, $P=0.2$,
-$\tau = 0.2\,L/c$, $T = 0.4\,L/c$, switch at $0.8\,T$).}
+\paragraph{Delayed Mathieu equation} ($d=2$)
+\begin{equation*}
+  \ddot{x} + a_1 \dot{x} + \bigl(\delta + \varepsilon\cos(2\pi t/T)\bigr)x
+  = b_0\, x(t-\tau) + \sin(4\pi t / T),
+\end{equation*}
+with $\delta = 3$, $\varepsilon = 0.2$, $b_0 = -0.15$, $a_1 = 0.1$,
+$\tau = T = 2\pi$. Converged dominant multiplier
+$\mu = 0.351417260953549$ (Table, two-resolution GL10 reference).
+
+\paragraph{Seasonal scalar model} ($d=1$)
+$\dot{y}(t) = -(a + b\cos t)\, y(t - \tau)$ with $a = b = 1$, $\tau = 2$,
+$T = 2\pi$; $\mu = 0.626021929290183$.
+
+\paragraph{Turning with spindle-speed variation} ($d=2$)
+\begin{equation*}
+  \ddot{x} + \zeta \dot{x} + (1 + k_w)x = k_w\, x\bigl(t - \tau(t)\bigr)
+  + \cos(2\pi t),\quad
+  \tau(t) = \frac{2\pi}{\Omega}\Bigl(1 + A_\mathrm{SSV}
+    \sin\tfrac{2\pi t}{T}\Bigr),
+\end{equation*}
+with $k_w = 0.2$, $\zeta = 0.1$, $\Omega = 0.3$, $A_\mathrm{SSV} = 0.1$,
+$T = N_T\, 2\pi/\Omega$, $N_T = 10$ (so $T/\tau_{\max} \approx 9.1$);
+$\mu \approx 4.47617$.
+
+\paragraph{FEM beam with delayed boundary feedback} ($d = 28$)
+Longitudinal rod of length $L = 100$\,m, Young's modulus $E = 210$\,GPa,
+cross-section $A = 10^{-4}$\,m$^2$, density $\rho = 7800$\,kg/m$^3$,
+stiffness-proportional damping $\eta = 0.01$, discretized by $N = 15$ linear
+elements with lumped mass, fixed at the first node ($d = 2(N-1) = 28$ states).
+Delayed displacement feedback from the first free node to the last node with
+gain $P\,E/(L/N)$, $P = 0.2$; wave speed $c = \sqrt{E/\rho}$,
+$T_\mathrm{sp} = L/c$, delay $\tau = 0.2\,T_\mathrm{sp}$, period
+$T = 0.4\,T_\mathrm{sp}$ ($\tau/T = 1/2$); constant unit force at the free
+end. In the act-and-wait configuration the feedback matrix is active only for
+$t < 0.8\,T$. \TODOnum{beam reference $\mu$ from final CSV}
 
 \section{Reproducibility}
 \label{app:repro}
 
-\TODOnum{Julia version, package versions, machine, BLAS threads = 1,
-repository URL and commit hash; every figure regenerable by
+All computations: Julia 1.12.4 on Windows 11 (x86-64), BLAS restricted to a
+single thread, package versions pinned by the repository manifests
+(\textsf{MFCM.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
+baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are means over
+repeated warm-started runs with standard deviations shown as bands; start
+vectors of all Krylov iterations are deterministic. Reference multipliers are
+accepted only when two resolutions of a GL(10) (small systems) or lazy GL(5)
+(beam) computation agree to $10^{-10}$ relative, and the reference method is
+cross-validated against \textsf{SemiDiscretizationMethod.jl} on every system.
+Every figure regenerates via
 \texttt{julia --project=benchmark benchmark/run\_all.jl} followed by
-\texttt{make\_figures.jl}.}
+\texttt{benchmark/make\_figures.jl}. \TODOnum{repository URL + commit hash at
+submission}
 
 \bibliographystyle{SageH}
 \bibliography{references}

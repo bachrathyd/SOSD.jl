@@ -1,0 +1,8 @@
+Generating Milling Stability Chart...
+  interpolate! :    0.256611 seconds (2.29 M allocations: 89.633 MiB, 25.40% gc time, 3.30% compilation time: <1% of which was recompilation)
+  1 refine! & interpolate! :    0.308660 seconds (3.90 M allocations: 154.280 MiB, 7.00% gc time)
+  2 refine! & interpolate! :    0.766592 seconds (9.37 M allocations: 371.603 MiB, 4.18% gc time)
+  3 refine! & interpolate! :    1.417489 seconds (19.40 M allocations: 769.687 MiB, 4.40% gc time)
+           checkneighbour! :    0.329203 seconds (4.00 M allocations: 159.180 MiB, 5.62% gc time)
+total time:  :    3.155848 seconds (39.03 M allocations: 1.511 GiB, 6.33% gc time, 2.69% compilation time: <1% of which was recompilation)
+Milling chart saved to milling_stability_chart.png

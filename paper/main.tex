@@ -17,9 +17,9 @@
 
 \runninghead{Bachrathy}
 
-\title{Higher-Order Multiplication-Free Stability Analysis of Time-Periodic
-Delayed Systems: Runge--Kutta and Collocation Steps and the
-Accuracy--Sparsity Trade-off}
+\title{Solution-Operator Semi-Discretization: General-Order
+Multiplication-Free Stability Analysis of Time-Periodic Delayed Systems and
+the Accuracy--Sparsity Trade-off}
 
 \author{D\'aniel Bachrathy\affilnum{1}}
 
@@ -37,32 +37,36 @@ The multiplication-free semi-discretization method (MFSD) reduces the
 stability analysis of time-periodic delay differential equations to a sparse,
 banded generalized eigenvalue problem with linear time complexity in the
 resolution $p$; however, the classical piecewise-constant step limits its
-convergence order to two. This paper shows that, once the analysis is written
-in the multiplication-free form, the per-step integrator becomes a free design
-choice: the residual block rows of any explicit Runge--Kutta or implicit
-collocation scheme (Gauss--Legendre, Radau, Lobatto) can be embedded in the
-banded system through their Butcher tableaux, raising the convergence order of
-the dominant characteristic multipliers to the order of the chosen scheme ---
-super-convergent order $2s$ for $s$-stage Gauss collocation --- provided the
-delayed terms are interpolated by the continuous extension of the same scheme.
-In the limit of a single ultra-high-order step, the framework degenerates to
-the known global collocation (pseudospectral) method; between the two extremes
-lies a continuum in which per-step order is traded against matrix sparsity.
-Because the number of nonzeros grows cubically with the stage number while the
-error decreases only exponentially, the CPU-time optimum for a prescribed
-accuracy is a problem-dependent \emph{sweet spot} at moderate order and many
-steps, which we locate experimentally for a small benchmark system (the
-delayed Mathieu equation) and a high-dimensional finite-element beam with
-delayed boundary feedback. We further argue that previous
-``collocation versus semi-discretization'' comparisons conflated
-$p$-refinement with $h$-refinement, and we prescribe a fair work--precision
-methodology (log--log axes, wide resolution ranges, variance-reported CPU
-times, one machine and thread configuration). All methods are released in the
-open-source Julia package \textsf{SOSD.jl}.
+convergence order to two. This paper introduces the \emph{solution-operator
+semi-discretization} (SOSD) method: since the multiplication-free
+representation of the one-period solution operator only requires a per-step
+residual, the integrator inside each step becomes a free design choice. The
+residual block rows of any explicit Runge--Kutta or implicit collocation-type
+scheme (Gauss--Legendre, Radau, Lobatto) are embedded in the banded system
+through a Kronecker-product structure of the Butcher tableau and the
+system matrices, raising the convergence order of the dominant characteristic
+multipliers to the order of the chosen scheme --- super-convergent order $2s$
+for $s$-stage Gauss quadrature points --- provided the delayed terms are
+interpolated by the continuous extension of the same scheme. In the limit of
+a single ultra-high-order step, the framework degenerates to the known global
+spectral method; between the two extremes lies a continuum in which per-step
+order is traded against matrix sparsity. Because the number of nonzeros grows
+cubically with the stage number while the error decreases only exponentially,
+the CPU-time optimum for a prescribed accuracy is a problem-dependent
+\emph{sweet spot} at moderate order and many steps: its location is measured
+for systems requiring only tens of points per period and for systems --- high
+natural frequency relative to the period --- requiring many hundreds, where
+the banded moderate-order route wins decisively. We further argue that
+previous method comparisons conflated $p$-refinement with $h$-refinement, and
+we prescribe a fair work--precision methodology (log--log axes, wide
+resolution ranges, variance-reported CPU times, one machine and thread
+configuration). All methods are released in the open-source Julia package
+\textsf{SOSD.jl}.
 \end{abstract}
 
-\keywords{Time-delay systems, semi-discretization, collocation, Runge--Kutta
-methods, Floquet theory, stability analysis, computational complexity}
+\keywords{Time-delay systems, semi-discretization, solution operator,
+Runge--Kutta methods, Floquet theory, stability analysis, computational
+complexity}
 
 \maketitle
 
@@ -115,11 +119,15 @@ multiplication-free form only needs a per-step residual}. Semi-discretization
 is, structurally, a fixed-step time integrator whose only approximation is the
 per-step treatment of the coefficients and the delayed term. Consequently, the
 piecewise-constant step can be replaced by \emph{any} one-step scheme --- an
-explicit Runge--Kutta method or an implicit collocation method --- by placing
-the Butcher-tableau coefficients into the residual block rows and augmenting
-the per-step state with the internal stage values. This raises the achievable
-convergence order arbitrarily, at a quantifiable structural price: the sparse
-matrices become denser as the stage number grows.
+explicit Runge--Kutta method or an implicit collocation-type method --- by
+placing the Butcher-tableau coefficients into the residual block rows and
+augmenting the per-step state with the internal stage values. This raises the
+achievable convergence order arbitrarily, at a quantifiable structural price:
+the sparse matrices become denser as the stage number grows. We call the
+resulting family the \emph{solution-operator semi-discretization} (SOSD): the
+banded pair $(\mathbf{\Phi}_\mathrm{L}, \mathbf{\Phi}_\mathrm{R})$ is a
+sparse representation of the one-period solution operator of \eqref{eq:ldde},
+and the per-step integrator merely selects the order of that representation.
 
 The contributions are, honestly delimited:
 \begin{enumerate}
@@ -222,9 +230,67 @@ and the global unknown $\mathbf{q} = (\mathbf{v}_1^\top,\ldots,
 \eqref{eq:stage}--\eqref{eq:update} are linear in the current and delayed
 states, so each step contributes one block row to a sparse system
 $\mathbf{\Phi}_\mathrm{L}\,\mathbf{q} = \mathbf{\Phi}_\mathrm{R}\,
-\mathbf{q}_\mathrm{hist}$, exactly as in MFSD but with $(s+1)d$-sized blocks:
-the block bandwidth grows linearly and the per-block fill quadratically with
-the stage number.
+\mathbf{q}_\mathrm{hist}$, exactly as in MFSD but with $(s+1)d$-sized blocks.
+
+The structure of these blocks is a Kronecker (dyadic) composition of three
+independent ingredients: the Butcher tableau, the system matrices, and the
+interpolation weights. Collecting the tableau into the compound
+$(s{+}1)\times s$ matrix
+\begin{equation}
+  \hat{\mathbf{A}} \;=\;
+  \begin{bmatrix} \mathbf{a} \\ \mathbf{b}^{\!\top} \end{bmatrix},
+  \qquad
+  \boldsymbol{\mathcal{A}}_n = \mathrm{diag}\bigl(\mathbf{A}(t_{n1}),
+      \ldots, \mathbf{A}(t_{ns})\bigr),
+  \label{eq:compound}
+\end{equation}
+the step \eqref{eq:stage}--\eqref{eq:update} reads, for the stacked unknowns
+$\mathbf{w}_n = (\mathbf{Y}_1^\top,\ldots,\mathbf{Y}_s^\top,
+\mathbf{x}_{n+1}^\top)^\top$,
+\begin{equation}
+  \Bigl[\mathbf{I} - \Delta t\,\bigl(\hat{\mathbf{A}}\otimes\mathbf{I}_d\bigr)
+        \,\boldsymbol{\mathcal{A}}_n\,\mathbf{S}\Bigr]\mathbf{w}_n
+  = \bigl(\mathbf{1}_{s+1}\otimes\mathbf{I}_d\bigr)\,\mathbf{x}_n
+  + \Delta t\,\bigl(\hat{\mathbf{A}}\otimes\mathbf{I}_d\bigr)\,\mathbf{d}_n,
+  \label{eq:kron}
+\end{equation}
+where $\mathbf{S} = [\,\mathbf{I}_{sd}\;\;\mathbf{0}\,]$ selects the stage
+part of $\mathbf{w}_n$ and $\mathbf{d}_n$ stacks the terms
+\eqref{eq:delayterm}. Each delayed sample in $\mathbf{d}_n$ is itself a dyad:
+stage $j$ of delay $k$ contributes
+\begin{equation}
+  \Delta t\,\bigl(\hat{\mathbf{A}}\,\mathbf{e}_j \otimes
+  \mathbf{B}_k(t_{nj})\bigr)\,
+  \bigl(\mathbf{w}(\theta_{njk})^{\!\top} \otimes \mathbf{I}_d\bigr),
+  \label{eq:dyad}
+\end{equation}
+i.e.\ the outer product of a Butcher-tableau column, the delay coefficient
+matrix, and the continuous-extension weight row $\mathbf{w}(\theta)^{\!\top}$
+evaluated at the fractional position $\theta_{njk}$ of the delayed instant.
+The entire assembly therefore separates into precomputable factors
+(tableau, weights) and pointwise coefficient evaluations
+$\mathbf{A}(t^\ast)$, $\mathbf{B}_k(t^\ast)$ --- no matrix products between
+steps ever occur. Figure~\ref{fig:structure} shows the resulting sparsity
+patterns: $\mathbf{\Phi}_\mathrm{L}$ has unit diagonal and is strictly
+block-lower triangular for \emph{both} explicit and implicit tableaux (after
+the per-step elimination below), so linear solves reduce to forward
+substitution with zero fill-in; all delay couplings that reach into the
+pre-period history populate $\mathbf{\Phi}_\mathrm{R}$. The per-block fill of
+the delay band grows with the stage number --- the mechanism that will drive
+the accuracy--sparsity sweet spot.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/structure_patterns.pdf}
+  \caption{Sparsity patterns of the solution-operator pair
+  $(\mathbf{\Phi}_\mathrm{L}, \mathbf{\Phi}_\mathrm{R})$ on the delayed
+  Mathieu equation ($p = r = 8$): explicit RK4 (top) versus Gauss GL3
+  (bottom). $\mathbf{\Phi}_\mathrm{L}$ is unit block-lower-triangular in both
+  cases (forward-substitution solvable, no fill-in); the delay band sits in
+  $\mathbf{\Phi}_\mathrm{R}$, with denser per-block coupling for the
+  collocation-type stages.}
+  \label{fig:structure}
+\end{figure}
 
 In the implementation the stage equations \eqref{eq:stage} are
 \emph{pre-eliminated} per step: the stage-coupling matrix
@@ -469,6 +535,33 @@ logarithmic drift with $\varepsilon$, and the beam shifts the optimum to
 lower order than the small Mathieu system, as predicted by the
 $d^2$-scaling of the fill.
 
+\subsection{Contrasting resolution demands: where the banded route wins}
+\label{sec:contrast}
+
+The location and the \emph{stakes} of the sweet spot depend on how many
+points per period the problem physically requires. Two showcases bracket the
+range:
+\begin{itemize}
+  \item \textbf{Low demand (tens of points).} For the delayed Mathieu
+        equation and the seasonal scalar model, $p \approx 10$--$30$ already
+        reaches deep accuracy with moderate Gauss orders; matrices are so
+        small that sparsity is irrelevant, and even the single-step spectral
+        corner is viable.
+  \item \textbf{High demand (hundreds of points and more).} The
+        spindle-speed-variation turning system oscillates with
+        $T/T_\mathrm{osc} \approx 36$ (natural frequency high relative to
+        the period), so \emph{any} method needs $p \gtrsim 500$ to resolve
+        the dynamics at all. Here the banded moderate-order route wins
+        decisively: the fill of a high-order or single-step variant is
+        prohibitive at such $p$, while the $\mathcal{O}(p)$ banded solve is
+        unaffected. \TODOnum{turning sweet-spot numbers: optimal $(s^\ast,
+        p^\ast)$ and CPU vs high-order alternative, from
+        sweet\_spot\_turning\_ssv.csv}
+\end{itemize}
+The same contrast governs high-dimensional systems: for the FEM beam
+($d = 28$), memory --- the $d^2 s^3$ per-step fill --- caps the affordable
+stage number before CPU time does.
+
 \subsection{Explicit versus implicit steps}
 \label{sec:expl-impl}
 
@@ -488,16 +581,21 @@ the low-accuracy regime ($\varepsilon \gtrsim 10^{-4}$), and Gauss stages
 dominate everywhere beyond it. \TODOnum{quantify crossover from
 work-precision CSVs after suite completion}
 
-\subsection{Non-smoothness stress test}
+\subsection{Remark on scope: smooth systems}
 \label{sec:nonsmooth}
 
-With act-and-wait switching active, the beam's feedback matrix jumps at
-$t = 0.8\,T$. When the switching instant falls on a grid node the full order
-is retained; when it falls inside a step, all high-order methods collapse
-towards low observed order near the switching-induced error floor
-(\TODOnum{fitted slopes aligned vs off-grid for GL1/GL2/GL3}). Moderate
-order with many steps is thus also the \emph{robust} choice for non-smooth
-engineering systems --- reinforcing, not weakening, the sweet-spot message.
+The high-order convergence results above --- like those of every spectral or
+high-order method --- presuppose (piecewise-)smooth coefficients with any
+discontinuities aligned to grid nodes. For genuinely non-smooth systems
+(act-and-wait switching, interrupted cutting) \emph{all} methods of any
+nominal order fall back to low observed order when the discontinuity falls
+inside a step; this is verified for the act-and-wait beam in
+Appendix~\ref{app:nonsmooth}. Two practical consequences: the sweet-spot
+recommendation of moderate order with many steps holds \emph{a fortiori}
+(the sparsest variants lose nothing where high order cannot pay off), and
+the linear-complexity advantage of the solution-operator assembly is
+unaffected. A discontinuity-aware treatment (mesh alignment, step splitting)
+is outside the scope of this paper.
 
 \section{Discussion: practical guidance}
 \label{sec:discussion}
@@ -600,6 +698,56 @@ $T_\mathrm{sp} = L/c$, delay $\tau = 0.2\,T_\mathrm{sp}$, period
 $T = 0.4\,T_\mathrm{sp}$ ($\tau/T = 1/2$); constant unit force at the free
 end. In the act-and-wait configuration the feedback matrix is active only for
 $t < 0.8\,T$. \TODOnum{beam reference $\mu$ from final CSV}
+
+\section{Additional work--precision studies}
+\label{app:morewp}
+
+Figures~\ref{fig:wp-bio}--\ref{fig:wp-beam} repeat the three-panel
+work--precision study of Figure~\ref{fig:wp-mathieu} for the remaining test
+systems. The qualitative picture is identical: linear time complexity for
+every embedded integrator, Gauss stages dominating beyond
+$\varepsilon \approx 10^{-4}$. On the stiff beam the explicit methods are
+unstable below a CFL-like resolution bound (errors up to $10^{43}$),
+while the A-stable Gauss stages converge from the coarsest grids.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/work_precision_bio.pdf}
+  \caption{Work-precision — seasonal scalar model.}
+  \label{fig:wp-bio}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/work_precision_turning_ssv.pdf}
+  \caption{Work-precision — turning with spindle-speed variation.}
+  \label{fig:wp-turning}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/work_precision_beam.pdf}
+  \caption{Work-precision — FEM beam with delayed boundary feedback.}
+  \label{fig:wp-beam}
+\end{figure}
+
+\section{Non-smooth coefficients: act-and-wait beam}
+\label{app:nonsmooth}
+
+With act-and-wait switching, the beam's feedback matrix jumps at
+$t = 0.8\,T$. On grids where the switching instant is a node (p divisible by
+5) the full order is retained; on off-grid meshes (powers of two) the
+observed order of every method collapses towards one--two near the
+switching-induced error floor (Figure~\ref{fig:nonsmooth}), confirming the
+scope remark of Section~\ref{sec:nonsmooth}.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=0.85\linewidth}{figures/nonsmooth_beam.pdf}
+  \caption{Act-and-wait beam: relative error versus $p$ for GL1--GL3 on
+  grid-aligned (solid) and off-grid (dashed) meshes.}
+  \label{fig:nonsmooth}
+\end{figure}
 
 \section{Reproducibility}
 \label{app:repro}

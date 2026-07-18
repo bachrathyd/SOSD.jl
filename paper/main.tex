@@ -284,7 +284,7 @@ pre-period history populate $\mathbf{\Phi}_\mathrm{R}$. The per-block fill of
 the delay band grows with the stage number --- the mechanism that will drive
 the accuracy--sparsity sweet spot.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/structure_patterns.pdf}
   \caption{Sparsity patterns of the solution-operator pair
@@ -295,7 +295,7 @@ the accuracy--sparsity sweet spot.
   $\mathbf{\Phi}_\mathrm{R}$, with denser per-block coupling for the
   collocation-type stages.}
   \label{fig:structure}
-\end{figure}
+\end{figure*}
 
 In the implementation the stage equations \eqref{eq:stage} are
 \emph{pre-eliminated} per step: the stage-coupling matrix
@@ -502,7 +502,7 @@ in \citealp{Bachrathy2026}) and the banded LR mapping (fitted exponent
 $1.1$); both agree in the multiplier to $10^{-15}$, and at $p = 1778$ the
 multiplication-free route is already $2500\times$ faster.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_mathieu.pdf}
   \caption{Work-precision study on the delayed Mathieu equation. Left:
@@ -513,7 +513,7 @@ multiplication-free route is already $2500\times$ faster.
   benchmark measurements; their relative scatter is below a few per cent
   and is therefore not drawn.}
   \label{fig:wp-mathieu}
-\end{figure}
+\end{figure*}
 
 \begin{figure}[t]
   \centering
@@ -567,7 +567,7 @@ single-step/ultra-high-order corner once the resolution demand or the system
 dimension is nontrivial: the polynomial $s$-law meets the linear $p$-law at
 moderate order.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/ph_map_turning_ssv.pdf}
   \caption{The $(s, p)$-map for the high-resolution-demand turning system.
@@ -578,7 +578,7 @@ moderate order.
   $4$\,s CPU budget. The corresponding maps for the low-demand Mathieu
   system are in Appendix~\ref{app:morewp}.}
   \label{fig:phmap}
-\end{figure}
+\end{figure*}
 
 \subsection{Contrasting resolution demands: where the banded route wins}
 \label{sec:contrast}
@@ -647,7 +647,7 @@ Figures~\ref{fig:order} and \ref{fig:wp-mathieu}, and
 Appendix~\ref{app:morewp} for the hard case) show the complementary
 $h$-refinement direction of the same surface.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/p_refinement_cliff.pdf}
   \caption{$p$-refinement at fixed step counts: relative error versus total
@@ -656,7 +656,7 @@ $h$-refinement direction of the same surface.
   $c = 5$--$10$. Super-convergent decay starts only beyond the band; its
   position scales with $\omega_{\max}T/2\pi$, not with the method order.}
   \label{fig:cliff}
-\end{figure}
+\end{figure*}
 
 \subsection{Explicit versus implicit steps}
 \label{sec:expl-impl}
@@ -816,7 +816,7 @@ $\varepsilon \approx 10^{-4}$. On the stiff beam the explicit methods are
 unstable below a CFL-like resolution bound (errors up to $10^{43}$),
 while the A-stable Gauss stages converge from the coarsest grids.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/ph_map_mathieu.pdf}
   \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation,
@@ -826,23 +826,23 @@ while the A-stable Gauss stages converge from the coarsest grids.
   the spectral corner because the matrices stay tiny; the polynomial CPU
   growth along $s$ is nevertheless visible at the extended stage orders.}
   \label{fig:phmap-mathieu}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_bio.pdf}
   \caption{Work-precision — seasonal scalar model.}
   \label{fig:wp-bio}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_turning_ssv.pdf}
   \caption{Work-precision — turning with spindle-speed variation.}
   \label{fig:wp-turning}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_beam.pdf}
   \caption{Work-precision — FEM beam with delayed boundary feedback. The
@@ -851,7 +851,7 @@ while the A-stable Gauss stages converge from the coarsest grids.
   which carry no information beyond ``unstable''. CPU times are means of
   repeated benchmark measurements (scatter below a few per cent).}
   \label{fig:wp-beam}
-\end{figure}
+\end{figure*}
 
 \section{Non-smooth coefficients: act-and-wait beam}
 \label{app:nonsmooth}
@@ -874,6 +874,41 @@ moderate-order variants.
   grid-aligned (solid) and off-grid (dashed) meshes.}
   \label{fig:nonsmooth}
 \end{figure}
+
+\section{Brute-force stability charts at the optimal setting}
+\label{app:charts}
+
+\IfFileExists{figures/chart_times.tex}{\input{figures/chart_times.tex}}{%
+  \newcommand{\chartTimeMathieu}{--}\newcommand{\chartPtsMathieu}{--}%
+  \newcommand{\chartMsMathieu}{--}\newcommand{\chartTimeTurning}{--}%
+  \newcommand{\chartPtsTurning}{--}\newcommand{\chartMsTurning}{--}}
+
+As an end-to-end demonstration of the sweet-spot guidance, high-resolution
+stability charts are computed by brute force --- one eigenvalue solve per
+grid point, single-threaded, using the CPU-optimal $(s^\ast, p^\ast)$ of
+each system. Figure~\ref{fig:charts} shows the results, coloured by the
+logarithm of the spectral radius with the stability boundary
+$\rho = 1$ drawn in black. The delayed Mathieu chart
+($301\times301 = \chartPtsMathieu$ points, GL7, $p = 2$) completes in
+$\chartTimeMathieu$\,s (\chartMsMathieu\,ms per point); the SSV turning
+chart ($151\times151 = \chartPtsTurning$ points, GL4, $p = 158$ ---
+a resolution-pinned hard system) in $\chartTimeTurning$\,s
+(\chartMsTurning\,ms per point). No parallelization or continuation
+tricks are used; the per-point cost is simply the optimally chosen
+solution-operator solve.
+
+\begin{figure*}[t]
+  \centering
+  \figok{width=0.49\linewidth}{figures/stability_chart_mathieu.pdf}
+  \figok{width=0.49\linewidth}{figures/stability_chart_turning.pdf}
+  \caption{Brute-force stability charts at the optimal settings, coloured by
+  $\log_{10}\rho$ (spectral radius of the dominant multiplier), black curve:
+  stability boundary $\rho = 1$. Left: delayed Mathieu equation in the
+  $(\delta, b)$ plane ($\varepsilon = 1$, $a_1 = 0.1$, $\tau = T = 2\pi$),
+  GL7 with $p = 2$. Right: SSV turning in the $(\Omega, k_w)$ plane, GL4
+  with $p = 158$. Total single-threaded CPU times are reported in the text.}
+  \label{fig:charts}
+\end{figure*}
 
 \section{Structural remarks: delay--period ratios, sub-step delays, and mass
 matrices}

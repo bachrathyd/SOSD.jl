@@ -1,0 +1,11 @@
+method,nominal_order,fitted_slope
+SDM-O2,2,3.131
+RK1,1,NaN
+RK2,2,1.997
+RK4,4,3.282
+RK5,5,2.140
+GL1,2,1.995
+GL2,4,3.996
+GL3,6,5.985
+GL5,10,9.962
+GL8,16,NaN

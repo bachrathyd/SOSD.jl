@@ -1,0 +1,11 @@
+Timestamp: 2026-07-18T19:30:54.039
+Julia: 1.12.4
+OS: NT x86_64-w64-mingw32
+CPU: AMD Ryzen 7 5800H with Radeon Graphics          x 16 threads
+BLAS: LBTConfig([ILP64] libopenblas64_.dll)  threads = 1
+Julia threads: 1
+MFCM loaded
+SemiDiscretizationMethod loaded
+KrylovKit loaded
+StaticArrays loaded
+RungeKutta loaded

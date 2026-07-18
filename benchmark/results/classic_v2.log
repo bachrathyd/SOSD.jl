@@ -1,0 +1,23 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+p=     10  MFSD 0.0001195s   SD-classic 0.0002564s  |Δμ|=3.89e-16
+p=     18  MFSD 0.0002908s   SD-classic 0.0004114s  |Δμ|=1.67e-16
+p=     32  MFSD 0.0005902s   SD-classic 0.0005569s  |Δμ|=4.44e-16
+p=     56  MFSD 0.0007462s   SD-classic 0.001383s  |Δμ|=7.77e-16
+p=    100  MFSD 0.001109s   SD-classic 0.007395s  |Δμ|=3.33e-16
+p=    178  MFSD 0.001973s   SD-classic 0.02701s  |Δμ|=1.61e-15
+p=    316  MFSD 0.002721s   SD-classic 0.1726s  |Δμ|=1.50e-15
+p=    562  MFSD 0.002854s   SD-classic 0.8231s  |Δμ|=2.55e-15
+p=   1000  MFSD 0.004469s   SD-classic 5.382s  |Δμ|=2.39e-15
+p=   1778  MFSD 0.01409s   SD-classic NaNs  |Δμ|=NaN
+p=   3162  MFSD 0.02039s   SD-classic NaNs  |Δμ|=NaN
+p=   5623  MFSD 0.03192s   SD-classic NaNs  |Δμ|=NaN
+p=  10000  MFSD 0.05344s   SD-classic NaNs  |Δμ|=NaN
+p=  17783  MFSD 0.1168s   SD-classic NaNs  |Δμ|=NaN
+p=  31623  MFSD 0.2378s   SD-classic NaNs  |Δμ|=NaN
+p=  56234  MFSD 0.4182s   SD-classic NaNs  |Δμ|=NaN
+p= 100000  MFSD 0.8819s   SD-classic NaNs  |Δμ|=NaN
+p= 177828  MFSD 1.821s   SD-classic NaNs  |Δμ|=NaN
+p= 316228  MFSD 3.482s   SD-classic NaNs  |Δμ|=NaN
+p= 562341  MFSD 9.165s   SD-classic NaNs  |Δμ|=NaN
+p=1000000  MFSD 13.2s   SD-classic NaNs  |Δμ|=NaN
+[classic-sd] done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\classic_sd_vs_mfsd.csv

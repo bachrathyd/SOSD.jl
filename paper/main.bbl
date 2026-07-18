@@ -1,0 +1,101 @@
+\begin{thebibliography}{17}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{DOI:\discretionary{}{}{}#1}\else
+  \providecommand{\doi}{DOI:\discretionary{}{}{}\begingroup
+  \urlstyle{rm}\Url}\fi
+
+\bibitem[{Altintas(2012)}]{Altintas2012}
+Altintas Y (2012) \emph{Manufacturing Automation: Metal Cutting Mechanics,
+  Machine Tool Vibrations, and CNC Design}.
+\newblock Cambridge University Press.
+
+\bibitem[{Bachrathy(2026)}]{Bachrathy2026}
+Bachrathy D (2026) Linear time complexity analysis of time-periodic delayed
+  systems with multiplication free semi-discretization method.
+\newblock \emph{Journal of Vibration and Control} In press.
+
+\bibitem[{Bellen and Zennaro(2003)}]{BellenZennaro2003}
+Bellen A and Zennaro M (2003) \emph{Numerical Methods for Delay Differential
+  Equations}.
+\newblock Oxford: Oxford University Press.
+\newblock \doi{10.1093/acprof:oso/9780198506546.001.0001}.
+
+\bibitem[{Breda et~al.(2005)Breda, Maset and Vermiglio}]{Breda2005}
+Breda D, Maset S and Vermiglio R (2005) Pseudospectral differencing methods for
+  characteristic roots of delay differential equations.
+\newblock \emph{SIAM Journal on Scientific Computing} 27(2): 482--495.
+\newblock \doi{10.1137/030601600}.
+
+\bibitem[{Breda et~al.(2015)Breda, Maset and Vermiglio}]{Breda2015}
+Breda D, Maset S and Vermiglio R (2015) \emph{Stability of Linear Delay
+  Differential Equations: A Numerical Approach with {MATLAB}}.
+\newblock New York: Springer.
+\newblock \doi{10.1007/978-1-4939-2107-2}.
+
+\bibitem[{Butcher(2016)}]{Butcher2016}
+Butcher JC (2016) \emph{Numerical Methods for Ordinary Differential Equations}.
+\newblock 3rd edition. Chichester: Wiley.
+\newblock \doi{10.1002/9781119121534}.
+
+\bibitem[{Haegeman(2021)}]{Haegeman2021}
+Haegeman J (2021) Krylovkit.jl: A julia package for krylov methods.
+\newblock GitHub.
+
+\bibitem[{Hairer and Wanner(1996)}]{HairerWanner1996}
+Hairer E and Wanner G (1996) \emph{Solving Ordinary Differential Equations
+  {II}: Stiff and Differential-Algebraic Problems}.
+\newblock 2nd edition. Berlin: Springer.
+\newblock \doi{10.1007/978-3-642-05221-7}.
+
+\bibitem[{Insperger and St{\'e}p{\'a}n(2002)}]{Insperger2002}
+Insperger T and St{\'e}p{\'a}n G (2002) Semi-discretization method for delayed
+  systems.
+\newblock \emph{International Journal for Numerical Methods in Engineering}
+  55(5): 503--518.
+
+\bibitem[{Insperger and St{\'e}p{\'a}n(2011)}]{Insperger2011}
+Insperger T and St{\'e}p{\'a}n G (2011) \emph{Semi-discretization for
+  Time-delay Systems}.
+\newblock Springer.
+
+\bibitem[{Insperger et~al.(2008)Insperger, St{\'e}p{\'a}n and
+  Turi}]{Insperger2008}
+Insperger T, St{\'e}p{\'a}n G and Turi J (2008) On the higher-order
+  semi-discretizations for periodic delayed systems.
+\newblock \emph{Journal of Sound and Vibration} 313(1-2): 334--341.
+\newblock \doi{10.1016/j.jsv.2007.11.040}.
+
+\bibitem[{Long and Balachandran(2007)}]{Long2007}
+Long XH and Balachandran B (2007) Stability of milling process with random
+  spindle speed variation.
+\newblock \emph{International Journal of Machine Tools and Manufacture} 47(10):
+  1600--1609.
+
+\bibitem[{Munoa et~al.(2016)}]{Munoa2016}
+Munoa J et~al. (2016) Chatter suppression techniques in metal cutting.
+\newblock \emph{CIRP Annals} 65(2): 785--808.
+
+\bibitem[{Saad and Schultz(1986)}]{Saad1986}
+Saad Y and Schultz MH (1986) Gmres: A generalized minimal residual algorithm
+  for solving nonsymmetric linear systems.
+\newblock \emph{SIAM Journal on Scientific and Statistical Computing} 7(3):
+  856--869.
+
+\bibitem[{Seguy et~al.(2008)}]{Seguy2008}
+Seguy S et~al. (2008) High-speed multiple spindle drilling stability with
+  random perturbations.
+\newblock \emph{Journal of Sound and Vibration} 311(3-5): 833--849.
+
+\bibitem[{St{\'e}p{\'a}n(1989)}]{Stepan1989}
+St{\'e}p{\'a}n G (1989) Retarded dynamical systems: Stability and
+  characteristic functions.
+\newblock \emph{Longman Scientific \& Technical} .
+
+\bibitem[{Tobias(1965)}]{Tobias1965}
+Tobias SA (1965) \emph{Machine-Tool Vibration}.
+\newblock Blackie.
+
+\end{thebibliography}

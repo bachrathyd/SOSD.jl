@@ -10,7 +10,7 @@ using Statistics
 ENV["GKSwstype"] = "100"
 gr()
 default(fontfamily="Computer Modern", titlefontsize=11, guidefontsize=10,
-        tickfontsize=8, legendfontsize=7, grid=true, minorgrid=true, dpi=300)
+        tickfontsize=8, legendfontsize=7, grid=true, minorgrid=false, dpi=300)
 
 const RESULTS = joinpath(@__DIR__, "results")
 const FIGS = joinpath(@__DIR__, "figures")
@@ -96,7 +96,9 @@ function fig_work_precision(sysname)
         kt = sum(half) > 1 ? ([log10.(ps[half]) ones(sum(half))] \ log10.(tm[half]))[1] : NaN
         lblt = isfinite(kt) ? "$m (t~p^$(round(kt, digits=1)))" : m
         plot!(p1, ps, errs, marker=:circle, ms=2.5, lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lble)
-        plot!(p2, ps, tm, ribbon=ts, fillalpha=0.25, marker=:circle, ms=2.5,
+        # ribbon lower bound must stay positive on the log axis
+        rib_lo = min.(ts, tm .* 0.9)
+        plot!(p2, ps, tm, ribbon=(rib_lo, ts), fillalpha=0.25, marker=:circle, ms=2.5,
               lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lblt)
         plot!(p3, tm, errs, marker=:circle, ms=2.5, lw=mwidth(m), ls=mstyle(m), color=mcolor(m), label=lble)
     end
@@ -195,8 +197,32 @@ function fig_nonsmooth()
 end
 
 # ---------------------------------------------------------------------------
+# 6. SD-classic vs MFSD baseline parity
+# ---------------------------------------------------------------------------
+function fig_classic()
+    path = joinpath(RESULTS, "classic_sd_vs_mfsd.csv")
+    isfile(path) || (println("skip classic"); return)
+    d = load_csv(path)
+    ps = fnum(d["p"]); t_lr = fnum(d["t_mfsd"]); s_lr = fnum(d["t_mfsd_std"])
+    t_cl = fnum(d["t_classic"]); s_cl = fnum(d["t_classic_std"])
+    ok = isfinite.(t_cl)
+    k_lr = ([log10.(ps) ones(length(ps))] \ log10.(t_lr))[1]
+    k_cl = sum(ok) > 1 ? ([log10.(ps[ok]) ones(sum(ok))] \ log10.(t_cl[ok]))[1] : NaN
+    plt = plot(xscale=:log10, yscale=:log10, xlabel="resolution  p", ylabel="CPU time [s]",
+               legend=:topleft, title="SD-classic vs multiplication-free LR mapping")
+    plot!(plt, ps[ok], t_cl[ok], ribbon=(min.(s_cl[ok], t_cl[ok] .* 0.9), s_cl[ok]),
+          fillalpha=0.25, marker=:circle, ms=3, lw=2.5, color=:firebrick,
+          label="SD-classic (t ~ p^$(round(k_cl, digits=2)))")
+    plot!(plt, ps, t_lr, ribbon=(min.(s_lr, t_lr .* 0.9), s_lr), fillalpha=0.25,
+          marker=:circle, ms=3, lw=2.5, color=:royalblue,
+          label="MFSD LR (t ~ p^$(round(k_lr, digits=2)))")
+    saveboth(plt, "classic_sd_vs_mfsd")
+end
+
+# ---------------------------------------------------------------------------
 println("Generating figures...")
 fig_order()
+fig_classic()
 for s in ("mathieu", "bio", "turning_ssv", "beam")
     fig_work_precision(s)
 end

@@ -1,67 +1,54 @@
 # Project Progress Tracking
 
-## Completed Tasks
-- [x] Initialized `progress.md`.
-- [x] Updated `GEMINI.md` with verification and visualization requirements.
+## Phase 2 — verification, completion and paper (Claude, 2026-07-18)
 
-- **Sparse Matrix Validation:**
-    - Error vs Lazy Operator: ~ 3.7e-16 (Exact match).
-- **Work-Precision Analysis:**
-    - High-order accuracy (Order 4) verified with CPU time comparison.
-    - [Image: mathieu_work_precision.png]
-- **Stability Chart (Milling):**
-    - 1-DOF Regenerative Milling model verified.
-    - Stability boundary generated in ~ 9 seconds.
-    - [Image: milling_stability_chart.png]
+### Fixed
+- [x] **Critical delay bug**: `extract_SDM_system` hardcoded `τ = 2π`; the
+      milling and biological charts and two tests were silently computed with a
+      clamped, wrong delay. Delays are now auto-detected from the RHS history
+      calls (or passed via `delays=[...]`), each `B_k` extracted with per-lag
+      masking, and out-of-window delayed lookups now raise an error instead of
+      clamping.
+- [x] Cross-validation vs `SemiDiscretizationMethod.jl` on ALL systems:
+      mathieu 9.5e-4 @ p=50, bio 2.6e-4, beam 1.2e-4, turning SSV
+      converging jointly to μ = 4.47617 (gap 1.5e-7 @ p=4000).
 
-- **Stability Chart (Biological):**
-    - **Work-Precision Analysis:**
-        - High-order accuracy (up to Order 20 with GL10) verified.
-        - Resolution range $p \in [10, 10,000]$ analyzed.
-        - Spectral solvers reach machine precision floor (< 1e-14) extremely fast (e.g., GL10 at $p \approx 22$).
-        - [Image: mathieu_work_precision_combined.png]
+### Added
+- [x] `build_system_matrices_dense` + `SystemMatricesDense`: heap-allocated
+      assembly path (auto-selected for S·D > 32) — FEM-scale systems and very
+      high collocation orders now work without StaticArrays compile blowup.
+      Verified identical to the static path to ~1e-16.
+- [x] `examples/beam_delay_feedback.jl` — predecessor Appendix C system
+      (D = 28, act-and-wait), the missing 4th test case.
+- [x] `benchmark/` — full fair-comparison suite: harness (BLAS pinned,
+      deterministic vectors, two-resolution-verified references, mean±σ
+      timing), order verification, work-precision × 4 systems, sweet-spot
+      (p×s + matrix structure), single-step spectral corner, non-smooth
+      stress test, SD-classic parity.
+- [x] `paper/` — SAGE `sagej` manuscript per the handoff plan; compiles clean.
 
-    ## Completed Tasks
-    - [x] Initialized `progress.md`.
-    - [x] Updated `GEMINI.md` with verification and visualization requirements.
-    - [x] Fixed High-Order Interpolation (Continuous Extension) - Resolved weight distribution for endpoint nodes.
-    - [x] Fixed missing `GL2Tableau` and `GL3Tableau` aliases and exports.
-    - [x] Verified O(p^1) Complexity for $p$ up to 10,000.
-    - [x] Verified Spectral Accuracy for GL solvers up to GL(10) (Order 20).
-    - **Performance Optimization:**
-        - Implemented **Step-wise Transition Matrix Pre-computation**.
-        - Achieved **80 μs** Monodromy multiplication for $p=100$.
-        - Implemented **SparseMonodromyMap** (Direct Sparse Solver).
-        - **MFCM beats SDM** in the Time-Error diagram for typical precision levels ($10^{-5}$).
-        - Implemented **Exhaustive Sparse Benchmark** (`examples/sparse_benchmark_full.jl`) for GL1-10 and RK1-5.
-        - **Memory Analysis:** Identified Lazy implementation overhead due to per-multiplication history buffer allocation. Sparse pre-factorization is more memory-efficient during iteration.
-        - Added **Memory Tracking** vs $N_{eval}$ for $p$ up to 100,000.
-    - [x] Implemented Explicit Sparse Builder.
-    - [x] Implemented and Verified 3 Engineering Case Studies.
-    - [x] Implemented and Verified Inhomogeneous Periodic Solution solver.
-    - [x] Fixed sign error in `solve_periodic_solution` (linsolve arguments).
-    - [x] Stability Charts and Work-Precision diagrams generated and saved as images (moved to `assets/images`).
-    - [x] Comprehensive README and test suite (`test/runtests.jl`).
-    - [x] Added `LICENSE` file (MIT).
-    - [x] Cleaned up `Project.toml`: moved non-core dependencies to `[extras]`, added `[compat]` entries.
-    - [x] Verified project integrity with final test run.
-- [x] **Benchmarking & Complexity Refinement:**
-    - Completed comprehensive benchmark (`matrix_free_benchmark.png`) comparing **MFCM Sparse**, **SDM**, and **Pure DDE Solvers** (DifferentialEquations.jl).
-    - **Performance Gap:** MFCM Sparse is significantly faster than both SDM and Pure DDE Solvers for high resolutions ($p > 1000$).
-    - **Memory scaling:** Verified $O(p)$ memory for MFCM and SDM. DDE-based solvers show lower initial memory but overhead grows during iterative eigenvalue calculation.
-    - **Stability verified:** All methods converge to the same reference value ($\mu \approx 0.3514$).
-    - **Superconvergence:** MFCM GL3 (O6) reaches floor much faster than explicit DDE RK4 or Vern6.
+### Verified results (so far)
+- Test suite 7/7 on Julia 1.12.4 (with correct delays).
+- Gauss superconvergence 2s: GL2/GL3/GL5 slopes 3.996/5.985/9.962; GL8 at
+  1e-16 floor from p = 16. RadauIIA → 2s−1; LobattoIIIA → 2s−2.
+- Explicit RK capped by continuous-extension order (RK4 → 3.3, RK5 → 2.1):
+  the delay-interpolation order requirement demonstrated; structural argument
+  for collocation steps (matching-order CE for free).
+- Explicit steps unstable on the stiff FEM beam until a CFL-like p bound
+  (errors 1e20–1e43); A-stable Gauss stages unaffected.
+- All MFCM variants: fitted time exponent 1.0 (linear complexity preserved).
+- SD-classic ≈ O(p^2.86) vs MFSD O(p^1.0) — predecessor parity; μ agreement
+  1e-15; 2500× speedup at p = 1778.
+- Single-step GL20 (p = 1) reproduces converged spectrum to 3e-9 —
+  collocation-equivalence demonstrated.
 
-## Final Verification Summary
-    - **ODE Order (GL2/GL3/GL10):** 4.0 / 6.0 / 20.0
-    - **DDE Order (GL2):** 4.5 (Verified with updated `mu_ref`)
-    - **Inhomogeneous Solver:** Verified $x'(t)=-x(t)+\sin(t) \to x(0)=-0.5$.
-    - **Spectral Accuracy:** GL(10) reaches floor (< 1e-14) at $p \approx 20$.
-    - **Complexity:** O(p^1.0) verified up to $p=100,000$.
-    - **Efficiency:** MFCM Sparse GL10 is orders of magnitude faster than SDM for high-precision.
-    - **Sparse Match Error:** < 1e-15
-- **Engineering Cases:** All 3 produced expected stability boundaries.
-- **Implicit Methods:** Verified convergence for Implicit Euler.
-- **Interpolation:** Verified for stages at endpoints (Crank-Nicolson, IE).
+### Running / pending
+- [ ] Benchmark suite completion (beam WP → sweet-spot → non-smooth).
+- [ ] Regenerate all figures from final CSVs; fill red placeholders in paper.
+- [ ] Final proofread pass + reproducibility appendix with commit hash.
 
-The project is now fully finalized and ready for registration.
+## Phase 1 — initial development (Gemini, earlier)
+(See git history of this file for the original Phase 1 log: lazy + sparse
+monodromy operators, tableau library, three engineering cases, initial
+work-precision studies. Note: Phase 1 milling/bio stability charts were
+affected by the delay bug fixed above and must be regenerated before use.)

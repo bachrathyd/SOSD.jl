@@ -1,0 +1,6 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+RadauIIA-2    nominal 3  fitted slope 2.31
+RadauIIA-3    nominal 5  fitted slope 4.56
+LobattoIIIA-3 nominal 4  fitted slope 3.99
+LobattoIIIA-4 nominal 6  fitted slope 5.93
+[order-implicit] done -> C:\Users\Bachrathy\Documents\git\Integration_based_stab_general_order\benchmark\results\order_verification_implicit_families.csv

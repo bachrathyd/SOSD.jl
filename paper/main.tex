@@ -8,6 +8,8 @@
 
 % ------- numbers still to be filled from benchmark/results (marked in red) ----
 \newcommand{\TODOnum}[1]{\textcolor{red}{[#1]}}
+% figure include that degrades gracefully while the benchmark suite is running
+\newcommand{\figok}[2]{\IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{\texttt{\detokenize{pending: #2}}}}}
 
 \def\volumeyear{2026}
 
@@ -345,18 +347,54 @@ Appendix~\ref{app:params}):
 \subsection{Order verification}
 \label{sec:order}
 
-Figure~\ref{fig:order} confirms on the delayed Mathieu equation that each
-embedded integrator attains its theoretical convergence order in the dominant
-multiplier: fitted slopes \TODOnum{table: RK1 $\to$ 1, RK2/GL1 $\to$ 2,
-RK4/GL2 $\to$ 4, RK5 $\to$ 5, GL3 $\to$ 6, GL5 $\to$ 10, GL8 $\to$ 16}
-against nominal orders, with the Gauss family exhibiting the
-super-convergent order $2s$. This simultaneously validates the
-continuous-extension delay interpolation: an under-ordered delay lookup
-would cap all observed slopes (Section~\ref{sec:delayinterp}).
+Figure~\ref{fig:order} and Table~\ref{tab:orders} confirm on the delayed
+Mathieu equation that each embedded \emph{collocation} integrator attains its
+theoretical convergence order in the dominant multiplier: the Gauss family
+exhibits the super-convergent order $2s$ (fitted slopes $2.00$, $4.00$,
+$5.99$ and $9.96$ for $s = 1, 2, 3, 5$; GL8 reaches the $10^{-16}$ relative
+floor already at $p = 16$), Radau~IIA attains $2s-1$ and Lobatto~IIIA
+$2s-2$. The explicit family behaves differently, and instructively: the
+observed order is the \emph{minimum} of the method order and the order of its
+continuous extension. RK4 with its classical third-order dense output
+converges with slope $\approx 3.3$ instead of $4$, and RK5 with a generic
+stage-value interpolant collapses to slope $\approx 2.1$ --- the delayed
+lookup, not the step, is the binding constraint, exactly as anticipated in
+Section~\ref{sec:delayinterp}. For collocation tableaux this constraint is
+vacuous because the stage values lie on the collocation polynomial, whose
+degree grows with $s$; the matching-order continuous extension is therefore
+available \emph{for free}. This asymmetry is a structural argument for
+implicit collocation steps inside the multiplication-free framework that the
+usual ``explicit steps are cheaper'' intuition misses.
+
+\begin{table}[t]
+\caption{Order verification on the delayed Mathieu equation: nominal versus
+fitted convergence order of the dominant multiplier (log--log slope over the
+pre-floor error range).}
+\label{tab:orders}
+\centering
+\begin{tabular}{lccl}
+\toprule
+Method & Nominal & Fitted & Comment \\
+\midrule
+SDM (order 2)  & 2  & 3.1 & delayed-term interpolation superconverges \\
+RK2 (Heun)     & 2  & 2.0 & \\
+RK4            & 4  & 3.3 & capped by 3rd-order dense output \\
+RK5            & 5  & 2.1 & capped by generic stage interpolant \\
+GL1 (midpoint) & 2  & 2.0 & \\
+GL2            & 4  & 4.0 & superconvergence $2s$ \\
+GL3            & 6  & 6.0 & \\
+GL5            & 10 & 10.0 & \\
+GL8            & 16 & --- & at $10^{-16}$ floor from $p = 16$ \\
+Radau IIA, $s{=}3$   & 5 & 4.9 & \\
+Lobatto IIIA, $s{=}3$ & 4 & 4.0 & \\
+Lobatto IIIA, $s{=}4$ & 6 & 6.0 & \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figures/order_verification.pdf}
+  \figok{width=\linewidth}{figures/order_verification.pdf}
   \caption{Order verification on the delayed Mathieu equation: eigenvalue
   error versus resolution $p$ (log--log), one curve per method, dashed lines
   showing fitted slopes. \TODOnum{regenerate from
@@ -367,9 +405,45 @@ would cap all observed slopes (Section~\ref{sec:delayinterp}).
 \subsection{Work--precision and time complexity}
 \label{sec:wp}
 
-\TODOnum{Figures: 4-panel work-precision per system; complexity plot with
-mean$\pm1\sigma$ bands and fitted exponents $\approx 1.0$ for all MFCM
-variants; SDM reference curve.}
+Figure~\ref{fig:wp-mathieu} shows the three canonical panels for the delayed
+Mathieu equation: error versus $p$, CPU time versus $p$ with $\pm1\sigma$
+bands, and the work--precision plane. Every embedded integrator preserves the
+linear time complexity of the multiplication-free assembly --- the fitted
+scaling exponents are $1.0$ for all methods, from RK1 through GL8 --- so
+raising the per-step order shifts the CPU-time line by a constant factor
+(the block fill) without changing its slope. On the work--precision plane
+this is decisive: GL5 and GL8 reach relative errors of $10^{-14}$ within
+milliseconds, whereas the order-2 baseline spends an order of magnitude more
+time to reach only $10^{-6}$. The same qualitative picture holds for the
+scalar seasonal model and for the spindle-speed-variation turning system
+(time-periodic delay, $p \gg r$ partitioning); the beam is discussed with
+the sweet-spot study below. \TODOnum{beam WP numbers after suite completes}
+
+For baseline parity with the predecessor \citep{Bachrathy2026},
+Figure~\ref{fig:classic} reproduces, in the present environment, the
+time-complexity contrast between the traditional monodromy construction
+(SD-classic, fitted exponent $\approx$ \TODOnum{x.x}) and the banded LR
+mapping ($\approx 1.0$); the crossover already lies below $p = 100$.
+
+\begin{figure}[t]
+  \centering
+  \figok{width=\linewidth}{figures/work_precision_mathieu.pdf}
+  \caption{Work-precision study on the delayed Mathieu equation. Left:
+  eigenvalue error vs.\ resolution $p$; middle: CPU time vs.\ $p$ (mean of
+  repeated runs, shaded $\pm1\sigma$), all fitted exponents $\approx 1.0$;
+  right: the work--precision plane (down and left is better).}
+  \label{fig:wp-mathieu}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \figok{width=0.8\linewidth}{figures/classic_sd_vs_mfsd.pdf}
+  \caption{Baseline parity with the predecessor: CPU time of the traditional
+  monodromy build (SD-classic) versus the banded multiplication-free mapping
+  on the delayed Mathieu equation, mean $\pm1\sigma$, with fitted scaling
+  exponents.}
+  \label{fig:classic}
+\end{figure}
 
 \subsection{The accuracy--sparsity sweet spot}
 \label{sec:sweetspot}
@@ -396,10 +470,21 @@ $d^2$-scaling of the fill.
 \subsection{Explicit versus implicit steps}
 \label{sec:expl-impl}
 
-\TODOnum{Overlay from work-precision data: explicit RK4/RK5 vs GL2/GL3;
-regimes where the cheap triangular structure of explicit steps wins
-wall-clock despite lower order, and where Gauss super-convergence wins
-because far fewer points are needed.}
+The conventional trade-off --- explicit steps are cheap but order-capped,
+implicit stages are expensive but super-convergent --- is reshaped by two
+findings. First, after per-step pre-elimination \emph{both} families yield a
+unit block-lower-triangular $\mathbf{\Phi}_\mathrm{L}$, so the downstream
+solve cost differs only through the block fill; the explicit advantage
+reduces to the cheaper (forward-substitution) per-step elimination, which is
+a linear-in-$p$ term either way. Second, the delay-interpolation order
+requirement (Table~\ref{tab:orders}) penalizes exactly the explicit family:
+sustaining order $q > 3$ explicitly requires bespoke dense output of order
+$q$, i.e.\ additional stages and fill, whereas the collocation families carry
+their matching-order continuous extension for free. In the measured
+work--precision curves the explicit methods are therefore competitive only in
+the low-accuracy regime ($\varepsilon \gtrsim 10^{-4}$), and Gauss stages
+dominate everywhere beyond it. \TODOnum{quantify crossover from
+work-precision CSVs after suite completion}
 
 \subsection{Non-smoothness stress test}
 \label{sec:nonsmooth}

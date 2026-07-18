@@ -548,10 +548,11 @@ $s = 8$, $p = 6$, $\mathrm{nnz}(\mathbf{\Phi}_\mathrm{L}) = 288$) --- for
 low-demand problems the whole matrix is tiny and the near-spectral corner is
 optimal. The fill term takes over exactly in the contrast cases:
 the measured per-step fill grows from $12$ nonzeros at $s=1$ to $112$ at
-$s=20$ already on the Mathieu system, and for the high-demand and
-high-dimensional systems of Section~\ref{sec:contrast} the optimum falls
-back to moderate order.
-\TODOnum{beam + turning optima from final CSVs}
+$s=20$ on the Mathieu system but from $1.7\cdot10^3$ ($s=1$) to
+$6.4\cdot10^3$ ($s=6$) per step on the $d=28$ beam, whose optima
+correspondingly retreat to $s^\ast = 4$--$5$ (relative accuracy $10^{-8}$
+in $11$\,ms at $s=5$, $p=6$; targets beyond $10^{-8}$ are excluded as they
+approach the reference accuracy).
 
 Figure~\ref{fig:phmap} renders the full picture: relative error and CPU time
 as colour maps over the $(s, p)$ plane, with the two complexity laws visible
@@ -813,11 +814,15 @@ while the A-stable Gauss stages converge from the coarsest grids.
 \label{app:nonsmooth}
 
 With act-and-wait switching, the beam's feedback matrix jumps at
-$t = 0.8\,T$. On grids where the switching instant is a node (p divisible by
-5) the full order is retained; on off-grid meshes (powers of two) the
-observed order of every method collapses towards one--two near the
-switching-induced error floor (Figure~\ref{fig:nonsmooth}), confirming the
-scope remark of Section~\ref{sec:nonsmooth}.
+$t = 0.8\,T$. On grids where the switching instant is a node ($p$ divisible
+by $5$) the nominal order is retained (measured slopes $2.0$ for GL1 and
+$3.7$ for GL2; GL3 sits at the reference floor from the coarsest aligned
+grid). On off-grid meshes (powers of two) the observed order of \emph{every}
+method collapses to $\approx 1$ (measured $1.2$, $1.1$, $0.9$ for GL1--GL3;
+Figure~\ref{fig:nonsmooth}), confirming the scope remark of
+Section~\ref{sec:nonsmooth}: with unaligned non-smoothness, all methods
+fall back to first order, so nothing is lost by choosing the sparse
+moderate-order variants.
 
 \begin{figure}[t]
   \centering

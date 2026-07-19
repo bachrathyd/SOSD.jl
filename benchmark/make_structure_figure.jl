@@ -13,8 +13,8 @@ using LinearAlgebra
 
 ENV["GKSwstype"] = "100"
 gr()
-default(fontfamily="Computer Modern", titlefontsize=10, guidefontsize=9,
-        tickfontsize=7, legendfontsize=7, dpi=300)
+default(fontfamily="Computer Modern", titlefontsize=8, guidefontsize=7,
+        tickfontsize=6, legendfontsize=6, dpi=300)
 
 const FIGS = joinpath(@__DIR__, "figures")
 const PAPER_FIGS = joinpath(@__DIR__, "..", "paper", "figures")
@@ -38,7 +38,7 @@ function pattern_panel(tab, name; p=8)
 
     function spy_plot(M, ttl)
         I_, J_, _ = findnz(M)
-        plt = scatter(J_, I_, ms=1.2, msw=0, color=:royalblue, label=false,
+        plt = scatter(J_, I_, ms=2.8, msw=0, color=:royalblue, label=false,
                       title=ttl, yflip=true, aspect_ratio=:equal,
                       xlim=(0, size(M, 2) + 1), ylim=(0, size(M, 1) + 1),
                       xlabel="column", ylabel="row")
@@ -54,7 +54,7 @@ end
 pL1, pR1 = pattern_panel(SOSD.RK4(), "explicit RK4 (s = 4)")
 pL2, pR2 = pattern_panel(GL(3), "Gauss GL3 (s = 3)")
 
-plt = plot(pL1, pR1, pL2, pR2, layout=(2, 2), size=(950, 900),
+plt = plot(pL1, pR1, pL2, pR2, layout=(2, 2), size=(680, 640),
            left_margin=5Plots.mm, bottom_margin=5Plots.mm)
 savefig(plt, joinpath(FIGS, "structure_patterns.png"))
 savefig(plt, joinpath(FIGS, "structure_patterns.pdf"))

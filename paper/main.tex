@@ -208,12 +208,12 @@ applied to \eqref{eq:ldde} on $[t_n, t_n + \Delta t]$. Writing the stage
 \emph{values} $\mathbf{Y}_{i}\approx\mathbf{x}(t_n + c_i\Delta t)$ (rather
 than stage slopes), the step reads
 \begin{align}
-  \mathbf{Y}_i &= \mathbf{x}_n + \Delta t \sum_{j=1}^{s} a_{ij}
-      \Bigl[\mathbf{A}(t_{nj})\,\mathbf{Y}_j + \mathbf{d}_j\Bigr],
-      \qquad i = 1,\ldots,s,
+  \mathbf{Y}_i &= \mathbf{x}_n + \Delta t \sum_{j} a_{ij}
+      \bigl[\mathbf{A}(t_{nj})\,\mathbf{Y}_j + \mathbf{d}_j\bigr],
+      \quad i = 1,\ldots,s,
   \label{eq:stage}\\
-  \mathbf{x}_{n+1} &= \mathbf{x}_n + \Delta t \sum_{j=1}^{s} b_{j}
-      \Bigl[\mathbf{A}(t_{nj})\,\mathbf{Y}_j + \mathbf{d}_j\Bigr],
+  \mathbf{x}_{n+1} &= \mathbf{x}_n + \Delta t \sum_{j} b_{j}
+      \bigl[\mathbf{A}(t_{nj})\,\mathbf{Y}_j + \mathbf{d}_j\bigr],
   \label{eq:update}
 \end{align}
 with $t_{nj} = t_n + c_j \Delta t$ and the delayed-plus-forcing terms
@@ -245,18 +245,19 @@ $(s{+}1)\times s$ matrix
   \hat{\mathbf{A}} \;=\;
   \begin{bmatrix} \mathbf{a} \\ \mathbf{b}^{\!\top} \end{bmatrix},
   \qquad
-  \boldsymbol{\mathcal{A}}_n = \mathrm{diag}\bigl(\mathbf{A}(t_{n1}),
-      \ldots, \mathbf{A}(t_{ns})\bigr),
+  \mathbf{K} = \hat{\mathbf{A}}\otimes\mathbf{I}_d,
   \label{eq:compound}
 \end{equation}
+and writing $\boldsymbol{\mathcal{A}}_n = \mathrm{diag}\bigl(\mathbf{A}(t_{n1}),
+\ldots, \mathbf{A}(t_{ns})\bigr)$ for the stagewise coefficient block,
 the step \eqref{eq:stage}--\eqref{eq:update} reads, for the stacked unknowns
 $\mathbf{w}_n = (\mathbf{Y}_1^\top,\ldots,\mathbf{Y}_s^\top,
 \mathbf{x}_{n+1}^\top)^\top$,
 \begin{equation}
-  \Bigl[\mathbf{I} - \Delta t\,\bigl(\hat{\mathbf{A}}\otimes\mathbf{I}_d\bigr)
-        \,\boldsymbol{\mathcal{A}}_n\,\mathbf{S}\Bigr]\mathbf{w}_n
+  \bigl[\mathbf{I} - \Delta t\,\mathbf{K}
+        \boldsymbol{\mathcal{A}}_n\mathbf{S}\bigr]\mathbf{w}_n
   = \bigl(\mathbf{1}_{s+1}\otimes\mathbf{I}_d\bigr)\,\mathbf{x}_n
-  + \Delta t\,\bigl(\hat{\mathbf{A}}\otimes\mathbf{I}_d\bigr)\,\mathbf{d}_n,
+  + \Delta t\,\mathbf{K}\,\mathbf{d}_n,
   \label{eq:kron}
 \end{equation}
 where $\mathbf{S} = [\,\mathbf{I}_{sd}\;\;\mathbf{0}\,]$ selects the stage
@@ -286,7 +287,7 @@ the accuracy--sparsity sweet spot.
 
 \begin{figure*}[t]
   \centering
-  \figok{width=\linewidth}{figures/structure_patterns.pdf}
+  \figok{width=0.62\textwidth}{figures/structure_patterns.pdf}
   \caption{Sparsity patterns of the solution-operator pair
   $(\mathbf{\Phi}_\mathrm{L}, \mathbf{\Phi}_\mathrm{R})$ on the delayed
   Mathieu equation ($p = r = 8$): explicit RK4 (top) versus Gauss GL3
@@ -447,22 +448,24 @@ fitted convergence order of the dominant multiplier (log--log slope over the
 pre-floor error range).}
 \label{tab:orders}
 \centering
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccl}
 \toprule
-Method & Nominal & Fitted & Comment \\
+Method & Nom. & Fitted & Comment \\
 \midrule
-SDM (order 2)  & 2  & 3.1 & delayed-term interpolation superconverges \\
+SDM (order 2)  & 2  & 3.1 & delay interp.\ superconverges \\
 RK2 (Heun)     & 2  & 2.0 & \\
-RK4            & 4  & 3.3 & capped by 3rd-order dense output \\
-RK5            & 5  & 2.1 & capped by generic stage interpolant \\
+RK4            & 4  & 3.3 & capped: 3rd-order dense output \\
+RK5            & 5  & 2.1 & capped: stage interpolant \\
 GL1 (midpoint) & 2  & 2.0 & \\
 GL2            & 4  & 4.0 & superconvergence $2s$ \\
 GL3            & 6  & 6.0 & \\
 GL5            & 10 & 10.0 & \\
-GL8            & 16 & --- & at $10^{-16}$ floor from $p = 16$ \\
+GL8            & 16 & --- & at $10^{-16}$ floor, $p \ge 16$ \\
 Radau IIA, $s{=}3$   & 5 & 4.9 & \\
-Lobatto IIIA, $s{=}3$ & 4 & 4.0 & \\
-Lobatto IIIA, $s{=}4$ & 6 & 6.0 & \\
+Lob.\ IIIA, $s{=}3$ & 4 & 4.0 & \\
+Lob.\ IIIA, $s{=}4$ & 6 & 6.0 & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -794,10 +797,11 @@ The author declares no conflict of interest.
 \label{app:params}
 
 \paragraph{Delayed Mathieu equation} ($d=2$)
-\begin{equation*}
+\begin{align*}
   \ddot{x} + a_1 \dot{x} + \bigl(\delta + \varepsilon\cos(2\pi t/T)\bigr)x
-  = b_0\, x(t-\tau) + \sin(4\pi t / T),
-\end{equation*}
+  \hspace{-2.2cm}& \\
+  &= b_0\, x(t-\tau) + \sin(4\pi t / T),
+\end{align*}
 with $\delta = 3$, $\varepsilon = 0.2$, $b_0 = -0.15$, $a_1 = 0.1$,
 $\tau = T = 2\pi$. Converged dominant multiplier
 $\mu = 0.351417260953549$ (Table, two-resolution GL10 reference).
@@ -807,12 +811,12 @@ $\dot{y}(t) = -(a + b\cos t)\, y(t - \tau)$ with $a = b = 1$, $\tau = 2$,
 $T = 2\pi$; $\mu = 0.626021929290183$.
 
 \paragraph{Turning with spindle-speed variation} ($d=2$)
-\begin{equation*}
-  \ddot{x} + \zeta \dot{x} + (1 + k_w)x = k_w\, x\bigl(t - \tau(t)\bigr)
-  + \cos(2\pi t),\quad
-  \tau(t) = \frac{2\pi}{\Omega}\Bigl(1 + A_\mathrm{SSV}
+\begin{align*}
+  \ddot{x} + \zeta \dot{x} + (1 + k_w)x
+  &= k_w\, x\bigl(t - \tau(t)\bigr) + \cos(2\pi t),\\
+  \tau(t) &= \frac{2\pi}{\Omega}\Bigl(1 + A_\mathrm{SSV}
     \sin\tfrac{2\pi t}{T}\Bigr),
-\end{equation*}
+\end{align*}
 with $k_w = 0.2$, $\zeta = 0.1$, $\Omega = 0.3$, $A_\mathrm{SSV} = 0.1$,
 $T = N_T\, 2\pi/\Omega$, $N_T = 10$ (so $T/\tau_{\max} \approx 9.1$);
 $\mu \approx 4.47617$.

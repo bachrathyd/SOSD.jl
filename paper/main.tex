@@ -675,38 +675,39 @@ affordable stage number before CPU time does.
 
 An important caveat on superconvergence follows.
 Figure~\ref{fig:cliff} shows the order-refinement direction explicitly: the
-error \emph{and} the CPU time versus the stage number $s$ (up to $s = 100$)
-at fixed step counts $p = 1, 10, 100$, for the easy and the hard system.
-Superconvergence does \emph{not} mean that a handful of stages always
-suffices: below the resolution bound \eqref{eq:nyquist} the discrete
-spectrum is simply wrong (relative errors of order one), and the celebrated
-steep decay only begins once $N = p(s{+}1)$ crosses the bound --- the cliff
-sits at $s^{\mathrm{cliff}} \approx c_\mathrm{s}\,\omega_{\max}T/(2\pi p) - 1$, i.e.\
-its position is set by the natural-oscillation content of the system divided
-by the step count, not by the method order. For the Mathieu system the
-cliff sits at $N \approx 10$--$30$; for the turning system at
-$N \approx 200$--$400$, so a single-step scheme needs $s$ in the hundreds
-before it produces anything meaningful. Raising the order buys nothing
-until the sampling limit is met; beyond the limit it buys everything. The bottom
-row displays the measured CPU-versus-$s$ law at fixed $p$ with fitted
-exponents, answering the complexity question directly: the cost is
-polynomial in $s$ throughout, with the exponent growing towards the cubic
-stage-elimination limit at large $s$. The order-verification and
-work--precision figures (error versus $p$ at fixed $s$,
-Figures~\ref{fig:order} and \ref{fig:wp-mathieu}, and
+error versus the \emph{total sample count} $N = p(s{+}1)$, sweeping the
+stage number at fixed step counts $p = 1, 10, 100$, for the easy and the
+hard system side by side. Superconvergence does \emph{not} mean that a
+handful of stages always suffices: below the resolution bound
+\eqref{eq:nyquist} --- the shaded band --- the discrete spectrum is simply
+wrong (relative errors of order one), and the steep decay only begins once
+$N$ crosses the band. Plotted against $N$, the message is direct: the
+resolution that matters is the sample count, not $p$ or $s$ alone. For the
+Mathieu system the band sits at $N \approx 10$--$20$ and every curve dives
+at or just beyond it; for the turning system it sits at
+$N \approx 200$--$400$, all curves stay at $\varepsilon = \mathcal{O}(1)$
+until they reach it, and a single-step scheme ($p = 1$) cannot cross it at
+all within the practical stage range. Raising the order buys nothing until
+the sampling limit is met; beyond the limit it buys everything. The
+order-verification and work--precision figures (error versus $p$ at fixed
+$s$, Figures~\ref{fig:order} and \ref{fig:wp-mathieu}, and
 Appendix~\ref{app:morewp} for the hard case) show the complementary
-$h$-refinement direction of the same surface.
+$h$-refinement direction of the same surface, and the measured
+CPU-versus-$s$ exponents appear in the $(s, p)$-map of
+Figure~\ref{fig:phmap}.
 
 \begin{figure*}[t]
   \centering
-  \figok{width=\linewidth}{figures/p_refinement_cliff.pdf}
-  \caption{Order refinement at fixed step counts $p = 1, 10, 100$ for the easy
-  (left) and hard (right) system. Top: relative error versus stage number
-  $s$ (clipped at $3\cdot10^{0}$); dotted vertical lines mark the sampling
-  estimate \eqref{eq:nyquist}. Superconvergent decay starts only beyond
-  the bound, whose position scales with $\omega_{\max}T/(2\pi p)$. Bottom:
-  the measured CPU time versus $s$ with fitted large-$s$ exponents
-  (minimum of repeated measurements).}
+  \figok{width=0.9\linewidth}{figures/p_refinement_cliff.pdf}
+  \caption{Order refinement at fixed step counts $p = 1, 10, 100$: relative
+  error versus the total sample count $N = p(s{+}1)$ for the easy (left) and
+  hard (right) system, error clipped at $3\cdot10^{0}$. The shaded band is
+  the sampling estimate \eqref{eq:nyquist} with
+  $c_\mathrm{s} = 5$--$10$. Superconvergent decay starts only once $N$
+  crosses the band, whose position is set by the oscillation content
+  $\omega_{\max}T/2\pi$ of the system --- not by the method order; on the
+  hard system the single-step curve ($p = 1$) cannot reach the band within
+  the practical stage range and stays meaningless throughout.}
   \label{fig:cliff}
 \end{figure*}
 

@@ -296,42 +296,35 @@ end
 #     bound; the cliff position collapses in N across all fixed-p curves.
 # ---------------------------------------------------------------------------
 function fig_cliff()
-    # redesigned: x-axis is the stage number s at fixed p in {1, 10, 100};
-    # top row: error vs s (cliff at the Shannon bound); bottom row: CPU vs s
-    # (the empirical s-complexity, incl. where the (sd)^3 term takes over)
-    paths = [("mathieu", "easy: delayed Mathieu", 1.7), ("turning_ssv", "hard: turning SSV", 36.0)]
-    top = []; bottom = []
+    # error versus TOTAL SAMPLE COUNT N = p(s+1) at fixed p in {1, 10, 100}:
+    # all curves must cross the shaded Shannon band before the superconvergent
+    # drop can begin — the resolution has to match N, not p or s alone.
+    # Compact combined layout: easy (left) and hard (right) system.
+    paths = [("mathieu", "easy: delayed Mathieu", 1.7),
+             ("turning_ssv", "hard: SSV turning", 36.0)]
+    panels = []
     for (sysname, ttl, osc) in paths
         path = joinpath(RESULTS, "s_complexity_$sysname.csv")
         isfile(path) || continue
         d = load_csv(path)
-        ps = Int.(d["p"]); ss = Int.(d["s"])
+        ps = Int.(d["p"]); Ns = Int.(d["N"])
         errs = clamp.(fnum(d["rel_error"]), 1e-16, 3.0)
-        tms = fnum(d["t_min"])
-        pE = plot(xscale=:log10, yscale=:log10, xlabel=L"s", ylabel=L"\varepsilon",
-                  legend=:bottomleft, title=ttl, ylims=(1e-16, 3.0))
-        pT = plot(xscale=:log10, yscale=:log10, xlabel=L"s", ylabel=L"T_\mathrm{CPU}\;[\mathrm{s}]",
-                  legend=:topleft, title="CPU time — $ttl")
+        plt = plot(xscale=:log10, yscale=:log10, xlabel=L"N = p(s+1)",
+                   ylabel=L"\varepsilon", legend=:bottomleft, title=ttl,
+                   ylims=(1e-16, 3.0))
+        vspan!(plt, [5osc, 10osc], fillalpha=0.18, color=:gray,
+               label=L"N = (5{-}10)\,\omega_{\max}T/2\pi")
         for p in sort(unique(ps))
             idx = findall(==(p), ps)
-            ord = sortperm(ss[idx])
-            sv = ss[idx][ord]
-            # cliff position predicted by the sampling bound: s* = c*osc/p - 1
-            plot!(pE, sv, errs[idx][ord], marker=:circle, ms=3, lw=1.8, label="p = $p")
-            scliff = 7.5osc / p - 1
-            scliff > 1 && vline!(pE, [scliff], ls=:dot, lc=:gray, label=false)
-            # CPU: fit the large-s tail exponent
-            tt = tms[idx][ord]
-            large = sv .>= max(8, 0.4maximum(sv))
-            kt = sum(large) > 2 ? ([log10.(Float64.(sv[large])) ones(sum(large))] \ log10.(tt[large]))[1] : NaN
-            plot!(pT, sv, tt, marker=:circle, ms=3, lw=1.8,
-                  label=isfinite(kt) ? "p = $p (t ~ s^$(round(kt, digits=1)))" : "p = $p")
+            ord = sortperm(Ns[idx])
+            plot!(plt, Ns[idx][ord], errs[idx][ord], marker=:circle, ms=2.6,
+                  lw=1.7, label=L"p = %$p")
         end
-        push!(top, pE); push!(bottom, pT)
+        push!(panels, plt)
     end
-    isempty(top) && (println("skip cliff"); return)
-    plt = plot(top..., bottom..., layout=(2, length(top)), size=(1300, 850),
-               left_margin=8Plots.mm, bottom_margin=8Plots.mm)
+    isempty(panels) && (println("skip cliff"); return)
+    plt = plot(panels..., layout=(1, length(panels)), size=(950, 360),
+               left_margin=7Plots.mm, bottom_margin=7Plots.mm)
     saveboth(plt, "p_refinement_cliff")
 end
 

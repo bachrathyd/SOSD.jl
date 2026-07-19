@@ -39,7 +39,10 @@ end
 
 function fit_slope_window(xs, errs; lo=1e-14, hi=1e-1)
     idx = findall(i -> lo < errs[i] < hi && isfinite(errs[i]) && xs[i] > 0, eachindex(errs))
-    length(idx) < 2 && return NaN
+    # a meaningful order fit needs >= 4 points spanning >= 1.5 error decades
+    length(idx) < 4 && return NaN
+    span = log10(maximum(errs[idx])) - log10(minimum(errs[idx]))
+    span < 1.5 && return NaN
     A = [log10.(xs[idx]) ones(length(idx))]
     return (A \ log10.(errs[idx]))[1]
 end
@@ -62,7 +65,7 @@ function fig_order()
     d = load_csv(path)
     methods = unique(String.(d["method"]))
     plt = plot(xscale=:log10, yscale=:log10, xlabel=L"p",
-               ylabel=L"|\Delta\mu|", legend=:bottomleft,
+               ylabel=L"|\Delta\mu|", legend=:outerright,
                title="Order verification — delayed Mathieu")
     for m in methods
         idx = findall(==(m), String.(d["method"]))

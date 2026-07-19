@@ -39,38 +39,22 @@ Budapest, Hungary.}
 The multiplication-free semi-discretization method (MFSD) reduces the
 stability analysis of time-periodic delay differential equations to a sparse,
 banded generalized eigenvalue problem with linear time complexity in the
-resolution $p$; however, the classical piecewise-constant step limits its
-convergence order to two. This paper introduces the \emph{solution-operator
-semi-discretization} (SOSD) method: since the multiplication-free
-representation of the one-period solution operator only requires a per-step
-residual, the integrator inside each step becomes a free design choice. The
-residual block rows of any explicit Runge--Kutta or implicit collocation-type
-scheme (Gauss--Legendre, Radau, Lobatto) are embedded in the banded system
-through a Kronecker-product structure of the Butcher tableau and the
-system matrices, raising the convergence order of the dominant characteristic
-multipliers far beyond the classical limit of two: the full superconvergent
-order $2s$ of $s$-stage Gauss collocation is observed when the delay is
-commensurate with the mesh, and orders between the interpolation-limited
-$s{+}1$ and $2s$ for general (including time-periodic) delays, in agreement
-with classical DDE interpolation theory. In the limit of
-a single ultra-high-order step, the framework degenerates to the known global
-spectral method; between the two extremes lies a continuum in which per-step
-order is traded against matrix sparsity. Because the cost at fixed step count
-grows polynomially with the stage number (measured exponents $1.6$--$2.0$
-for the rank-one delay couplings typical of machining and feedback systems,
-up to cubic for dense coupling) while the $h$-refinement cost is linear up
-to the near-constant Krylov iteration count (measured exponents
-$1.0$--$1.1$), the CPU-time optimum for a prescribed accuracy is a
-problem-dependent
-\emph{sweet spot} at moderate order and many steps: its location is measured
-for systems requiring only tens of points per period and for systems --- with
-natural frequency high relative to the period --- requiring many hundreds, where
-the banded moderate-order route wins decisively. We further argue that
-previous method comparisons conflated order refinement with $h$-refinement, and
-we prescribe a fair work--precision methodology (log--log axes, wide
-resolution ranges, repetition-robust CPU timing, a single machine and
-BLAS-thread configuration). All methods are implemented in the open-source Julia package
-\textsf{SOSD.jl}.
+resolution $p$, but its piecewise-constant step limits the convergence order
+to two. This paper introduces the \emph{solution-operator semi-discretization}
+(SOSD) method: the integrator inside each step becomes a free design choice,
+and the residual block rows of any explicit Runge--Kutta or implicit
+collocation-type scheme (Gauss--Legendre, Radau, Lobatto) embed in the banded
+system through a Kronecker-product structure of the Butcher tableau and the
+system matrices. The full superconvergent order $2s$ of $s$-stage Gauss
+collocation is observed for mesh-commensurate delays, and orders between
+$s{+}1$ and $2s$ are observed for general (including time-periodic) delays.
+Because the cost at fixed step count grows polynomially with the stage number
+while $h$-refinement stays essentially linear, the CPU-time optimum is a
+problem-dependent \emph{sweet spot}, located here for systems requiring tens
+and many hundreds of samples per period. A Shannon-type sampling bound turns
+the measurements into an a~priori recipe for choosing the stage and step
+counts, demonstrated end-to-end on high-resolution stability charts. All
+methods are implemented in the open-source Julia package \textsf{SOSD.jl}.
 \end{abstract}
 
 \keywords{time-delay systems, semi-discretization, solution operator,
@@ -184,9 +168,9 @@ and its avoidance is the point of MFSD: each step contributes the residual
 row $\mathbf{0} = \mathbf{I}\mathbf{x}_{n+1} - \mathbf{P}_n\mathbf{x}_n -
 \mathbf{R}_n\mathbf{x}_{n-r}$ to a sparse banded block system over the
 extended vector spanning $[t-\tau_{\max},\, t+T]$, split into left/right
-blocks so that the spectrum follows from
-$\mathbf{\Phi}_\mathrm{L}\mathbf{y}_p =
-\mu\,\mathbf{\Phi}_\mathrm{R}\mathbf{y}_0$
+blocks so that, with the Floquet ansatz
+$\mathbf{y}_p = \mu\,\mathbf{y}_0$, the spectrum follows from
+$\mu\,\mathbf{\Phi}_\mathrm{L}\mathbf{v} = \mathbf{\Phi}_\mathrm{R}\mathbf{v}$
 via sparse Krylov iteration \citep{Haegeman2021} at
 $\mathcal{O}(p)$ total cost \citep{Bachrathy2026}.
 
@@ -339,9 +323,11 @@ explicit methods, the scheme's dense-output polynomial (for RK4 the classical
 cubic Hermite-type formula). The interpolation weights depend only on
 $\theta$ and the tableau, so they join the precomputed transition blocks
 without changing the banded structure; each delayed sample couples block row
-$n$ to the two neighbouring history blocks $m$ and $m+1$. Since the
-delayed state lies at least one full delay in the past, these couplings stay
-strictly below the diagonal and $\mathbf{\Phi}_\mathrm{L}$ remains
+$n$ to the two neighbouring history blocks $m$ and $m+1$. Provided every
+delay spans at least one step ($\tau_k \ge \Delta t$;
+Appendix~\ref{app:structure} treats sub-step delays), the delayed instant
+lies in a strictly earlier step, so these couplings stay below the diagonal
+and $\mathbf{\Phi}_\mathrm{L}$ remains
 triangular; couplings reaching into the pre-period history enter
 $\mathbf{\Phi}_\mathrm{R}$ instead. Time-periodic delays $\tau_k(t)$ are
 handled naturally, because $\theta$ and the target block $m$ are evaluated
@@ -422,7 +408,7 @@ Appendix~\ref{app:params}):
         canonical smooth validation case \citep{Insperger2011}.
   \item \textbf{Seasonal scalar model} ($d=1$, $\tau = 2$, $T=2\pi$): a
         smooth, cheap system where high per-step order excels.
-  \item \textbf{Turning with spindle-speed variation} ($d=2$,
+  \item \textbf{Turning with spindle-speed variation (SSV)} ($d=2$,
         time-periodic delay, $T/\tau_{\max} \approx 9.1$): exercises the
         $p \gg r$ partitioning and time-varying delay handling.
   \item \textbf{FEM beam with delayed boundary feedback} ($d=28$,
@@ -438,23 +424,24 @@ Figure~\ref{fig:order} and Table~\ref{tab:orders} confirm on the delayed
 Mathieu equation that each embedded \emph{collocation} integrator attains its
 theoretical convergence order in the dominant multiplier on this
 \emph{mesh-commensurate} test ($\tau = T = p\,\Delta t$): the Gauss family
-exhibits the superconvergent order $2s$ (fitted slopes $2.00$, $4.00$,
-$5.99$ and $9.96$ for $s = 1, 2, 3, 5$; GL8 reaches the $10^{-16}$ relative
+exhibits the superconvergent order $2s$ (fitted slopes $1.96$, $3.98$,
+$5.98$ and $9.98$ for $s = 1, 2, 3, 5$; GL8 reaches the $10^{-16}$ relative
 floor already at $p = 16$), Radau~IIA attains $2s-1$ and Lobatto~IIIA
-$2s-2$. Commensurability matters: the continuous extension of an $s$-stage
+$2s-2$. The first-order RK1 curve is included in the figures for
+completeness. Commensurability matters: the continuous extension of an $s$-stage
 collocation step is a degree-$s$ polynomial with uniform accuracy
-$\mathcal{O}(\Delta t^{s+1})$, so for delays that fall \emph{inside} steps
+$\mathcal{O}(\Delta t^{s+1})$, so for delays that fall \emph{inside} steps,
 classical DDE interpolation theory \citep{BellenZennaro2003} caps the
-attainable order at $\min(2s,\, s{+}1)$ unless error cancellation occurs.
+attainable order at $s{+}1$ unless error cancellation occurs.
 The measurements bracket exactly this range: on the seasonal model
 ($\tau = 2$, never mesh-aligned) GL2 and GL3 reduce to fitted orders
-$2.9$ and $4.0 \approx s{+}1$, while on the SSV turning system (time-varying
-delay) GL2 retains the full $4.0$ and GL3 attains $5.2$ --- between
+$2.9$ and $3.8 \approx s{+}1$, while on the SSV turning system (time-varying
+delay) GL2 retains the full $4.0$ and GL3 attains $5.3$ --- between
 $s{+}1$ and $2s$. The explicit family is capped harder: the
 observed order is limited by its continuous extension, so RK4 with its
-classical third-order dense output converges with slope $\approx 3.3$
+classical third-order dense output converges with slope $\approx 3.2$
 instead of $4$, and RK5 with a generic stage-value interpolant collapses to
-slope $\approx 2.1$ --- the delayed lookup, not the step, is the binding
+slope $\approx 2.3$ --- the delayed lookup, not the step, is the binding
 constraint, exactly as anticipated in Section~\ref{sec:delayinterp}. Even
 with the $s{+}1$ cap, collocation stages carry a consistent
 high-order extension at no extra cost, and their nodal order can exceed it
@@ -476,9 +463,9 @@ pre-floor error range).}
 Method & Nom. & Fitted & Comment \\
 \midrule
 SD (order 2)   & 2  & 3.1 & aligned-delay cancellation \\
-RK2 (Heun)     & 2  & 2.0 & \\
-RK4            & 4  & 3.3 & capped: 3rd-order dense output \\
-RK5            & 5  & 2.1 & capped: stage interpolant \\
+RK2 (Heun)     & 2  & 1.8 & \\
+RK4            & 4  & 3.2 & capped: 3rd-order dense output \\
+RK5            & 5  & 2.3 & capped: stage interpolant \\
 GL1 (midpoint) & 2  & 2.0 & \\
 GL2            & 4  & 4.0 & superconvergence $2s$ \\
 GL3            & 6  & 6.0 & \\
@@ -495,8 +482,8 @@ Lob.\ IIIA, $s{=}4$ & 6 & 6.0 & \\
   \centering
   \figok{width=\linewidth}{figures/order_verification.pdf}
   \caption{Order verification on the delayed Mathieu equation: eigenvalue
-  error versus resolution $p$ (log--log), one curve per method, dashed lines
-  showing fitted slopes.}
+  error versus resolution $p$ (log--log), one curve per method, fitted
+  slopes in the legend (explicit methods dashed).}
   \label{fig:order}
 \end{figure}
 
@@ -512,7 +499,8 @@ RK2 through GL8, rising to at most $1.6$ on the high-dimensional beam ---
 so raising the per-step order shifts the CPU-time line by an essentially
 constant factor (the block fill) without changing its slope. On the work--precision plane
 this is decisive: GL5 and GL8 reach relative errors of $10^{-14}$ within
-milliseconds, whereas the order-2 baseline spends an order of magnitude more
+milliseconds, whereas the order-2 baseline (labelled SDM-O2 in the figures)
+spends an order of magnitude more
 time to reach only $10^{-6}$. The same qualitative picture holds for the
 scalar seasonal model and for the spindle-speed-variation turning system
 (time-periodic delay, $p \gg r$ partitioning); the beam work--precision
@@ -522,12 +510,13 @@ Appendix~\ref{app:morewp}.
 For baseline parity with the predecessor \citep{Bachrathy2026},
 Figure~\ref{fig:classic} reproduces, in the present environment, the
 time-complexity contrast between the traditional monodromy construction
-(SD-classic, fitted exponent $2.2$ over the range affordable under a
-$2$\,s-per-solve budget, $p \le 10^3$; the predecessor measured
-$\approx\!2.8$ over a wider window) and the banded LR mapping (fitted
-exponent $1.05$, continued here to $p = 10^{6}$ in $13$\,s); both agree in
-the multiplier to $10^{-15}$, and at the last common resolution $p = 10^3$
-the multiplication-free route is already $1200\times$ faster.
+(SD-classic, fitted exponent $2.2$ over the affordable range --- the series
+stops when a solve exceeds the $2$\,s budget, at $p = 10^{3}$ with
+$5.4$\,s) and the banded LR mapping (fitted exponent $0.98$, steepening to
+$\approx 1.2$ beyond $p = 10^{4}$ as memory effects enter; continued to
+$p = 10^{6}$ in $13$\,s); both agree in the multiplier to $10^{-15}$, and at
+$p = 10^{3}$ the measured times are $4.5$\,ms versus $5.4$\,s --- a factor
+of $1200$.
 
 \begin{figure*}[t]
   \centering
@@ -561,20 +550,22 @@ order $s$ while choosing the smallest resolution $p$ that reaches
 $\varepsilon$ produces a U-shaped CPU-time curve: low orders need excessive
 $p$, high orders pay polynomially growing per-step cost --- stage
 elimination $\mathcal{O}\bigl((sd)^3\bigr)$ plus fill, with measured
-fixed-$p$ exponents $t \propto s^{k}$, $k = 1.6$ (Mathieu, $d=2$), $1.8$
-(beam, $d=28$) and $2.0$ (turning at $p = 3428$) for rank-one delay
+fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$), $1.8$
+(beam, $d=28$; map not shown) and $2.0$ (turning) for rank-one delay
 coupling, and $k \to 3$ asymptotically as the stage elimination dominates. A first-order cost model,
 $\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (\Delta t/T_\mathrm{c})^{2s}$
 for a characteristic time $T_\mathrm{c}$ (taking the best-case nodal order
-$2s$; reduced orders for non-commensurate delays shift the optimum mildly
-upward, and the factorial decay of the Gauss error constants is neglected),
+$2s$; reduced orders for non-commensurate delays raise the optimum
+appreciably --- roughly doubling $s^\ast$ --- which explains the high-order
+optimum observed at the extreme accuracy target, and the factorial decay of
+the Gauss error constants is neglected),
 predicts the optimum
 \begin{equation}
   s^\ast \approx \tfrac{1}{2k}\ln(1/\varepsilon),
   \label{eq:sweetspot}
 \end{equation}
 i.e.\ even a $10^{-12}$ accuracy target asks for only
-$s^\ast \approx 5$--$10$ Gauss stages --- moderate order, many steps. This asymptotic model applies
+$s = 7$--$11$ Gauss stages --- moderate order, many steps. This asymptotic model applies
 when the fill actually binds. For the small, smooth Mathieu system it does
 not: the measured optima sit at $s^\ast = 5$--$8$ with as few as
 $p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $4$\,ms with
@@ -605,8 +596,9 @@ moderate order.
   ($p = 1\ldots4\cdot10^3$, $s = 1\ldots30$; beyond $s \approx 30$ the
   product-form evaluation of the continuous-extension weights loses
   floating-point accuracy --- a barycentric implementation would extend the
-  range, which is irrelevant in practice since all optima lie at
-  $s \le 8$). Left: colour encodes CPU time;
+  range, which is irrelevant in practice: all engineering-target optima lie
+  at $s \le 8$, and even the extreme $10^{-12}$-target optimum sits at
+  $s^\ast = 20$, well inside the range). Left: colour encodes CPU time;
   middle: colour encodes the eigenvalue error; right: both contour
   families overlaid --- following, e.g., the $\varepsilon = 10^{-6}$ error
   contour (solid), the smallest CPU-time contour (dashed) it touches
@@ -632,8 +624,9 @@ range:
         corner is viable.
   \item \textbf{High demand (hundreds of points and more).} The
         spindle-speed-variation turning system oscillates with
-        $T/T_\mathrm{osc} \approx 36$ (natural frequency high relative to
-        the period), so \emph{any} method needs $N = p(s{+}1) \gtrsim 500$
+        $\omega_{\max}T/2\pi \approx 36$ (its fastest natural period is
+        short relative to the principal period), so \emph{any} method needs
+        $N = p(s{+}1) \gtrsim 200$--$400$
         samples per period to resolve the dynamics at all. Here the banded
         moderate-order route wins decisively at engineering accuracies: the
         measured optima are $(s^\ast, p^\ast) = (7, 47)$ for
@@ -644,7 +637,7 @@ range:
         $\varepsilon = 10^{-12}$ does the optimum shift towards high order,
         $(20, 22)$ at $91$\,ms --- and even there $N = 462$ respects the
         bound and the step count remains far from the single-step corner,
-        which is not computable within the CPU budget at all.
+        while no single-step cell reaches any target within the stage range.
 \end{itemize}
 The resolution demand can be estimated a priori by a sampling (Shannon-type)
 argument. The discretization carries $N = p\,(s{+}1)$ solution samples per
@@ -658,8 +651,9 @@ $c_\mathrm{s} \approx 5$--$10$ samples:
 \end{equation}
 For the turning system ($\omega_{\max}T/2\pi \approx 36$) this predicts
 $N \gtrsim 200$--$400$, matching the observed onset of convergence; below it
-the computed multipliers are meaningless (for both SOSD--GL2 and the order-2
-baseline at $p = 50$, i.e.\ $N = 150$, they are off by orders of magnitude).
+the computed multipliers are meaningless (for GL2 at $p = 50$, i.e.\
+$N = 150$ --- and a fortiori for the order-2 baseline, whose sample count is
+only $p$, they are off by orders of magnitude).
 The bound
 \eqref{eq:nyquist} sharpens the sweet-spot analysis: when $N$ is pinned by
 the oscillation content rather than by the accuracy target, the cost of the
@@ -767,7 +761,7 @@ $\varepsilon$:
         with $c_\mathrm{s} \approx 5$--$10$ (Eq.~\eqref{eq:nyquist});
   \item \textbf{Stage number:} $s \approx \max\bigl(2,\
         \lceil\ln(1/\varepsilon)/(2k)\rceil\bigr)$ with the measured cost
-        exponent $k \approx 1.6$--$2.0$ (Eq.~\eqref{eq:sweetspot}), capped by
+        exponent $k \approx 1.3$--$2.0$ (Eq.~\eqref{eq:sweetspot}), capped by
         memory for large $d$;
   \item \textbf{Step count:} $p = \lceil N_{\min}/(s{+}1)\rceil$, then one or
         two $h$-refinements to confirm the target --- cheap, since the cost
@@ -778,7 +772,7 @@ In more detail:
 \begin{enumerate}
   \item \textbf{Default: Gauss stages, moderate order.} The stage-number
         rule of step 2 above --- $s \approx \lceil\ln(1/\varepsilon)/(2k)\rceil$
-        with the measured $k \approx 1.6$--$2.0$ --- gives $s = 7$--$9$ even
+        with the measured $k \approx 1.3$--$2.0$ --- gives $s = 7$--$11$ even
         for $\varepsilon = 10^{-12}$, in agreement with the measured optima
         $s^\ast = 4$--$8$ at engineering targets across all systems. Then pick
         $p$ by one or two refinement steps until the target is met --- the
@@ -807,6 +801,10 @@ In more detail:
         not, expect order collapse and prefer moderate order with more
         steps.
 \end{enumerate}
+Appendix~\ref{app:charts} demonstrates the recipe end-to-end on two
+production stability charts, and Appendix~\ref{app:structure} collects
+structural remarks on delay--period ratios, sub-step delays and mass
+matrices.
 
 \section{Conclusion}
 \label{sec:conclusion}
@@ -815,12 +813,15 @@ Once the stability analysis of time-periodic DDEs is written in
 multiplication-free banded form, the per-step integrator is a free design
 choice: Butcher-tableau residual blocks with continuous-extension delay
 interpolation raise the convergence order to that of the chosen scheme, up to
-Gauss superconvergence $2s$, while retaining $\mathcal{O}(p)$ complexity.
+Gauss superconvergence $2s$, for mesh-commensurate delays (orders between
+$s{+}1$ and $2s$ otherwise), while retaining $\mathcal{O}(p)$ complexity.
 The two classical method families are the endpoints of one continuum ---
 piecewise-constant semi-discretization at maximal sparsity and global
 collocation at maximal per-step order --- and neither endpoint is optimal:
 the CPU-time optimum sits at a problem-dependent sweet spot of moderate order
-and many steps, drifting only logarithmically with the accuracy target and
+and many steps, whenever the resolution demand or the system dimension is
+nontrivial; small smooth problems favour the near-spectral corner. The
+optimum drifts only logarithmically with the accuracy target and
 towards lower order for larger system dimension and non-smooth coefficients.
 This unifies and clarifies, rather than reinvents; the actionable outputs are
 the sweet-spot guidance and the open-source \textsf{SOSD.jl} implementation.
@@ -831,8 +832,10 @@ research, authorship, and/or publication of this article.
 \end{dci}
 
 \begin{funding}
-The research leading to these results was supported by the Hungarian
-Scientific Research Fund (NKFIH-152125).
+The author disclosed receipt of the following financial support for the
+research, authorship, and/or publication of this article: This work was
+supported by the Hungarian Scientific Research Fund (grant number
+NKFIH-152125).
 \end{funding}
 
 \appendix
@@ -857,20 +860,22 @@ $T = 2\pi$; $\mu = 0.626021929290183$.
 \paragraph{Turning with spindle-speed variation} ($d=2$)
 \begin{align*}
   \ddot{x} + \zeta \dot{x} + (1 + k_w)x
-  &= k_w\, x\bigl(t - \tau(t)\bigr) + \cos(2\pi t),\\
+  &= k_w\, x\bigl(t - \tau(t)\bigr) + \cos(2\pi t/T),\\
   \tau(t) &= \frac{2\pi}{\Omega}\Bigl(1 + A_\mathrm{SSV}
     \sin\tfrac{2\pi t}{T}\Bigr),
 \end{align*}
 with $k_w = 0.2$, $\zeta = 0.1$, $\Omega = 0.3$, $A_\mathrm{SSV} = 0.1$,
 $T = N_T\, 2\pi/\Omega$, $N_T = 10$ (so $T/\tau_{\max} \approx 9.1$);
-$\mu \approx 4.47617$.
+$\mu = 4.476168383091$.
 
 \paragraph{FEM beam with delayed boundary feedback} ($d = 28$)
 Longitudinal rod of length $L = 100$\,m, Young's modulus $E = 210$\,GPa,
 cross-section $A = 10^{-4}$\,m$^2$, density
 $\rho_\mathrm{m} = 7800$\,kg/m$^3$, stiffness-proportional damping
-$\eta = 0.01$, discretized by $N_\mathrm{e} = 15$ linear elements with lumped
-mass, fixed at the first node ($d = 2(N_\mathrm{e}-1) = 28$ states).
+$\eta = 0.01$, discretized into $N_\mathrm{e} = 15$ lumped-mass points with
+the first point fixed, leaving $14$ free nodes ($d = 2\cdot14 = 28$ states;
+the predecessor's appendix quotes $d = 30$ for a slightly different node
+counting of the same model).
 Delayed displacement feedback from the first free node to the last node with
 gain $P\,E/(L/N_\mathrm{e})$, $P = 0.2$; wave speed
 $c_0 = \sqrt{E/\rho_\mathrm{m}}$,
@@ -896,9 +901,8 @@ low-demand Mathieu system.
 \begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/ph_map_mathieu.pdf}
-  \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation,
-  with the same panel logic as Figure~\ref{fig:phmap} (colour = CPU time
-  with labelled error contours; inverse on the right): here deep accuracy is
+  \caption{The $(s, p)$-map for the low-demand delayed Mathieu equation
+  (same three panels as Figure~\ref{fig:phmap}): here deep accuracy is
   reached in the high-order/low-$p$ region as well, and the optima sit near
   the spectral corner because the matrices stay tiny; the polynomial CPU
   growth along $s$ is nevertheless visible at the extended stage orders.}
@@ -926,11 +930,12 @@ low-demand Mathieu system.
 \begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_beam.pdf}
-  \caption{Work-precision — FEM beam with delayed boundary feedback. The
+  \caption{Work--precision study for the FEM beam with delayed boundary
+  feedback. The
   error axis is clipped at $3\cdot10^{0}$: below the CFL-like stability
   bound the explicit methods produce meaningless values (up to $10^{43}$),
-  which carry no information beyond ``unstable''. CPU times are means of
-  repeated benchmark measurements (scatter below a few per cent).}
+  which carry no information beyond ``unstable''. CPU times are minima of
+  repeated warm-started benchmark measurements.}
   \label{fig:wp-beam}
 \end{figure*}
 
@@ -982,7 +987,7 @@ boundary; the strongly modulated SSV turning chart
 ($100\times100 = \chartPtsTurning$ points, GL4, step count chosen per point
 by the sampling recipe --- a resolution-pinned hard system) in
 $\chartTimeTurning$\,s wall time plus $\chartMdbmTurning$\,s for the
-boundary. No continuation tricks are used; the per-point cost is simply the
+boundary. No continuation tricks are used; the per-point cost is simply that of the
 optimally chosen solution-operator solve.
 
 \begin{figure*}[t]
@@ -998,7 +1003,7 @@ optimally chosen solution-operator solve.
   ($\zeta = 0.02$, $A_\mathrm{SSV} = 0.3$, $N_T = 10$); here the step count
   follows the sampling recipe of Section~\ref{sec:discussion} per point,
   $p(\Omega) = \lceil 16/\Omega \rceil$ --- the paper's own rule applied in a
-  realistic production setting. Grid evaluation on 16 threads (wall times in the titles);
+  realistic production setting. Grid evaluation on 16 threads;
   the MDBM refinement is serial.}
   \label{fig:charts}
 \end{figure*}
@@ -1039,12 +1044,13 @@ identity blocks of the stage system \eqref{eq:kron} by $\mathbf{M}$:
 \end{equation}
 For regular $\mathbf{M}$ this is a drop-in replacement (the per-step LU
 absorbs $\mathbf{M}$; no explicit inverse is ever formed). For
-\emph{singular} $\mathbf{M}$ --- a delay differential--algebraic system ---
+\emph{singular} $\mathbf{M}$ --- a delay differential--algebraic system
+(delay DAE) ---
 the update row would require $\mathbf{M}^{-1}$, unless the tableau is
 \emph{stiffly accurate} ($c_s = 1$, $b_j = a_{sj}$: Radau~IIA,
 Lobatto~IIIA), in which case $\mathbf{x}_{n+1} = \mathbf{Y}_s$ and no
-inversion occurs; the generalized eigenvalue formulation also absorbs the
-infinite spectrum of the algebraic part naturally. As a minimal validation
+inversion occurs; the generalized eigenvalue formulation also maps the
+algebraic part to multipliers near zero naturally. As a minimal validation
 (implemented in \texttt{examples/dae\_mass\_matrix.jl}), the index-1 system
 \begin{equation*}
   \dot{x}_1 = -x_1 + x_2 + \tfrac12 x_1(t-1), \qquad
@@ -1053,7 +1059,8 @@ infinite spectrum of the algebraic part naturally. As a minimal validation
 with $\mathbf{M} = \mathrm{diag}(1, \nu)$, reduces for
 $\nu = 0$ to a scalar linear DDE whose multiplier serves as reference.
 Radau~IIA ($s = 3$) applied to the \emph{singular} problem converges to this
-reference at observed order $\approx 4 = s{+}1$ --- consistent with the
+reference at observed order approaching $4 = s{+}1$ (fitted slope $3.7$
+over the measured range) --- consistent with the
 delay-interpolation cap of Section~\ref{sec:order} on this non-commensurate
 delay --- (relative errors $3.8\cdot10^{-8}$,
 $4.0\cdot10^{-9}$, $3.4\cdot10^{-10}$, $1.6\cdot10^{-11}$ for
@@ -1065,16 +1072,19 @@ convergence theory for delay DAEs is beyond the scope of this paper.
 \section{Reproducibility}
 \label{app:repro}
 
-All computations were performed with Julia 1.12.4 on Windows 11 (x86-64),
+All computations were performed with Julia 1.12.4 on Windows 11 (AMD Ryzen 7
+5800H, 8 cores/16 threads, 16 GB RAM),
 with BLAS restricted to a single thread, package versions pinned by the repository manifests
 (\textsf{SOSD.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
-baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are means over
-repeated warm-started runs reported as minima (scatter recorded in the
-results files); start
+baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are minima
+over repeated warm-started runs (repetition counts and scatter are recorded
+in the results files); start
 vectors of all Krylov iterations are deterministic. Reference multipliers are
-accepted only when two resolutions of a GL(10) (small systems) or lazy GL(5)
-(beam) computation agree to $10^{-10}$ relative, and the reference method is
+accepted only when two resolutions of a GL10 (small systems) or matrix-free
+GL5 (beam) computation agree to $10^{-10}$ relative, and the reference method is
 cross-validated against \textsf{SemiDiscretizationMethod.jl} on every system.
+The $10^{-12}$-target optima lie at the limit of this verification and are
+indicative.
 Every figure can be regenerated via
 \texttt{julia --project=benchmark benchmark/run\_all.jl} followed by
 \texttt{julia --project=benchmark benchmark/make\_figures.jl}. Repository:

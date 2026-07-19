@@ -96,7 +96,7 @@ w1, n1, m1 = chart((δ, b) -> make_mathieu(δ=δ, ε=1.0, b0=b, a1=0.1),
                collect(range(-1.0, 5.0, length=100)),
                collect(range(-2.0, 1.5, length=100)),
                7, 2, "mathieu", L"\delta", L"b",
-               "Delayed Mathieu, GL7, p=2")
+               "Mathieu, GL7, p=2")
 
 # --- SSV turning, intricate: zeta=0.02, A_SSV=0.3, adaptive p(Omega) --------
 p_ssv(Ω) = clamp(ceil(Int, 16.0 / Ω), 60, 400)
@@ -104,7 +104,7 @@ w2, n2, m2 = chart((Ω, kw) -> make_turning_ssv(kw=kw, Ω=Ω, ζ=0.02, ASSV=0.3)
                collect(range(0.08, 0.40, length=100)),
                collect(range(0.001, 0.40, length=100)),
                4, p_ssv, "turning", L"\Omega", L"k_\mathrm{w}",
-               "SSV turning (ζ=0.02, A=0.3), GL4, p=p(Ω)")
+               "SSV turning, GL4, p=p(Ω)")
 
 open(joinpath(PAPER_FIGS, "chart_times.tex"), "w") do io
     @printf(io, "\\newcommand{\\chartTimeMathieu}{%.0f}\n", w1)

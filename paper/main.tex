@@ -676,8 +676,8 @@ affordable stage number before CPU time does.
 An important caveat on superconvergence follows.
 Figure~\ref{fig:cliff} shows the order-refinement direction explicitly: the
 error versus the \emph{total sample count} $N = p(s{+}1)$, sweeping the
-stage number at fixed step counts $p = 1, 10, 100$, for the easy and the
-hard system side by side. Superconvergence does \emph{not} mean that a
+stage number at several fixed step counts ($p = 1, 10, 100$ for the easy
+system, $p = 1$--$40$ for the hard one), side by side. Superconvergence does \emph{not} mean that a
 handful of stages always suffices: below the resolution bound
 \eqref{eq:nyquist} --- the shaded band --- the discrete spectrum is simply
 wrong (relative errors of order one), and the steep decay only begins once
@@ -699,9 +699,10 @@ Figure~\ref{fig:phmap}.
 \begin{figure*}[t]
   \centering
   \figok{width=0.9\linewidth}{figures/p_refinement_cliff.pdf}
-  \caption{Order refinement at fixed step counts $p = 1, 10, 100$: relative
-  error versus the total sample count $N = p(s{+}1)$ for the easy (left) and
-  hard (right) system, error clipped at $3\cdot10^{0}$. The shaded band is
+  \caption{Order refinement at fixed step counts ($p = 1, 10, 100$, left;
+  $p = 1, 10, 20, 30, 40$, right): relative error versus the total sample
+  count $N = p(s{+}1)$ for the easy (left) and hard (right) system, error
+  clipped at $3\cdot10^{0}$. The shaded band is
   the sampling estimate \eqref{eq:nyquist} with
   $c_\mathrm{s} = 5$--$10$. Superconvergent decay starts only once $N$
   crosses the band, whose position is set by the oscillation content

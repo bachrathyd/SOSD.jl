@@ -56,7 +56,7 @@ with classical DDE interpolation theory. In the limit of
 a single ultra-high-order step, the framework degenerates to the known global
 spectral method; between the two extremes lies a continuum in which per-step
 order is traded against matrix sparsity. Because the cost at fixed step count
-grows polynomially with the stage number (measured exponents $1.3$--$1.8$
+grows polynomially with the stage number (measured exponents $1.6$--$2.0$
 for the rank-one delay couplings typical of machining and feedback systems,
 up to cubic for dense coupling) while the $h$-refinement cost is linear up
 to the near-constant Krylov iteration count (measured exponents
@@ -68,7 +68,7 @@ natural frequency high relative to the period --- requiring many hundreds, where
 the banded moderate-order route wins decisively. We further argue that
 previous method comparisons conflated order refinement with $h$-refinement, and
 we prescribe a fair work--precision methodology (log--log axes, wide
-resolution ranges, variance-reported CPU times, a single machine and
+resolution ranges, repetition-robust CPU timing, a single machine and
 BLAS-thread configuration). All methods are implemented in the open-source Julia package
 \textsf{SOSD.jl}.
 \end{abstract}
@@ -383,8 +383,12 @@ positive prescription:
         versus eigenvalue error, both logarithmic, over wide ranges; the
         secondary one is CPU time versus resolution $p$ with fitted scaling
         exponents.
-  \item \textbf{Variance-reported timing.} Every timed point is a warm-started
-        mean over repeated runs with its standard deviation.
+  \item \textbf{Repetition-robust timing.} Every timed point is the
+        \emph{minimum} of repeated warm-started runs (the standard
+        BenchmarkTools practice: the minimum is immune to garbage-collection
+        and scheduler interference, whose one-sided spikes contaminate
+        means); repetition counts and scatter are recorded alongside the
+        results.
   \item \textbf{Both refinement families, both complexity laws.} Every
         method is shown under $h$-refinement (fixed order, growing $p$),
         where the cost of the banded assembly is \emph{linear},
@@ -500,12 +504,13 @@ Lob.\ IIIA, $s{=}4$ & 6 & 6.0 & \\
 \label{sec:wp}
 
 Figure~\ref{fig:wp-mathieu} shows the three canonical panels for the delayed
-Mathieu equation: error versus $p$, CPU time versus $p$ with $\pm1\sigma$
-bands, and the work--precision plane. Every embedded integrator preserves the
-linear time complexity of the multiplication-free assembly --- the fitted
-scaling exponents are $1.0$ for all methods, from RK1 through GL8 --- so
-raising the per-step order shifts the CPU-time line by a constant factor
-(the block fill) without changing its slope. On the work--precision plane
+Mathieu equation: error versus $p$, CPU time versus $p$, and the
+work--precision plane. Every embedded integrator preserves the near-linear
+time complexity of the multiplication-free assembly --- the fitted scaling
+exponents lie between $0.9$ and $1.2$ (median $1.05$) for all methods from
+RK2 through GL8, rising to at most $1.6$ on the high-dimensional beam ---
+so raising the per-step order shifts the CPU-time line by an essentially
+constant factor (the block fill) without changing its slope. On the work--precision plane
 this is decisive: GL5 and GL8 reach relative errors of $10^{-14}$ within
 milliseconds, whereas the order-2 baseline spends an order of magnitude more
 time to reach only $10^{-6}$. The same qualitative picture holds for the
@@ -517,10 +522,12 @@ Appendix~\ref{app:morewp}.
 For baseline parity with the predecessor \citep{Bachrathy2026},
 Figure~\ref{fig:classic} reproduces, in the present environment, the
 time-complexity contrast between the traditional monodromy construction
-(SD-classic, fitted exponent $2.7$, in line with the $\approx\!2.8$ reported
-in \citealp{Bachrathy2026}) and the banded LR mapping (fitted exponent
-$1.1$); both agree in the multiplier to $10^{-15}$, and at $p = 1778$ the
-multiplication-free route is already $2500\times$ faster.
+(SD-classic, fitted exponent $2.2$ over the range affordable under a
+$2$\,s-per-solve budget, $p \le 10^3$; the predecessor measured
+$\approx\!2.8$ over a wider window) and the banded LR mapping (fitted
+exponent $1.05$, continued here to $p = 10^{6}$ in $13$\,s); both agree in
+the multiplier to $10^{-15}$, and at the last common resolution $p = 10^3$
+the multiplication-free route is already $1200\times$ faster.
 
 \begin{figure*}[t]
   \centering
@@ -529,7 +536,7 @@ multiplication-free route is already $2500\times$ faster.
   eigenvalue error vs.\ resolution $p$ (clipped at $3\cdot10^{0}$ ---
   pre-resolution values carry no information); middle: CPU time vs.\ $p$,
   all fitted exponents $\approx 1.0$; right: the work--precision plane
-  (down and left is better). CPU times are means of repeated warm-started
+  (down and left is better). CPU times are minima of repeated warm-started
   benchmark measurements; their relative scatter is below a few per cent
   and is therefore not drawn.}
   \label{fig:wp-mathieu}
@@ -539,9 +546,10 @@ multiplication-free route is already $2500\times$ faster.
   \centering
   \figok{width=0.8\linewidth}{figures/classic_sd_vs_mfsd.pdf}
   \caption{Baseline parity with the predecessor: CPU time of the traditional
-  monodromy build (SD-classic) versus the banded multiplication-free mapping
-  on the delayed Mathieu equation, mean $\pm1\sigma$, with fitted scaling
-  exponents.}
+  monodromy build (SD-classic, capped at $2$\,s per solve) versus the banded
+  multiplication-free mapping (continued to $p = 10^{6}$) on the delayed
+  Mathieu equation; minimum of repeated warm-started measurements, dashed
+  lines: fitted scaling.}
   \label{fig:classic}
 \end{figure}
 
@@ -553,9 +561,9 @@ order $s$ while choosing the smallest resolution $p$ that reaches
 $\varepsilon$ produces a U-shaped CPU-time curve: low orders need excessive
 $p$, high orders pay polynomially growing per-step cost --- stage
 elimination $\mathcal{O}\bigl((sd)^3\bigr)$ plus fill, with measured
-fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$), $1.6$
-(beam, $d=28$) and $1.8$ (turning at $p = 6310$) for rank-one delay
-coupling, and $k \to 3$ in the dense-coupling limit. A first-order cost model,
+fixed-$p$ exponents $t \propto s^{k}$, $k = 1.6$ (Mathieu, $d=2$), $1.8$
+(beam, $d=28$) and $2.0$ (turning at $p = 3428$) for rank-one delay
+coupling, and $k \to 3$ asymptotically as the stage elimination dominates. A first-order cost model,
 $\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (\Delta t/T_\mathrm{c})^{2s}$
 for a characteristic time $T_\mathrm{c}$ (taking the best-case nodal order
 $2s$; reduced orders for non-commensurate delays shift the optimum mildly
@@ -569,7 +577,7 @@ i.e.\ even a $10^{-12}$ accuracy target asks for only
 $s^\ast \approx 5$--$10$ Gauss stages --- moderate order, many steps. This asymptotic model applies
 when the fill actually binds. For the small, smooth Mathieu system it does
 not: the measured optima sit at $s^\ast = 5$--$8$ with as few as
-$p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $3.8$\,ms with
+$p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $4$\,ms with
 $s = 8$, $p = 6$, $\mathrm{nnz}(\mathbf{\Phi}_\mathrm{L}) = 288$) --- for
 low-demand problems the whole matrix is tiny and the near-spectral corner is
 optimal. The fill term takes over exactly in the contrasting cases:
@@ -594,7 +602,11 @@ moderate order.
   \centering
   \figok{width=\linewidth}{figures/ph_map_turning_ssv.pdf}
   \caption{The $(s, p)$-map for the high-resolution-demand turning system
-  ($p = 1\ldots10^4$, $s = 1\ldots50$). Left: colour encodes CPU time;
+  ($p = 1\ldots4\cdot10^3$, $s = 1\ldots30$; beyond $s \approx 30$ the
+  product-form evaluation of the continuous-extension weights loses
+  floating-point accuracy --- a barycentric implementation would extend the
+  range, which is irrelevant in practice since all optima lie at
+  $s \le 8$). Left: colour encodes CPU time;
   middle: colour encodes the eigenvalue error; right: both contour
   families overlaid --- following, e.g., the $\varepsilon = 10^{-6}$ error
   contour (solid), the smallest CPU-time contour (dashed) it touches
@@ -622,12 +634,17 @@ range:
         spindle-speed-variation turning system oscillates with
         $T/T_\mathrm{osc} \approx 36$ (natural frequency high relative to
         the period), so \emph{any} method needs $N = p(s{+}1) \gtrsim 500$
-        samples per period to resolve the dynamics at all. Here the banded moderate-order route wins
-        decisively: the measured optima are $(s^\ast, p^\ast) = (4, 158)$
-        for $\varepsilon = 10^{-4}$ ($23$\,ms), $(4, 251)$ for $10^{-6}$
-        ($37$\,ms) and $(8, 251)$ for $10^{-12}$ ($229$\,ms) --- always
-        \emph{hundreds of steps}, never few, and the single-step corner is
-        not even computable within the CPU budget.
+        samples per period to resolve the dynamics at all. Here the banded
+        moderate-order route wins decisively at engineering accuracies: the
+        measured optima are $(s^\ast, p^\ast) = (7, 47)$ for
+        $\varepsilon = 10^{-4}$ ($21$\,ms), $(5, 159)$ for $10^{-6}$
+        ($37$\,ms) and $(7, 100)$ for $10^{-8}$ ($49$\,ms) --- tens to
+        hundreds of steps at moderate order, with the sample count pinned
+        near the bound ($N \approx 380$--$950$). Only at the extreme target
+        $\varepsilon = 10^{-12}$ does the optimum shift towards high order,
+        $(20, 22)$ at $91$\,ms --- and even there $N = 462$ respects the
+        bound and the step count remains far from the single-step corner,
+        which is not computable within the CPU budget at all.
 \end{itemize}
 The resolution demand can be estimated a priori by a sampling (Shannon-type)
 argument. The discretization carries $N = p\,(s{+}1)$ solution samples per
@@ -710,11 +727,11 @@ their matching-order continuous extension for free. In the measured
 work--precision curves the explicit methods are therefore competitive only in
 the low-accuracy regime ($\varepsilon \gtrsim 10^{-4}$), and Gauss stages
 dominate everywhere beyond it. On the FEM beam the contrast is stark:
-GL3 reaches $\varepsilon = 10^{-4}$ in $5$\,ms and $10^{-6}$ in $13$\,ms,
-whereas the order-2 baseline needs $126$\,ms and $735$\,ms
-($25\times$--$57\times$), explicit RK5 needs $3.7$\,s for $10^{-6}$
-($280\times$ slower than GL3), and $\varepsilon = 10^{-8}$ is reached by the
-Gauss variants alone --- the explicit family is additionally barred from
+GL3 reaches $\varepsilon = 10^{-4}$ in $6$\,ms and $10^{-6}$ in $11$\,ms,
+whereas the order-2 baseline needs $140$\,ms and $795$\,ms
+($23\times$--$72\times$), explicit RK5 needs $3.9$\,s for $10^{-6}$
+($\approx\!360\times$ slower than GL3), and $\varepsilon = 10^{-8}$ is
+reached by the Gauss variants alone --- the explicit family is additionally barred from
 coarse grids by its Courant--Friedrichs--Lewy (CFL)-like stability bound on
 this stiff system
 (Appendix~\ref{app:morewp}).
@@ -748,7 +765,7 @@ $\varepsilon$:
         with $c_\mathrm{s} \approx 5$--$10$ (Eq.~\eqref{eq:nyquist});
   \item \textbf{Stage number:} $s \approx \max\bigl(2,\
         \lceil\ln(1/\varepsilon)/(2k)\rceil\bigr)$ with the measured cost
-        exponent $k \approx 1.5$ (Eq.~\eqref{eq:sweetspot}), capped by
+        exponent $k \approx 1.6$--$2.0$ (Eq.~\eqref{eq:sweetspot}), capped by
         memory for large $d$;
   \item \textbf{Step count:} $p = \lceil N_{\min}/(s{+}1)\rceil$, then one or
         two $h$-refinements to confirm the target --- cheap, since the cost
@@ -759,9 +776,9 @@ In more detail:
 \begin{enumerate}
   \item \textbf{Default: Gauss stages, moderate order.} The stage-number
         rule of step 2 above --- $s \approx \lceil\ln(1/\varepsilon)/(2k)\rceil$
-        with $k \approx 1.5$--$1.8$ --- gives $s = 8$--$10$ even for
-        $\varepsilon = 10^{-12}$, in agreement with the measured optima
-        $s^\ast = 4$--$8$ across all systems and targets. Then pick
+        with the measured $k \approx 1.6$--$2.0$ --- gives $s = 7$--$9$ even
+        for $\varepsilon = 10^{-12}$, in agreement with the measured optima
+        $s^\ast = 4$--$8$ at engineering targets across all systems. Then pick
         $p$ by one or two refinement steps until the target is met --- the
         cost is linear in $p$, so overshooting $p$ is cheap, whereas
         overshooting $s$ inflates the per-step cost polynomially.
@@ -1050,7 +1067,8 @@ All computations were performed with Julia 1.12.4 on Windows 11 (x86-64),
 with BLAS restricted to a single thread, package versions pinned by the repository manifests
 (\textsf{SOSD.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
 baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are means over
-repeated warm-started runs with standard deviations shown as bands; start
+repeated warm-started runs reported as minima (scatter recorded in the
+results files); start
 vectors of all Krylov iterations are deterministic. Reference multipliers are
 accepted only when two resolutions of a GL(10) (small systems) or lazy GL(5)
 (beam) computation agree to $10^{-10}$ relative, and the reference method is

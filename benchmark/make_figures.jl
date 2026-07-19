@@ -208,12 +208,17 @@ end
 #      p-refinement = right along s at fixed p: polynomial cost)
 #     Missing cells = NaN (not computed / beyond the time cap).
 # ---------------------------------------------------------------------------
-function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, -1, 0])
+function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, -1, 0],
+                    s_max=30)
     path = joinpath(RESULTS, "sweet_spot_$sysname.csv")
     isfile(path) || (println("skip ph-map $sysname"); return)
     d = load_csv(path)
     ss = Int.(d["s"]); ps = Int.(d["p"])
     errs = fnum(d["rel_error"]); tms = fnum(d["t_mean"])
+    # beyond s ~ 30 the product-form Lagrange CE weights lose accuracy
+    # (condition ~ 2^s) — restrict the map to the numerically valid range
+    keep = ss .<= s_max
+    ss = ss[keep]; ps = ps[keep]; errs = errs[keep]; tms = tms[keep]
     svals = sort(unique(ss)); pvals = sort(unique(ps))
     E = fill(NaN, length(pvals), length(svals))
     Tm = fill(NaN, length(pvals), length(svals))

@@ -95,7 +95,7 @@ end
 w1, n1, m1 = chart((δ, b) -> make_mathieu(δ=δ, ε=1.0, b0=b, a1=0.1),
                collect(range(-1.0, 5.0, length=100)),
                collect(range(-2.0, 1.5, length=100)),
-               7, 2, "mathieu", L"\delta", L"b",
+               7, 2, "mathieu", L"\delta", L"b_0",
                "Mathieu, GL7, p=2")
 
 # --- SSV turning, intricate: zeta=0.02, A_SSV=0.3, adaptive p(Omega) --------

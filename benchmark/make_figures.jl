@@ -99,7 +99,7 @@ function fig_work_precision(sysname)
         # prefer minimum-of-repeats timing when available (robust to GC spikes)
         tm = haskey(d, "t_min") ? fnum(d["t_min"][idx]) : fnum(d["t_mean"][idx])
         k = -fit_slope_window(ps, errs)
-        lble = isfinite(k) ? "$m (k=$(round(k, digits=1)))" : m
+        lble = m   # k-fits belong to the order figure; wp windows are floor-contaminated
         # time-scaling exponent from the upper half of the p range
         half = ps .>= sqrt(maximum(ps) * minimum(ps))
         kt = sum(half) > 1 ? ([log10.(ps[half]) ones(sum(half))] \ log10.(tm[half]))[1] : NaN
@@ -286,7 +286,7 @@ function fig_ph_map(sysname; err_levels=[-12, -9, -6, -3], time_levels=[-3, -2, 
             break
         end
     end
-    ttl = @sprintf("h-refinement t ∝ p^{%.1f}   |   p-refinement t ∝ s^{%.1f}",
+    ttl = @sprintf("h-refinement: t ~ p^%.1f   |   order refinement: t ~ s^%.1f",
                    isempty(kh) ? NaN : median(kh), kp)
     plt = plot(pT, pE, pC, layout=(1, 3), size=(1950, 500), plot_title=ttl,
                left_margin=8Plots.mm, bottom_margin=9Plots.mm)

@@ -51,7 +51,7 @@ $s{+}1$ and $2s$ are observed for general (including time-periodic) delays.
 Because the cost at fixed step count grows polynomially with the stage number
 while $h$-refinement stays essentially linear, the CPU-time optimum is a
 problem-dependent \emph{sweet spot}, located here for systems requiring tens
-and many hundreds of samples per period. A Shannon-type sampling bound turns
+to many hundreds of samples per period. A Shannon-type sampling bound turns
 the measurements into an a~priori recipe for choosing the stage and step
 counts, demonstrated end-to-end on high-resolution stability charts. All
 methods are implemented in the open-source Julia package \textsf{SOSD.jl}.
@@ -426,7 +426,7 @@ theoretical convergence order in the dominant multiplier on this
 \emph{mesh-commensurate} test ($\tau = T = p\,\Delta t$): the Gauss family
 exhibits the superconvergent order $2s$ (fitted slopes $1.96$, $3.98$,
 $5.98$ and $9.98$ for $s = 1, 2, 3, 5$; GL8 reaches the $10^{-16}$ relative
-floor already at $p = 16$), Radau~IIA attains $2s-1$ and Lobatto~IIIA
+floor from the coarsest measured resolutions), Radau~IIA attains $2s-1$ and Lobatto~IIIA
 $2s-2$. The first-order RK1 curve is included in the figures for
 completeness. Commensurability matters: the continuous extension of an $s$-stage
 collocation step is a degree-$s$ polynomial with uniform accuracy
@@ -1060,11 +1060,10 @@ with $\mathbf{M} = \mathrm{diag}(1, \nu)$, reduces for
 $\nu = 0$ to a scalar linear DDE whose multiplier serves as reference.
 Radau~IIA ($s = 3$) applied to the \emph{singular} problem converges to this
 reference at observed order approaching $4 = s{+}1$ (fitted slope $3.7$
-over the measured range) --- consistent with the
-delay-interpolation cap of Section~\ref{sec:order} on this non-commensurate
-delay --- (relative errors $3.8\cdot10^{-8}$,
-$4.0\cdot10^{-9}$, $3.4\cdot10^{-10}$, $1.6\cdot10^{-11}$ for
-$p = 25, 50, 100, 200$), and the singularly perturbed case
+over the measured range), consistent with the delay-interpolation cap of
+Section~\ref{sec:order} on this non-commensurate delay. The relative errors
+are $3.8\cdot10^{-8}$, $4.0\cdot10^{-9}$, $3.4\cdot10^{-10}$ and
+$1.6\cdot10^{-11}$ for $p = 25, 50, 100, 200$, and the singularly perturbed case
 $\nu = 10^{-6}$ converges stably to the DAE limit within the
 expected $\mathcal{O}(\nu)$ offset ($\approx 10^{-6}$). A full
 convergence theory for delay DAEs is beyond the scope of this paper.

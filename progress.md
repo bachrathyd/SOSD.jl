@@ -52,3 +52,18 @@
 monodromy operators, tableau library, three engineering cases, initial
 work-precision studies. Note: Phase 1 milling/bio stability charts were
 affected by the delay bug fixed above and must be regenerated before use.)
+
+## Phase 3 — review rounds and submission readiness (2026-07-19)
+- Three full review rounds completed: Round 1 (mathematician 22 + engineer 20
+  + editor 75 findings) — caught and fixed a real overclaim (2s superconvergence
+  restricted to mesh-commensurate delays; measured s+1..2s bracket on
+  non-aligned systems), the GEVP statement, recipe and scaling inconsistencies.
+  Round 2 (fresh trio) — number synchronization to regenerated figures,
+  classic-parity verification (1200x at p=1e3 is real), abstract cut to ~190
+  words, 29 consolidated fixes applied. Round 3 — 11-point acceptance
+  checklist: ALL PASS; 5 peripheral defects fixed (16-thread chart titles,
+  ph-map terminology, wp legend declutter, 2 wording items).
+- Paper: 12 pages, 0 errors, JVC header, 18-entry verified bibliography,
+  submission kit under paper/submission/ (cover letter, title page,
+  highlights, checklist). Remaining before submission: commit hash into the
+  reproducibility appendix, ORCID verification, funding AG-mark confirmation.

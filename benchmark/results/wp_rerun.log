@@ -1,0 +1,326 @@
+[harness] loaded. Systems: mathieu, bio, turning_ssv, beam(, beam_aaw)
+
+[mathieu] SDM-O2
+  p=6 rel=1.7e-01 t_min=8.34e-05
+  p=10 rel=1.2e-01 t_min=0.000212
+  p=16 rel=2.6e-02 t_min=0.000337
+  p=25 rel=6.9e-03 t_min=0.000368
+  p=40 rel=1.7e-03 t_min=0.00068
+  p=63 rel=4.4e-04 t_min=0.000655
+  p=100 rel=1.1e-04 t_min=0.000682
+  p=158 rel=2.6e-05 t_min=0.00107
+  p=251 rel=5.8e-06 t_min=0.00219
+  p=398 rel=5.2e-07 t_min=0.0023
+  p=631 rel=2.0e-07 t_min=0.00366
+  p=1000 rel=6.6e-08 t_min=0.0058
+  p=1585 rel=8.9e-09 t_min=0.00884
+  p=2512 rel=7.7e-09 t_min=0.0178
+  p=3981 rel=1.4e-09 t_min=0.0212
+
+[mathieu] RK1
+  p=6 rel=2.1e+02 t_min=0.000263
+  p=10 rel=1.2e+02 t_min=0.000412
+  p=16 rel=4.6e+01 t_min=0.000378
+  p=25 rel=1.7e+01 t_min=0.000634
+  p=40 rel=7.0e+00 t_min=0.00166
+  p=63 rel=3.4e+00 t_min=0.00124
+  p=100 rel=1.9e+00 t_min=0.00206
+  p=158 rel=1.1e+00 t_min=0.00538
+  p=251 rel=6.4e-01 t_min=0.00852
+  p=398 rel=3.8e-01 t_min=0.00774
+  p=631 rel=2.2e-01 t_min=0.0121
+  p=1000 rel=1.2e-01 t_min=0.0262
+  p=1585 rel=6.8e-02 t_min=0.031
+  p=2512 rel=3.9e-02 t_min=0.0533
+  p=3981 rel=2.3e-02 t_min=0.108
+
+[mathieu] RK2
+  p=6 rel=1.1e+02 t_min=0.000424
+  p=10 rel=7.8e+00 t_min=0.00062
+  p=16 rel=1.5e+00 t_min=0.000589
+  p=25 rel=3.9e-01 t_min=0.00107
+  p=40 rel=3.4e-02 t_min=0.00251
+  p=63 rel=1.4e-01 t_min=0.0025
+  p=100 rel=4.9e-02 t_min=0.00594
+  p=158 rel=1.9e-02 t_min=0.00552
+  p=251 rel=7.6e-03 t_min=0.00815
+  p=398 rel=3.0e-03 t_min=0.0122
+  p=631 rel=1.2e-03 t_min=0.0207
+  p=1000 rel=4.8e-04 t_min=0.0325
+  p=1585 rel=1.9e-04 t_min=0.0619
+  p=2512 rel=7.6e-05 t_min=0.126
+  p=3981 rel=3.0e-05 t_min=0.195
+
+[mathieu] RK4
+  p=6 rel=1.8e-01 t_min=0.00111
+  p=10 rel=8.2e-02 t_min=0.00178
+  p=16 rel=3.2e-02 t_min=0.00141
+  p=25 rel=8.0e-03 t_min=0.00231
+  p=40 rel=1.6e-03 t_min=0.00339
+  p=63 rel=3.2e-04 t_min=0.00501
+  p=100 rel=6.5e-05 t_min=0.0083
+  p=158 rel=1.4e-05 t_min=0.0139
+  p=251 rel=3.0e-06 t_min=0.0202
+  p=398 rel=6.9e-07 t_min=0.0359
+  p=631 rel=1.6e-07 t_min=0.0589
+  p=1000 rel=3.9e-08 t_min=0.101
+  p=1585 rel=9.6e-09 t_min=0.156
+  p=2512 rel=2.3e-09 t_min=0.229
+  p=3981 rel=5.8e-10 t_min=0.5
+
+[mathieu] RK5
+  p=6 rel=3.5e-01 t_min=0.00223
+  p=10 rel=1.7e-02 t_min=0.00199
+  p=16 rel=1.4e-03 t_min=0.00306
+  p=25 rel=9.5e-04 t_min=0.00561
+  p=40 rel=3.4e-04 t_min=0.00725
+  p=63 rel=1.2e-04 t_min=0.0118
+  p=100 rel=4.1e-05 t_min=0.019
+  p=158 rel=1.5e-05 t_min=0.0355
+  p=251 rel=5.6e-06 t_min=0.046
+  p=398 rel=2.1e-06 t_min=0.0972
+  p=631 rel=8.3e-07 t_min=0.149
+  p=1000 rel=3.2e-07 t_min=0.206
+  p=1585 rel=1.3e-07 t_min=0.406
+  p=2512 rel=5.0e-08 t_min=0.772
+  p=3981 rel=2.0e-08 t_min=1.2
+
+[mathieu] GL1
+  p=6 rel=1.7e+00 t_min=0.000242
+  p=10 rel=1.1e+00 t_min=0.000383
+  p=16 rel=5.8e-01 t_min=0.00048
+  p=25 rel=2.9e-01 t_min=0.000681
+  p=40 rel=1.3e-01 t_min=0.000957
+  p=63 rel=5.8e-02 t_min=0.00135
+  p=100 rel=2.4e-02 t_min=0.00202
+  p=158 rel=9.8e-03 t_min=0.00314
+  p=251 rel=3.9e-03 t_min=0.00461
+  p=398 rel=1.6e-03 t_min=0.014
+  p=631 rel=6.2e-04 t_min=0.0217
+  p=1000 rel=2.5e-04 t_min=0.0191
+  p=1585 rel=9.9e-05 t_min=0.0311
+  p=2512 rel=3.9e-05 t_min=0.063
+  p=3981 rel=1.6e-05 t_min=0.0999
+
+[mathieu] GL2
+  p=6 rel=2.6e-01 t_min=0.000662
+  p=10 rel=4.6e-02 t_min=0.00118
+  p=16 rel=7.5e-03 t_min=0.00178
+  p=25 rel=1.3e-03 t_min=0.00257
+  p=40 rel=2.0e-04 t_min=0.00385
+  p=63 rel=3.2e-05 t_min=0.0059
+  p=100 rel=5.1e-06 t_min=0.00849
+  p=158 rel=8.1e-07 t_min=0.00722
+  p=251 rel=1.3e-07 t_min=0.0127
+  p=398 rel=2.0e-08 t_min=0.0191
+  p=631 rel=3.2e-09 t_min=0.0313
+  p=1000 rel=5.1e-10 t_min=0.0493
+  p=1585 rel=8.0e-11 t_min=0.0879
+  p=2512 rel=1.3e-11 t_min=0.145
+  p=3981 rel=2.0e-12 t_min=0.251
+
+[mathieu] GL3
+  p=6 rel=8.1e-03 t_min=0.00134
+  p=10 rel=4.1e-04 t_min=0.00113
+  p=16 rel=2.5e-05 t_min=0.00141
+  p=25 rel=1.7e-06 t_min=0.00425
+  p=40 rel=1.0e-07 t_min=0.0035
+  p=63 rel=6.9e-09 t_min=0.00518
+  p=100 rel=4.3e-10 t_min=0.00823
+  p=158 rel=2.8e-11 t_min=0.0132
+  p=251 rel=1.7e-12 t_min=0.0206
+  p=398 rel=1.1e-13 t_min=0.0323
+  p=631 rel=4.6e-15 t_min=0.0541
+  p=1000 rel=8.2e-15 t_min=0.107
+  p=1585 rel=1.7e-15 t_min=0.184
+  p=2512 rel=2.7e-15 t_min=0.352
+  p=3981 rel=2.0e-14 t_min=0.524
+
+[mathieu] GL5
+  p=6 rel=9.0e-07 t_min=0.00165
+  p=10 rel=5.7e-09 t_min=0.00354
+  p=16 rel=5.3e-11 t_min=0.0035
+  p=25 rel=6.1e-13 t_min=0.00539
+  p=40 rel=4.7e-15 t_min=0.0138
+  p=63 rel=3.2e-16 t_min=0.0128
+  p=100 rel=3.9e-15 t_min=0.0208
+(floor)
+
+[mathieu] GL8
+  p=6 rel=1.6e-13 t_min=0.00453
+  p=10 rel=3.2e-16 t_min=0.00996
+  p=16 rel=9.5e-16 t_min=0.00978
+  p=25 rel=1.4e-15 t_min=0.015
+  p=40 rel=3.8e-15 t_min=0.0237
+(floor)
+
+[bio] SDM-O2
+  p=6 rel=1.1e-01 t_min=5.02e-05
+  p=10 rel=1.7e-02 t_min=9.63e-05
+  p=16 rel=6.0e-03 t_min=0.000127
+  p=25 rel=2.2e-03 t_min=9.39e-05
+  p=40 rel=3.4e-04 t_min=0.000146
+  p=63 rel=1.3e-04 t_min=0.000272
+  p=100 rel=2.8e-05 t_min=0.000365
+  p=158 rel=4.9e-06 t_min=0.000517
+  p=251 rel=2.0e-06 t_min=0.000793
+  p=398 rel=2.8e-07 t_min=0.00106
+  p=631 rel=1.2e-07 t_min=0.00179
+  p=1000 rel=1.8e-08 t_min=0.00434
+  p=1585 rel=5.3e-10 t_min=0.0064
+  p=2512 rel=5.9e-10 t_min=0.00636
+  p=3981 rel=4.3e-10 t_min=0.00958
+
+[bio] RK1
+  p=6 rel=3.5e+00 t_min=9.42e-05
+  p=10 rel=2.1e+00 t_min=0.000146
+  p=16 rel=1.2e+00 t_min=0.000426
+  p=25 rel=6.0e-01 t_min=0.000617
+  p=40 rel=1.3e-01 t_min=0.000816
+  p=63 rel=7.9e-02 t_min=0.000878
+  p=100 rel=5.0e-02 t_min=0.0014
+  p=158 rel=3.1e-02 t_min=0.00344
+  p=251 rel=2.0e-02 t_min=0.00309
+  p=398 rel=1.2e-02 t_min=0.00505
+  p=631 rel=7.8e-03 t_min=0.00784
+  p=1000 rel=4.9e-03 t_min=0.012
+  p=1585 rel=3.1e-03 t_min=0.0197
+  p=2512 rel=2.0e-03 t_min=0.0307
+  p=3981 rel=1.2e-03 t_min=0.0517
+
+[bio] RK2
+  p=6 rel=5.1e-02 t_min=0.000154
+  p=10 rel=4.7e-02 t_min=0.000261
+  p=16 rel=2.9e-02 t_min=0.000639
+  p=25 rel=5.4e-03 t_min=0.00115
+  p=40 rel=2.7e-03 t_min=0.00186
+  p=63 rel=1.5e-03 t_min=0.00158
+  p=100 rel=4.2e-04 t_min=0.00482
+  p=158 rel=1.1e-05 t_min=0.00375
+  p=251 rel=6.3e-05 t_min=0.00587
+  p=398 rel=2.7e-05 t_min=0.00947
+  p=631 rel=1.0e-05 t_min=0.017
+  p=1000 rel=6.6e-07 t_min=0.0238
+  p=1585 rel=1.3e-06 t_min=0.0396
+  p=2512 rel=6.2e-07 t_min=0.0632
+  p=3981 rel=1.0e-07 t_min=0.124
+
+[bio] RK4
+  p=6 rel=1.7e-02 t_min=0.000384
+  p=10 rel=2.8e-03 t_min=0.0012
+  p=16 rel=6.3e-04 t_min=0.00193
+  p=25 rel=3.4e-04 t_min=0.00149
+  p=40 rel=6.6e-05 t_min=0.00245
+  p=63 rel=7.0e-06 t_min=0.00535
+  p=100 rel=5.7e-06 t_min=0.00587
+  p=158 rel=8.3e-07 t_min=0.0095
+  p=251 rel=3.7e-07 t_min=0.0156
+  p=398 rel=5.1e-08 t_min=0.0236
+  p=631 rel=2.4e-08 t_min=0.0583
+  p=1000 rel=3.2e-09 t_min=0.0624
+  p=1585 rel=1.6e-09 t_min=0.108
+  p=2512 rel=6.8e-11 t_min=0.251
+  p=3981 rel=5.5e-11 t_min=0.306
+
+[bio] RK5
+  p=6 rel=3.3e-04 t_min=0.00173
+  p=10 rel=1.7e-03 t_min=0.00151
+  p=16 rel=8.2e-04 t_min=0.00246
+  p=25 rel=3.4e-04 t_min=0.00402
+  p=40 rel=7.5e-05 t_min=0.00634
+  p=63 rel=6.3e-05 t_min=0.0096
+  p=100 rel=2.2e-05 t_min=0.0148
+  p=158 rel=5.7e-06 t_min=0.0238
+  p=251 rel=3.9e-06 t_min=0.0379
+  p=398 rel=1.3e-06 t_min=0.0592
+  p=631 rel=5.6e-07 t_min=0.141
+  p=1000 rel=1.7e-07 t_min=0.235
+  p=1585 rel=9.2e-08 t_min=0.288
+  p=2512 rel=4.2e-08 t_min=0.539
+  p=3981 rel=1.3e-08 t_min=0.828
+
+[bio] GL1
+  p=6 rel=7.8e-02 t_min=0.000114
+  p=10 rel=1.1e-02 t_min=0.000169
+  p=16 rel=9.4e-03 t_min=0.000246
+  p=25 rel=5.1e-03 t_min=0.000369
+  p=40 rel=1.3e-03 t_min=0.000599
+  p=63 rel=7.7e-04 t_min=0.000974
+  p=100 rel=2.7e-04 t_min=0.00156
+  p=158 rel=5.9e-05 t_min=0.00238
+  p=251 rel=4.8e-05 t_min=0.00366
+  p=398 rel=8.5e-06 t_min=0.00574
+  p=631 rel=7.0e-06 t_min=0.00871
+  p=1000 rel=1.3e-06 t_min=0.0132
+  p=1585 rel=4.7e-07 t_min=0.0212
+  p=2512 rel=7.2e-09 t_min=0.0352
+  p=3981 rel=1.6e-07 t_min=0.0622
+
+[bio] GL2
+  p=6 rel=5.6e-03 t_min=0.000407
+  p=10 rel=8.9e-04 t_min=0.000645
+  p=16 rel=2.6e-05 t_min=0.00112
+  p=25 rel=1.7e-05 t_min=0.000936
+  p=40 rel=3.1e-05 t_min=0.00218
+  p=63 rel=2.7e-07 t_min=0.00258
+  p=100 rel=6.6e-07 t_min=0.0036
+  p=158 rel=5.1e-07 t_min=0.00577
+  p=251 rel=1.1e-08 t_min=0.00892
+  p=398 rel=3.2e-08 t_min=0.0143
+  p=631 rel=1.7e-09 t_min=0.0216
+  p=1000 rel=2.0e-09 t_min=0.0352
+  p=1585 rel=8.2e-11 t_min=0.0525
+  p=2512 rel=8.5e-11 t_min=0.0974
+  p=3981 rel=1.5e-11 t_min=0.148
+
+[bio] GL3
+  p=6 rel=4.6e-04 t_min=0.000409
+  p=10 rel=7.1e-05 t_min=0.000613
+  p=16 rel=2.9e-06 t_min=0.002
+  p=25 rel=2.1e-07 t_min=0.0017
+  p=40 rel=1.3e-07 t_min=0.00282
+  p=63 rel=6.6e-09 t_min=0.00693
+  p=100 rel=8.4e-10 t_min=0.00642
+  p=158 rel=5.9e-10 t_min=0.0104
+  p=251 rel=1.1e-10 t_min=0.0153
+  p=398 rel=1.5e-11 t_min=0.0246
+  p=631 rel=1.3e-12 t_min=0.0412
+  p=1000 rel=3.4e-13 t_min=0.0644
+  p=1585 rel=1.2e-13 t_min=0.104
+  p=2512 rel=4.2e-14 t_min=0.177
+  p=3981 rel=1.3e-14 t_min=0.312
+
+[bio] GL5
+  p=6 rel=2.8e-06 t_min=0.000922
+  p=10 rel=1.5e-07 t_min=0.00319
+  p=16 rel=2.3e-09 t_min=0.00513
+  p=25 rel=1.5e-10 t_min=0.00393
+  p=40 rel=1.6e-11 t_min=0.0063
+  p=63 rel=1.9e-13 t_min=0.00974
+  p=100 rel=5.5e-14 t_min=0.023
+  p=158 rel=1.6e-14 t_min=0.0299
+  p=251 rel=1.7e-14 t_min=0.0593
+  p=398 rel=2.6e-14 t_min=0.0626
+  p=631 rel=2.4e-14 t_min=0.108
+  p=1000 rel=6.9e-14 t_min=0.191
+  p=1585 rel=4.5e-14 t_min=0.303
+  p=2512 rel=4.6e-14 t_min=0.603
+  p=3981 rel=1.3e-14 t_min=0.895
+
+[bio] GL8
+  p=6 rel=3.9e-09 t_min=0.00239
+  p=10 rel=1.1e-11 t_min=0.00773
+  p=16 rel=1.4e-15 t_min=0.00636
+  p=25 rel=1.4e-14 t_min=0.00989
+  p=40 rel=1.1e-14 t_min=0.0159
+  p=63 rel=2.3e-14 t_min=0.0247
+  p=100 rel=1.6e-14 t_min=0.0391
+  p=158 rel=2.4e-14 t_min=0.0803
+  p=251 rel=1.8e-14 t_min=0.125
+  p=398 rel=4.8e-15 t_min=0.222
+  p=631 rel=8.0e-15 t_min=0.338
+  p=1000 rel=4.5e-14 t_min=0.581
+  p=1585 rel=3.8e-14 t_min=0.892
+  p=2512 rel=1.2e-15 t_min=1.68
+  p=3981 rel=5.6e-14 t_min=2.92
+WP RERUN DONE

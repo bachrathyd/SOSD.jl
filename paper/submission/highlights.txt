@@ -1,0 +1,7 @@
+Highlights — Solution-Operator Semi-Discretization (SOSD)
+
+- Any Runge-Kutta or collocation step embeds into the multiplication-free DDE framework
+- Convergence order raised from 2 up to 2s (Gauss stages) at unchanged O(p) complexity
+- Accuracy-sparsity sweet spot located: moderate order with many steps is CPU-optimal
+- Shannon-type sampling bound yields an a priori recipe for stage and step counts
+- Open-source Julia package SOSD.jl; every figure reproducible by a single script

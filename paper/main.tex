@@ -1,7 +1,11 @@
 \documentclass[Afour,sageh,times]{sagej}
 
+% journal identification (sagej default is the placeholder "Journal Title")
+\def\journalname{Journal of Vibration and Control}
+\def\volumeyear{2026}
+
 \usepackage{graphicx}
-\usepackage{amsmath,amssymb,bm}
+\usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{color}
@@ -11,23 +15,19 @@
 % figure include that degrades gracefully while the benchmark suite is running
 \newcommand{\figok}[2]{\IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{\texttt{\detokenize{pending: #2}}}}}
 
-\def\volumeyear{2026}
-
 \begin{document}
 
 \runninghead{Bachrathy D.}
 
 \title{Solution-Operator Semi-Discretization: General-Order
 Multiplication-Free Stability Analysis of Time-Periodic Delayed Systems and
-the Accuracy--Sparsity Trade-off}
+the Accuracy--Sparsity Trade-Off}
 
 \author{Daniel Bachrathy\affilnum{1}}
 
 \affiliation{\affilnum{1}Department of Applied Mechanics, Faculty of Mechanical
 Engineering, Budapest University of Technology and Economics, M\H{u}egyetem
-rkp.~3., H-1111 Budapest, Hungary.\\
-    Tel.: +36-1-463-1369\\
-    Email: bachrathy@mm.bme.hu}
+rkp.~3., H-1111 Budapest, Hungary.}
 
 \corrauth{Daniel Bachrathy, Department of Applied Mechanics, Faculty of
 Mechanical Engineering, Budapest University of Technology and Economics,
@@ -48,28 +48,32 @@ residual block rows of any explicit Runge--Kutta or implicit collocation-type
 scheme (Gauss--Legendre, Radau, Lobatto) are embedded in the banded system
 through a Kronecker-product structure of the Butcher tableau and the
 system matrices, raising the convergence order of the dominant characteristic
-multipliers to the order of the chosen scheme --- super-convergent order $2s$
-for $s$-stage Gauss quadrature points --- provided the delayed terms are
-interpolated by the continuous extension of the same scheme. In the limit of
+multipliers far beyond the classical limit of two: the full superconvergent
+order $2s$ of $s$-stage Gauss collocation is observed when the delay is
+commensurate with the mesh, and orders between the interpolation-limited
+$s{+}1$ and $2s$ for general (including time-periodic) delays, in agreement
+with classical DDE interpolation theory. In the limit of
 a single ultra-high-order step, the framework degenerates to the known global
 spectral method; between the two extremes lies a continuum in which per-step
 order is traded against matrix sparsity. Because the cost at fixed step count
 grows polynomially with the stage number (measured exponents $1.3$--$1.8$
 for the rank-one delay couplings typical of machining and feedback systems,
-up to cubic for dense coupling) while the $h$-refinement cost is exactly
-linear, the CPU-time optimum for a prescribed accuracy is a problem-dependent
+up to cubic for dense coupling) while the $h$-refinement cost is linear up
+to the near-constant Krylov iteration count (measured exponents
+$1.0$--$1.1$), the CPU-time optimum for a prescribed accuracy is a
+problem-dependent
 \emph{sweet spot} at moderate order and many steps: its location is measured
-for systems requiring only tens of points per period and for systems --- high
-natural frequency relative to the period --- requiring many hundreds, where
+for systems requiring only tens of points per period and for systems --- with
+natural frequency high relative to the period --- requiring many hundreds, where
 the banded moderate-order route wins decisively. We further argue that
-previous method comparisons conflated $p$-refinement with $h$-refinement, and
+previous method comparisons conflated order refinement with $h$-refinement, and
 we prescribe a fair work--precision methodology (log--log axes, wide
-resolution ranges, variance-reported CPU times, one machine and thread
-configuration). All methods are released in the open-source Julia package
+resolution ranges, variance-reported CPU times, a single machine and
+BLAS-thread configuration). All methods are implemented in the open-source Julia package
 \textsf{SOSD.jl}.
 \end{abstract}
 
-\keywords{Time-delay systems, semi-discretization, solution operator,
+\keywords{time-delay systems, semi-discretization, solution operator,
 Runge--Kutta methods, Floquet theory, stability analysis, computational
 complexity}
 
@@ -91,7 +95,7 @@ and biological systems: regenerative machine-tool chatter
 \citep{Tobias1965,Altintas2012,Munoa2016}, turning with spindle-speed
 variation \citep{Long2007,Seguy2008}, feedback control with latency
 \citep{Stepan1989}, and seasonally forced population dynamics. Their
-asymptotic stability is decided by the dominant characteristic multipliers of
+asymptotic stability is determined by the dominant characteristic multipliers of
 the monodromy operator associated with one period \citep{Insperger2011}.
 
 Two families of numerical methods dominate practice. Semi-discretization (SD)
@@ -104,20 +108,22 @@ linear per step; its convergence order is limited to two
 high-order polynomial and converge spectrally for smooth problems. A
 recurring claim in the literature is that collocation ``outperforms''
 semi-discretization; we argue in Section~\ref{sec:fair} that such comparisons
-are structurally unfair, because they compare a $p$-refinement strategy
-(raising the polynomial order) with an $h$-refinement strategy (shrinking the
-step) --- the same category error as declaring $p$-type finite elements
+are structurally unfair, because they compare an order-refinement strategy
+($p$-type refinement in FEM terminology, raising the polynomial order) with
+an $h$-refinement strategy (shrinking the step) --- the same category error as declaring $p$-type finite elements
 universally superior to $h$-type ones.
 
 The recent multiplication-free semi-discretization method (MFSD)
 \citep{Bachrathy2026} removed the main cost bottleneck of SD: instead of
 multiplying $p$ one-step matrices into a dense monodromy matrix
 ($\mathcal{O}(p^{2.8})$ in practice), every step is written as a residual
-equation and all $p$ steps are stacked into one sparse banded system, whose
-one-period transition is obtained from the generalized eigenvalue problem
-$\mathbf{\Phi}_\mathrm{L}\mathbf{y}_p = \mathbf{\Phi}_\mathrm{R}\mathbf{y}_0$
-at $\mathcal{O}(p)$ cost. The MFSD assembly is inherited machinery here and is
-\emph{not} claimed as a contribution of the present paper.
+equation and all $p$ steps are stacked into one sparse banded system, split
+into the one-period mapping
+$\mathbf{\Phi}_\mathrm{L}\mathbf{y}_p = \mathbf{\Phi}_\mathrm{R}\mathbf{y}_0$;
+with the Floquet ansatz $\mathbf{y}_p = \mu\,\mathbf{y}_0$ the multipliers
+follow from the generalized eigenvalue problem
+$\mu\,\mathbf{\Phi}_\mathrm{L}\mathbf{v} = \mathbf{\Phi}_\mathrm{R}\mathbf{v}$
+at $\mathcal{O}(p)$ cost.
 
 The present paper starts from a simple observation: \emph{the
 multiplication-free form only needs a per-step residual}. Semi-discretization
@@ -134,7 +140,7 @@ banded pair $(\mathbf{\Phi}_\mathrm{L}, \mathbf{\Phi}_\mathrm{R})$ is a
 sparse representation of the one-period solution operator of \eqref{eq:ldde},
 and the per-step integrator merely selects the order of that representation.
 
-The contributions are, honestly delimited:
+The contributions, precisely delimited, are the following:
 \begin{enumerate}
   \item the systematic embedding of arbitrary Runge--Kutta and collocation
         steps (via their Butcher tableaux and continuous extensions) into the
@@ -148,7 +154,8 @@ The contributions are, honestly delimited:
         at moderate per-step order and many steps, at a location that depends
         on the problem dimension and resolution demand
         (Section~\ref{sec:results});
-  \item a fair-comparison methodology that separates $p$- and $h$-refinement
+  \item a fair-comparison methodology that separates order refinement from
+        $h$-refinement
         and reports work--precision curves with variance on one fixed
         machine configuration (Section~\ref{sec:fair}); and
   \item an open-source Julia implementation, \textsf{SOSD.jl}, with all
@@ -171,8 +178,8 @@ $\mathbf{x}_{n+1} = \mathbf{P}_n \mathbf{x}_n + \mathbf{R}_n
 over $[t_n, t_{n+1}]$ \citep{Insperger2011}. The monodromy matrix is the
 product of $p$ such mappings acting on the discretized history
 $\mathbf{y}_n = (\mathbf{x}_n^\top,\ldots,\mathbf{x}_{n-r}^\top)^\top$;
-forming this product costs $\mathcal{O}(p\,(rd)^\omega/r^\omega)$-ish work in
-practice ($\approx\mathcal{O}(p^{2.8})$ measured in \citealp{Bachrathy2026}),
+forming this product scales polynomially in the resolution
+($\approx\mathcal{O}(p^{2.8})$ measured in \citealp{Bachrathy2026}),
 and its avoidance is the point of MFSD: each step contributes the residual
 row $\mathbf{0} = \mathbf{I}\mathbf{x}_{n+1} - \mathbf{P}_n\mathbf{x}_n -
 \mathbf{R}_n\mathbf{x}_{n-r}$ to a sparse banded block system over the
@@ -180,7 +187,7 @@ extended vector spanning $[t-\tau_{\max},\, t+T]$, split into left/right
 blocks so that the spectrum follows from
 $\mathbf{\Phi}_\mathrm{L}\mathbf{y}_p =
 \mu\,\mathbf{\Phi}_\mathrm{R}\mathbf{y}_0$
-via sparse Krylov iteration \citep{Saad1986,Haegeman2021} at
+via sparse Krylov iteration \citep{Haegeman2021} at
 $\mathcal{O}(p)$ total cost \citep{Bachrathy2026}.
 
 Two properties of this construction matter for what follows. First, the
@@ -226,12 +233,12 @@ where $\tilde{\mathbf{x}}$ denotes the interpolated delayed state
 (Section~\ref{sec:delayinterp}). The per-step unknown block is the
 stage-augmented vector
 \begin{equation}
-  \mathbf{v}_n = \bigl(\mathbf{x}_n^\top,\,
-    \mathbf{Y}_{1}^\top,\ldots,\mathbf{Y}_{s}^\top\bigr)^\top
+  \mathbf{w}_n = \bigl(\mathbf{Y}_{1}^\top,\ldots,\mathbf{Y}_{s}^\top,\,
+    \mathbf{x}_{n+1}^\top\bigr)^\top
     \in \mathbb{R}^{(s+1)d},
 \end{equation}
-and the global unknown $\mathbf{q} = (\mathbf{v}_1^\top,\ldots,
-\mathbf{v}_p^\top)^\top$ collects all steps of one period. Equations
+and the global unknown $\mathbf{q} = (\mathbf{w}_1^\top,\ldots,
+\mathbf{w}_p^\top)^\top$ collects all steps of one period. Equations
 \eqref{eq:stage}--\eqref{eq:update} are linear in the current and delayed
 states, so each step contributes one block row to a sparse system
 $\mathbf{\Phi}_\mathrm{L}\,\mathbf{q} = \mathbf{\Phi}_\mathrm{R}\,
@@ -250,9 +257,8 @@ $(s{+}1)\times s$ matrix
 \end{equation}
 and writing $\boldsymbol{\mathcal{A}}_n = \mathrm{diag}\bigl(\mathbf{A}(t_{n1}),
 \ldots, \mathbf{A}(t_{ns})\bigr)$ for the stagewise coefficient block,
-the step \eqref{eq:stage}--\eqref{eq:update} reads, for the stacked unknowns
-$\mathbf{w}_n = (\mathbf{Y}_1^\top,\ldots,\mathbf{Y}_s^\top,
-\mathbf{x}_{n+1}^\top)^\top$,
+the step \eqref{eq:stage}--\eqref{eq:update} reads, for the stacked unknown
+block $\mathbf{w}_n$,
 \begin{equation}
   \bigl[\mathbf{I} - \Delta t\,\mathbf{K}
         \boldsymbol{\mathcal{A}}_n\mathbf{S}\bigr]\mathbf{w}_n
@@ -267,17 +273,17 @@ stage $j$ of delay $k$ contributes
 \begin{equation}
   \Delta t\,\bigl(\hat{\mathbf{A}}\,\mathbf{e}_j \otimes
   \mathbf{B}_k(t_{nj})\bigr)\,
-  \bigl(\mathbf{w}(\theta_{njk})^{\!\top} \otimes \mathbf{I}_d\bigr),
+  \bigl(\boldsymbol{\ell}(\theta_{njk})^{\!\top} \otimes \mathbf{I}_d\bigr),
   \label{eq:dyad}
 \end{equation}
 i.e.\ the outer product of a Butcher-tableau column, the delay coefficient
-matrix, and the continuous-extension weight row $\mathbf{w}(\theta)^{\!\top}$
+matrix, and the continuous-extension weight row $\boldsymbol{\ell}(\theta)^{\!\top}$
 evaluated at the fractional position $\theta_{njk}$ of the delayed instant.
 The entire assembly therefore separates into precomputable factors
 (tableau, weights) and pointwise coefficient evaluations
 $\mathbf{A}(t^\ast)$, $\mathbf{B}_k(t^\ast)$ --- no matrix products between
 steps ever occur. Figure~\ref{fig:structure} shows the resulting sparsity
-patterns: $\mathbf{\Phi}_\mathrm{L}$ has unit diagonal and is strictly
+patterns: $\mathbf{\Phi}_\mathrm{L}$ has identity diagonal blocks and is
 block-lower triangular for \emph{both} explicit and implicit tableaux (after
 the per-step elimination below), so linear solves reduce to forward
 substitution with zero fill-in; all delay couplings that reach into the
@@ -298,7 +304,7 @@ the accuracy--sparsity sweet spot.
   \label{fig:structure}
 \end{figure*}
 
-In the implementation the stage equations \eqref{eq:stage} are
+In the implementation, the stage equations \eqref{eq:stage} are
 \emph{pre-eliminated} per step: the stage-coupling matrix
 $\mathbf{M}_n = \mathbf{I} - \Delta t\,(\mathbf{a}\otimes\mathbf{I}_d)\,
 \mathrm{diag}\bigl(\mathbf{A}(t_{n1}),\ldots,\mathbf{A}(t_{ns})\bigr)$
@@ -313,7 +319,7 @@ For explicit tableaux (strictly lower-triangular $\mathbf{a}$) the
 elimination degenerates to forward substitution; for implicit collocation
 tableaux (Gauss--Legendre of order $2s$, Radau~IIA of order $2s-1$,
 Lobatto~IIIA of order $2s-2$ \citep{HairerWanner1996,Butcher2016}) it is a
-genuine dense solve, which is precisely where the super-convergent order is
+genuine dense solve, which is precisely where the superconvergent order is
 purchased.
 
 \subsection{Delay interpolation by continuous extension}
@@ -321,7 +327,7 @@ purchased.
 
 The delayed argument $t_{nj} - \tau_k(t_{nj})$ generally falls between grid
 nodes, inside some earlier step $m$. Interpolating the delayed state with an
-order lower than the integrator silently caps the observed convergence order
+order lower than that of the integrator silently caps the observed convergence order
 --- the higher-order analogue of the remark of \citet{Insperger2008} for the
 classical scheme, and a classical result of DDE numerics
 \citep{BellenZennaro2003}. The consistent choice is the \emph{continuous
@@ -353,7 +359,8 @@ make the equivalence concrete --- in Section~\ref{sec:results} the
 single-step spectrum matches the converged reference to near machine
 precision --- and (ii) to expose its cost: the single-step matrix is
 effectively dense, and the number of nonzeros of the assembled system grows
-as $\mathcal{O}(d^2 s^3)$ with the stage count, so pushing all accuracy into
+as $\mathcal{O}(d^2 s^2)$ with the stage count (and its factorization cost as
+$\mathcal{O}(d^3 s^3)$), so pushing all accuracy into
 one step abandons exactly the sparsity that makes the multiplication-free
 form fast. The continuum between ``$p$ large, $s$ small'' and ``$p=1$, $s$
 large'' is the design space this paper maps.
@@ -361,7 +368,7 @@ large'' is the design space this paper maps.
 \section{Fair-comparison methodology}
 \label{sec:fair}
 
-Comparisons between DDE stability methods frequently pit a $p$-refinement
+Comparisons between DDE stability methods frequently pit an order-refinement
 method (collocation at increasing polynomial order) against an $h$-refinement
 method (semi-discretization at decreasing step size) and report accuracy at a
 single, often low, resolution on linear axes. Such comparisons cannot
@@ -381,7 +388,7 @@ positive prescription:
   \item \textbf{Both refinement families, both complexity laws.} Every
         method is shown under $h$-refinement (fixed order, growing $p$),
         where the cost of the banded assembly is \emph{linear},
-        $t \propto p^{1}$, \emph{and} under $p$-refinement (fixed $p$,
+        $t \propto p^{1}$, \emph{and} under order refinement (fixed $p$,
         growing stage number $s$), where the cost is \emph{polynomial} in
         the order --- per-step elimination $\mathcal{O}\bigl((sd)^3\bigr)$
         plus stage-quadratic fill. A comparison that shows only one
@@ -410,13 +417,13 @@ Appendix~\ref{app:params}):
   \item \textbf{Delayed Mathieu equation} ($d=2$, $\tau = T = 2\pi$): the
         canonical smooth validation case \citep{Insperger2011}.
   \item \textbf{Seasonal scalar model} ($d=1$, $\tau = 2$, $T=2\pi$): a
-        smooth, cheap system where high per-step order shines.
+        smooth, cheap system where high per-step order excels.
   \item \textbf{Turning with spindle-speed variation} ($d=2$,
-        time-periodic delay, $T/\tau \approx 10$): exercises the
+        time-periodic delay, $T/\tau_{\max} \approx 9.1$): exercises the
         $p \gg r$ partitioning and time-varying delay handling.
   \item \textbf{FEM beam with delayed boundary feedback} ($d=28$,
         $\tau/T = 1/2$), optionally with act-and-wait switching of the
-        feedback (non-smooth stress test): the high-dimensional,
+        feedback \citep{Insperger2006aw} (non-smooth stress test): the high-dimensional,
         high-resolution case where banded moderate order should win.
 \end{enumerate}
 
@@ -425,20 +432,30 @@ Appendix~\ref{app:params}):
 
 Figure~\ref{fig:order} and Table~\ref{tab:orders} confirm on the delayed
 Mathieu equation that each embedded \emph{collocation} integrator attains its
-theoretical convergence order in the dominant multiplier: the Gauss family
-exhibits the super-convergent order $2s$ (fitted slopes $2.00$, $4.00$,
+theoretical convergence order in the dominant multiplier on this
+\emph{mesh-commensurate} test ($\tau = T = p\,\Delta t$): the Gauss family
+exhibits the superconvergent order $2s$ (fitted slopes $2.00$, $4.00$,
 $5.99$ and $9.96$ for $s = 1, 2, 3, 5$; GL8 reaches the $10^{-16}$ relative
 floor already at $p = 16$), Radau~IIA attains $2s-1$ and Lobatto~IIIA
-$2s-2$. The explicit family behaves differently, and instructively: the
-observed order is the \emph{minimum} of the method order and the order of its
-continuous extension. RK4 with its classical third-order dense output
-converges with slope $\approx 3.3$ instead of $4$, and RK5 with a generic
-stage-value interpolant collapses to slope $\approx 2.1$ --- the delayed
-lookup, not the step, is the binding constraint, exactly as anticipated in
-Section~\ref{sec:delayinterp}. For collocation tableaux this constraint is
-vacuous because the stage values lie on the collocation polynomial, whose
-degree grows with $s$; the matching-order continuous extension is therefore
-available \emph{for free}. This asymmetry is a structural argument for
+$2s-2$. Commensurability matters: the continuous extension of an $s$-stage
+collocation step is a degree-$s$ polynomial with uniform accuracy
+$\mathcal{O}(\Delta t^{s+1})$, so for delays that fall \emph{inside} steps
+classical DDE interpolation theory \citep{BellenZennaro2003} caps the
+attainable order at $\min(2s,\, s{+}1)$ unless error cancellation occurs.
+The measurements bracket exactly this range: on the seasonal model
+($\tau = 2$, never mesh-aligned) GL2 and GL3 reduce to fitted orders
+$2.9$ and $4.0 \approx s{+}1$, while on the SSV turning system (time-varying
+delay) GL2 retains the full $4.0$ and GL3 attains $5.2$ --- between
+$s{+}1$ and $2s$. The explicit family is capped harder: the
+observed order is limited by its continuous extension, so RK4 with its
+classical third-order dense output converges with slope $\approx 3.3$
+instead of $4$, and RK5 with a generic stage-value interpolant collapses to
+slope $\approx 2.1$ --- the delayed lookup, not the step, is the binding
+constraint, exactly as anticipated in Section~\ref{sec:delayinterp}. Even
+with the $s{+}1$ cap, collocation stages carry a consistent
+high-order extension at no extra cost, and their nodal order can exceed it
+up to $2s$; sustaining comparable orders explicitly would require bespoke
+dense output of matching order. This asymmetry is a structural argument for
 implicit collocation steps inside the multiplication-free framework that the
 usual ``explicit steps are cheaper'' intuition misses.
 
@@ -454,7 +471,7 @@ pre-floor error range).}
 \toprule
 Method & Nom. & Fitted & Comment \\
 \midrule
-SDM (order 2)  & 2  & 3.1 & delay interp.\ superconverges \\
+SD (order 2)   & 2  & 3.1 & aligned-delay cancellation \\
 RK2 (Heun)     & 2  & 2.0 & \\
 RK4            & 4  & 3.3 & capped: 3rd-order dense output \\
 RK5            & 5  & 2.1 & capped: stage interpolant \\
@@ -539,7 +556,10 @@ elimination $\mathcal{O}\bigl((sd)^3\bigr)$ plus fill, with measured
 fixed-$p$ exponents $t \propto s^{k}$, $k = 1.3$ (Mathieu, $d=2$), $1.6$
 (beam, $d=28$) and $1.8$ (turning at $p = 6310$) for rank-one delay
 coupling, and $k \to 3$ in the dense-coupling limit. A first-order cost model,
-$\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (T/p)^{2s}$,
+$\mathrm{cost} \propto p\,s^{k}$ with $\varepsilon \propto (\Delta t/T_\mathrm{c})^{2s}$
+for a characteristic time $T_\mathrm{c}$ (taking the best-case nodal order
+$2s$; reduced orders for non-commensurate delays shift the optimum mildly
+upward, and the factorial decay of the Gauss error constants is neglected),
 predicts the optimum
 \begin{equation}
   s^\ast \approx \tfrac{1}{2k}\ln(1/\varepsilon),
@@ -552,7 +572,7 @@ not: the measured optima sit at $s^\ast = 5$--$8$ with as few as
 $p^\ast = 2$--$6$ steps (e.g.\ $\varepsilon = 10^{-12}$ in $3.8$\,ms with
 $s = 8$, $p = 6$, $\mathrm{nnz}(\mathbf{\Phi}_\mathrm{L}) = 288$) --- for
 low-demand problems the whole matrix is tiny and the near-spectral corner is
-optimal. The fill term takes over exactly in the contrast cases:
+optimal. The fill term takes over exactly in the contrasting cases:
 the measured per-step fill grows from $12$ nonzeros at $s=1$ to $112$ at
 $s=20$ on the Mathieu system but from $1.7\cdot10^3$ ($s=1$) to
 $6.4\cdot10^3$ ($s=6$) per step on the $d=28$ beam, whose optima
@@ -579,7 +599,7 @@ moderate order.
   families overlaid --- following, e.g., the $\varepsilon = 10^{-6}$ error
   contour (solid), the smallest CPU-time contour (dashed) it touches
   identifies the optimal setting, marked by the star. $h$-refinement
-  (vertical) is linear in cost, $p$-refinement (horizontal) polynomial;
+  (vertical) is linear in cost, order refinement (horizontal) polynomial;
   blank cells exceed the $5$\,s CPU budget. The corresponding maps for the
   low-demand Mathieu system are in Appendix~\ref{app:morewp}.}
   \label{fig:phmap}
@@ -588,20 +608,21 @@ moderate order.
 \subsection{Contrasting resolution demands: where the banded route wins}
 \label{sec:contrast}
 
-The location and the \emph{stakes} of the sweet spot depend on how many
+The location and the practical consequences of the sweet spot depend on how many
 points per period the problem physically requires. Two showcases bracket the
 range:
 \begin{itemize}
   \item \textbf{Low demand (tens of points).} For the delayed Mathieu
-        equation and the seasonal scalar model, $p \approx 10$--$30$ already
-        reaches deep accuracy with moderate Gauss orders; matrices are so
+        equation and the seasonal scalar model, resolutions of
+        $p \approx 10$--$30$ already reach high accuracy with moderate Gauss
+        orders; matrices are so
         small that sparsity is irrelevant, and even the single-step spectral
         corner is viable.
   \item \textbf{High demand (hundreds of points and more).} The
         spindle-speed-variation turning system oscillates with
         $T/T_\mathrm{osc} \approx 36$ (natural frequency high relative to
-        the period), so \emph{any} method needs $p \gtrsim 500$ to resolve
-        the dynamics at all. Here the banded moderate-order route wins
+        the period), so \emph{any} method needs $N = p(s{+}1) \gtrsim 500$
+        samples per period to resolve the dynamics at all. Here the banded moderate-order route wins
         decisively: the measured optima are $(s^\ast, p^\ast) = (4, 158)$
         for $\varepsilon = 10^{-4}$ ($23$\,ms), $(4, 251)$ for $10^{-6}$
         ($37$\,ms) and $(8, 251)$ for $10^{-12}$ ($229$\,ms) --- always
@@ -613,15 +634,16 @@ argument. The discretization carries $N = p\,(s{+}1)$ solution samples per
 period; resolving the fastest natural oscillation of the system,
 $\omega_{\max}$, requires at least the Nyquist floor of two samples per
 oscillation period and, for engineering accuracy, empirically
-$c \approx 5$--$10$:
+$c_\mathrm{s} \approx 5$--$10$ samples:
 \begin{equation}
-  N \;=\; p\,(s{+}1) \;\gtrsim\; c\,\frac{\omega_{\max} T}{2\pi}.
+  N \;=\; p\,(s{+}1) \;\gtrsim\; c_\mathrm{s}\,\frac{\omega_{\max} T}{2\pi}.
   \label{eq:nyquist}
 \end{equation}
 For the turning system ($\omega_{\max}T/2\pi \approx 36$) this predicts
-$N \gtrsim 200$--$400$, matching the observed onset of convergence, and the
-measured garbage below it (both methods at $p = 50$, $s = 2$, i.e.\
-$N = 150$, return multipliers off by orders of magnitude). The bound
+$N \gtrsim 200$--$400$, matching the observed onset of convergence; below it
+the computed multipliers are meaningless (for both SOSD--GL2 and the order-2
+baseline at $p = 50$, i.e.\ $N = 150$, they are off by orders of magnitude).
+The bound
 \eqref{eq:nyquist} sharpens the sweet-spot analysis: when $N$ is pinned by
 the oscillation content rather than by the accuracy target, the cost of the
 banded route scales as $p\,s^{k} \approx N\,s^{k-1}$ --- \emph{still
@@ -634,21 +656,21 @@ the fill takes over. The same contrast governs high-dimensional systems: for
 the FEM beam ($d = 28$), memory --- the per-step fill --- caps the
 affordable stage number before CPU time does.
 
-An important caveat on super-convergence follows.
-Figure~\ref{fig:cliff} shows the $p$-refinement direction explicitly: the
+An important caveat on superconvergence follows.
+Figure~\ref{fig:cliff} shows the order-refinement direction explicitly: the
 error \emph{and} the CPU time versus the stage number $s$ (up to $s = 100$)
 at fixed step counts $p = 1, 10, 100$, for the easy and the hard system.
-Super-convergence does \emph{not} mean that a handful of stages always
+Superconvergence does \emph{not} mean that a handful of stages always
 suffices: below the resolution bound \eqref{eq:nyquist} the discrete
 spectrum is simply wrong (relative errors of order one), and the celebrated
 steep decay only begins once $N = p(s{+}1)$ crosses the bound --- the cliff
-sits at $s^{\mathrm{cliff}} \approx c\,\omega_{\max}T/(2\pi p) - 1$, i.e.\
+sits at $s^{\mathrm{cliff}} \approx c_\mathrm{s}\,\omega_{\max}T/(2\pi p) - 1$, i.e.\
 its position is set by the natural-oscillation content of the system divided
 by the step count, not by the method order. For the Mathieu system the
 cliff sits at $N \approx 10$--$30$; for the turning system at
 $N \approx 200$--$400$, so a single-step scheme needs $s$ in the hundreds
 before it produces anything meaningful. Raising the order buys nothing
-until the sampling limit is met; after it, it buys everything. The bottom
+until the sampling limit is met; beyond the limit it buys everything. The bottom
 row displays the measured CPU-versus-$s$ law at fixed $p$ with fitted
 exponents, answering the complexity question directly: the cost is
 polynomial in $s$ throughout, with the exponent growing towards the cubic
@@ -661,10 +683,10 @@ $h$-refinement direction of the same surface.
 \begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/p_refinement_cliff.pdf}
-  \caption{$p$-refinement at fixed step counts $p = 1, 10, 100$ for the easy
+  \caption{Order refinement at fixed step counts $p = 1, 10, 100$ for the easy
   (left) and hard (right) system. Top: relative error versus stage number
   $s$ (clipped at $3\cdot10^{0}$); dotted vertical lines mark the sampling
-  estimate \eqref{eq:nyquist}. Super-convergent decay starts only beyond
+  estimate \eqref{eq:nyquist}. Superconvergent decay starts only beyond
   the bound, whose position scales with $\omega_{\max}T/(2\pi p)$. Bottom:
   the measured CPU time versus $s$ with fitted large-$s$ exponents
   (minimum of repeated measurements).}
@@ -675,7 +697,7 @@ $h$-refinement direction of the same surface.
 \label{sec:expl-impl}
 
 The conventional trade-off --- explicit steps are cheap but order-capped,
-implicit stages are expensive but super-convergent --- is reshaped by two
+implicit stages are expensive but superconvergent --- is reshaped by two
 findings. First, after per-step pre-elimination \emph{both} families yield a
 unit block-lower-triangular $\mathbf{\Phi}_\mathrm{L}$, so the downstream
 solve cost differs only through the block fill; the explicit advantage
@@ -689,11 +711,12 @@ work--precision curves the explicit methods are therefore competitive only in
 the low-accuracy regime ($\varepsilon \gtrsim 10^{-4}$), and Gauss stages
 dominate everywhere beyond it. On the FEM beam the contrast is stark:
 GL3 reaches $\varepsilon = 10^{-4}$ in $5$\,ms and $10^{-6}$ in $13$\,ms,
-where the order-2 baseline needs $126$\,ms and $735$\,ms
+whereas the order-2 baseline needs $126$\,ms and $735$\,ms
 ($25\times$--$57\times$), explicit RK5 needs $3.7$\,s for $10^{-6}$
 ($280\times$ slower than GL3), and $\varepsilon = 10^{-8}$ is reached by the
 Gauss variants alone --- the explicit family is additionally barred from
-coarse grids by its CFL-like stability bound on this stiff system
+coarse grids by its Courant--Friedrichs--Lewy (CFL)-like stability bound on
+this stiff system
 (Appendix~\ref{app:morewp}).
 
 \subsection{Remark on scope: smooth systems}
@@ -716,15 +739,16 @@ is outside the scope of this paper.
 \label{sec:discussion}
 
 The measurements condense into a short decision rule for practitioners ---
-an a-priori recipe requiring only the fastest natural frequency
+an a priori recipe requiring only the fastest natural frequency
 $\omega_{\max}$ of the system, the period $T$, and the accuracy target
 $\varepsilon$:
 \begin{enumerate}
-  \item \textbf{Resolution bound:} $N_{\min} \approx c\,\omega_{\max}T/(2\pi)$
-        with $c \approx 5$--$10$ (Equation~\ref{eq:nyquist});
+  \item \textbf{Resolution bound:} $N_{\min} \approx
+        c_\mathrm{s}\,\omega_{\max}T/(2\pi)$
+        with $c_\mathrm{s} \approx 5$--$10$ (Eq.~\eqref{eq:nyquist});
   \item \textbf{Stage number:} $s \approx \max\bigl(2,\
         \lceil\ln(1/\varepsilon)/(2k)\rceil\bigr)$ with the measured cost
-        exponent $k \approx 1.5$ (Equation~\ref{eq:sweetspot}), capped by
+        exponent $k \approx 1.5$ (Eq.~\eqref{eq:sweetspot}), capped by
         memory for large $d$;
   \item \textbf{Step count:} $p = \lceil N_{\min}/(s{+}1)\rceil$, then one or
         two $h$-refinements to confirm the target --- cheap, since the cost
@@ -733,10 +757,11 @@ $\varepsilon$:
 In more detail:
 
 \begin{enumerate}
-  \item \textbf{Default: Gauss stages, moderate order.} Choose
-        $s \approx \max\bigl(2,\ \lceil\ln(1/\varepsilon)/6\rceil\bigr)$ for a
-        relative accuracy target $\varepsilon$ (Equation~\ref{eq:sweetspot});
-        even $\varepsilon = 10^{-12}$ asks only for $s \approx 5$. Then pick
+  \item \textbf{Default: Gauss stages, moderate order.} The stage-number
+        rule of step 2 above --- $s \approx \lceil\ln(1/\varepsilon)/(2k)\rceil$
+        with $k \approx 1.5$--$1.8$ --- gives $s = 8$--$10$ even for
+        $\varepsilon = 10^{-12}$, in agreement with the measured optima
+        $s^\ast = 4$--$8$ across all systems and targets. Then pick
         $p$ by one or two refinement steps until the target is met --- the
         cost is linear in $p$, so overshooting $p$ is cheap, whereas
         overshooting $s$ inflates the per-step cost polynomially.
@@ -748,7 +773,8 @@ In more detail:
   \item \textbf{Avoid the spectral corner for engineering models.} The
         single-step (global collocation) mode is elegant for small, smooth,
         low-accuracy-run-count problems, but it abandons sparsity
-        ($\mathrm{nnz} \sim d^2 s^3$ in one dense block) and loses its order
+        ($\mathrm{nnz} \sim d^2 s^2$ in one dense block, factorization
+        $\sim d^3 s^3$) and loses its order
         advantage entirely for non-smooth coefficients (act-and-wait,
         interrupted cutting).
   \item \textbf{Explicit steps only for cheap low-accuracy sweeps on
@@ -770,7 +796,7 @@ Once the stability analysis of time-periodic DDEs is written in
 multiplication-free banded form, the per-step integrator is a free design
 choice: Butcher-tableau residual blocks with continuous-extension delay
 interpolation raise the convergence order to that of the chosen scheme, up to
-Gauss super-convergence $2s$, while retaining $\mathcal{O}(p)$ complexity.
+Gauss superconvergence $2s$, while retaining $\mathcal{O}(p)$ complexity.
 The two classical method families are the endpoints of one continuum ---
 piecewise-constant semi-discretization at maximal sparsity and global
 collocation at maximal per-step order --- and neither endpoint is optimal:
@@ -780,16 +806,15 @@ towards lower order for larger system dimension and non-smooth coefficients.
 This unifies and clarifies, rather than reinvents; the actionable outputs are
 the sweet-spot guidance and the open-source \textsf{SOSD.jl} implementation.
 
-\section*{Funding}
+\begin{dci}
+The author declared no potential conflicts of interest with respect to the
+research, authorship, and/or publication of this article.
+\end{dci}
+
+\begin{funding}
 The research leading to these results was supported by the Hungarian
 Scientific Research Fund (NKFIH-152125).
-% NOTE for Daniel: your published MFSD paper (JVC-26-0126.R1) uses exactly
-% "NKFIH-152125" (there together with NKFIH 138500). If the official
-% Advanced-Grant mark ("AG") must appear, please give the exact format.
-
-\begin{dci}
-The author declares no conflict of interest.
-\end{dci}
+\end{funding}
 
 \appendix
 
@@ -798,13 +823,13 @@ The author declares no conflict of interest.
 
 \paragraph{Delayed Mathieu equation} ($d=2$)
 \begin{align*}
-  \ddot{x} + a_1 \dot{x} + \bigl(\delta + \varepsilon\cos(2\pi t/T)\bigr)x
-  \hspace{-2.2cm}& \\
+  \ddot{x} + a_1 \dot{x} &+ \bigl(\delta + \epsilon_\mathrm{M}\cos(2\pi t/T)\bigr)x \\
   &= b_0\, x(t-\tau) + \sin(4\pi t / T),
 \end{align*}
-with $\delta = 3$, $\varepsilon = 0.2$, $b_0 = -0.15$, $a_1 = 0.1$,
+with $\delta = 3$, $\epsilon_\mathrm{M} = 0.2$, $b_0 = -0.15$, $a_1 = 0.1$,
 $\tau = T = 2\pi$. Converged dominant multiplier
-$\mu = 0.351417260953549$ (Table, two-resolution GL10 reference).
+$\mu = 0.351417260953549$ (two-resolution GL10 reference,
+Appendix~\ref{app:repro}).
 
 \paragraph{Seasonal scalar model} ($d=1$)
 $\dot{y}(t) = -(a + b\cos t)\, y(t - \tau)$ with $a = b = 1$, $\tau = 2$,
@@ -823,12 +848,14 @@ $\mu \approx 4.47617$.
 
 \paragraph{FEM beam with delayed boundary feedback} ($d = 28$)
 Longitudinal rod of length $L = 100$\,m, Young's modulus $E = 210$\,GPa,
-cross-section $A = 10^{-4}$\,m$^2$, density $\rho = 7800$\,kg/m$^3$,
-stiffness-proportional damping $\eta = 0.01$, discretized by $N = 15$ linear
-elements with lumped mass, fixed at the first node ($d = 2(N-1) = 28$ states).
+cross-section $A = 10^{-4}$\,m$^2$, density
+$\rho_\mathrm{m} = 7800$\,kg/m$^3$, stiffness-proportional damping
+$\eta = 0.01$, discretized by $N_\mathrm{e} = 15$ linear elements with lumped
+mass, fixed at the first node ($d = 2(N_\mathrm{e}-1) = 28$ states).
 Delayed displacement feedback from the first free node to the last node with
-gain $P\,E/(L/N)$, $P = 0.2$; wave speed $c = \sqrt{E/\rho}$,
-$T_\mathrm{sp} = L/c$, delay $\tau = 0.2\,T_\mathrm{sp}$, period
+gain $P\,E/(L/N_\mathrm{e})$, $P = 0.2$; wave speed
+$c_0 = \sqrt{E/\rho_\mathrm{m}}$,
+$T_\mathrm{sp} = L/c_0$, delay $\tau = 0.2\,T_\mathrm{sp}$, period
 $T = 0.4\,T_\mathrm{sp}$ ($\tau/T = 1/2$); constant unit force at the free
 end. In the act-and-wait configuration the feedback matrix is active only for
 $t < 0.8\,T$. Reference multipliers: $\mu = 373.008322$ (smooth) and
@@ -844,6 +871,8 @@ every embedded integrator, Gauss stages dominating beyond
 $\varepsilon \approx 10^{-4}$. On the stiff beam the explicit methods are
 unstable below a CFL-like resolution bound (errors up to $10^{43}$),
 while the A-stable Gauss stages converge from the coarsest grids.
+Figure~\ref{fig:phmap-mathieu} shows the corresponding $(s, p)$-maps for the
+low-demand Mathieu system.
 
 \begin{figure*}[t]
   \centering
@@ -860,14 +889,18 @@ while the A-stable Gauss stages converge from the coarsest grids.
 \begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_bio.pdf}
-  \caption{Work-precision — seasonal scalar model.}
+  \caption{Work--precision study for the seasonal scalar model; same panel
+  logic as Figure~\ref{fig:wp-mathieu}, parameters in
+  Appendix~\ref{app:params}.}
   \label{fig:wp-bio}
 \end{figure*}
 
 \begin{figure*}[t]
   \centering
   \figok{width=\linewidth}{figures/work_precision_turning_ssv.pdf}
-  \caption{Work-precision — turning with spindle-speed variation.}
+  \caption{Work--precision study for the turning system with spindle-speed
+  variation; same panel logic as Figure~\ref{fig:wp-mathieu}, parameters in
+  Appendix~\ref{app:params}.}
   \label{fig:wp-turning}
 \end{figure*}
 
@@ -915,11 +948,13 @@ moderate-order variants.
 
 As an end-to-end demonstration of the sweet-spot guidance, high-resolution
 stability charts are computed by brute force --- one eigenvalue solve per
-grid point, single-threaded, using the CPU-optimal setting of each system.
+grid point (each solve single-threaded), using the CPU-optimal setting of
+each system.
 Figure~\ref{fig:charts} shows the results, coloured by the logarithm of the
 spectral radius (blue: stable, red: unstable); the stability boundary
 $\rho = 1$ is refined to sub-cell accuracy by the multi-dimensional
-bisection method (MDBM, \citealp{Bachrathy2012}) on top of the colour map.
+bisection method (MDBM, \citealp{BachrathyStepan2012mdbm}) on top of the
+colour map.
 The grid evaluation is trivially parallel (every point is an independent
 solution-operator solve) and is executed on 16 threads. The delayed Mathieu
 chart ($100\times100 = \chartPtsMathieu$ points, GL7, $p = 2$) completes in
@@ -938,13 +973,13 @@ optimally chosen solution-operator solve.
   \caption{Brute-force stability charts at the optimal settings, coloured by
   $\log_{10}\rho$ (blue: stable, red: unstable); black dots: the
   $\rho = 1$ boundary refined by MDBM; the measured CPU times appear in
-  each title. Left: delayed Mathieu equation in the $(\delta, b)$ plane
-  ($\varepsilon = 1$, $a_1 = 0.1$, $\tau = T = 2\pi$), GL7 with $p = 2$.
+  each title. Left: delayed Mathieu equation in the $(\delta, b_0)$ plane
+  ($\epsilon_\mathrm{M} = 1$, $a_1 = 0.1$, $\tau = T = 2\pi$), GL7 with $p = 2$.
   Right: SSV turning in the $(\Omega, k_w)$ plane with strong modulation
   ($\zeta = 0.02$, $A_\mathrm{SSV} = 0.3$, $N_T = 10$); here the step count
   follows the sampling recipe of Section~\ref{sec:discussion} per point,
-  $p(\Omega) = \lceil 16/\Omega \rceil$ --- the paper's own rule applied in
-  production. Grid evaluation on 16 threads (wall times in the titles);
+  $p(\Omega) = \lceil 16/\Omega \rceil$ --- the paper's own rule applied in a
+  realistic production setting. Grid evaluation on 16 threads (wall times in the titles);
   the MDBM refinement is serial.}
   \label{fig:charts}
 \end{figure*}
@@ -954,25 +989,24 @@ matrices}
 \label{app:structure}
 
 \paragraph{Period-to-delay ratio.} The ratio $T/\tau_{\max}$ (i.e.\ $p$
-versus $r$) does \emph{not} affect the triangularity of
-$\mathbf{\Phi}_\mathrm{L}$; it only selects the splitting of the assembled
-system into the left/right pair (the $p-1 \gtrless r$ partitioning of
-\citealp{Bachrathy2026}). For $\tau_{\max} > T$ the output history window
-overlaps the input window and the map wraps part of the history through
-unchanged --- handled in the assembly, still triangular. The turning example
-($T/\tau \approx 9$) exercises the $p \gg r$ case throughout this paper.
+versus $r$) never affects the triangularity of $\mathbf{\Phi}_\mathrm{L}$;
+it only selects the splitting into the left/right pair (the
+$p-1 \gtrless r$ partitioning of \citealp{Bachrathy2026}), and for
+$\tau_{\max} > T$ the assembly simply wraps the overlapping part of the
+history through unchanged --- still triangular. The turning example
+($T/\tau_{\max} \approx 9.1$) exercises the $p \gg r$ case throughout this
+paper.
 
 \paragraph{Sub-step delays.} What \emph{does} change the structure is the
-delay relative to the \emph{step}: if $\tau_k(t) \ge \Delta t$ everywhere,
-every delayed lookup references strictly earlier blocks and
-$\mathbf{\Phi}_\mathrm{L}$ is unit block-lower-triangular. If
-$\Delta t > \tau_k$ (steps coarser than a delay), stage lookups reach into
-the \emph{current} step: couplings appear inside the diagonal block, which
-becomes a non-identity (but small and invertible) matrix --- block forward
-substitution still applies at linear cost, but even an explicit tableau then
-requires a per-step solve (the classical ``overlapping'' phenomenon of DDE
-integration). Entries \emph{above} the diagonal would require advanced-type
-arguments ($\tau < 0$) and never arise for retarded systems.
+delay relative to the \emph{step}: for $\tau_k(t) \ge \Delta t$ every delayed
+lookup references strictly earlier blocks and $\mathbf{\Phi}_\mathrm{L}$ is
+unit block-lower-triangular. For $\Delta t > \tau_k$ stage lookups reach into
+the \emph{current} step, so the diagonal block becomes a non-identity but
+small and invertible matrix: block forward substitution still applies at
+linear cost, although even an explicit tableau then requires a per-step solve
+(the classical ``overlapping'' phenomenon of DDE integration). Entries
+\emph{above} the diagonal would require advanced-type arguments ($\tau < 0$)
+and never arise for retarded systems.
 
 \paragraph{Mass matrices and differential--algebraic systems.} The
 descriptor form $\mathbf{M}\dot{\mathbf{x}} = \mathbf{A}(t)\mathbf{x} +
@@ -995,23 +1029,25 @@ infinite spectrum of the algebraic part naturally. As a minimal validation
 (implemented in \texttt{examples/dae\_mass\_matrix.jl}), the index-1 system
 \begin{equation*}
   \dot{x}_1 = -x_1 + x_2 + \tfrac12 x_1(t-1), \qquad
-  \varepsilon \dot{x}_2 = \sin(t)\,x_1 - x_2,
+  \nu \dot{x}_2 = \sin(t)\,x_1 - x_2,
 \end{equation*}
-with $\mathbf{M} = \mathrm{diag}(1, \varepsilon)$, reduces for
-$\varepsilon = 0$ to a scalar LDDE whose multiplier serves as reference.
+with $\mathbf{M} = \mathrm{diag}(1, \nu)$, reduces for
+$\nu = 0$ to a scalar linear DDE whose multiplier serves as reference.
 Radau~IIA ($s = 3$) applied to the \emph{singular} problem converges to this
-reference at high order (relative errors $3.8\cdot10^{-8}$,
+reference at observed order $\approx 4 = s{+}1$ --- consistent with the
+delay-interpolation cap of Section~\ref{sec:order} on this non-commensurate
+delay --- (relative errors $3.8\cdot10^{-8}$,
 $4.0\cdot10^{-9}$, $3.4\cdot10^{-10}$, $1.6\cdot10^{-11}$ for
 $p = 25, 50, 100, 200$), and the singularly perturbed case
-$\varepsilon = 10^{-6}$ converges stably to the DAE limit within the
-expected $\mathcal{O}(\varepsilon)$ offset ($\approx 10^{-6}$). A full
+$\nu = 10^{-6}$ converges stably to the DAE limit within the
+expected $\mathcal{O}(\nu)$ offset ($\approx 10^{-6}$). A full
 convergence theory for delay DAEs is beyond the scope of this paper.
 
 \section{Reproducibility}
 \label{app:repro}
 
-All computations: Julia 1.12.4 on Windows 11 (x86-64), BLAS restricted to a
-single thread, package versions pinned by the repository manifests
+All computations were performed with Julia 1.12.4 on Windows 11 (x86-64),
+with BLAS restricted to a single thread, package versions pinned by the repository manifests
 (\textsf{SOSD.jl} v0.1.1 with KrylovKit, LinearMaps, RungeKutta, StaticArrays;
 baseline \textsf{SemiDiscretizationMethod.jl} v0.4.2). Timings are means over
 repeated warm-started runs with standard deviations shown as bands; start
@@ -1019,9 +1055,9 @@ vectors of all Krylov iterations are deterministic. Reference multipliers are
 accepted only when two resolutions of a GL(10) (small systems) or lazy GL(5)
 (beam) computation agree to $10^{-10}$ relative, and the reference method is
 cross-validated against \textsf{SemiDiscretizationMethod.jl} on every system.
-Every figure regenerates via
+Every figure can be regenerated via
 \texttt{julia --project=benchmark benchmark/run\_all.jl} followed by
-\texttt{benchmark/make\_figures.jl}. Repository:
+\texttt{julia --project=benchmark benchmark/make\_figures.jl}. Repository:
 \url{https://github.com/bachrathyd/SOSD.jl}
 \TODOnum{insert commit hash at submission}.
 

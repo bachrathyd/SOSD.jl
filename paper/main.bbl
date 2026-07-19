@@ -17,11 +17,11 @@ Bachrathy D (2026) Linear time complexity analysis of time-periodic delayed
   systems with multiplication free semi-discretization method.
 \newblock \emph{Journal of Vibration and Control} In press.
 
-\bibitem[{Bachrathy and St{\'e}p{\'a}n(2012)}]{Bachrathy2012}
-Bachrathy D and St{\'e}p{\'a}n G (2012) Improved semi-discretization for
-  time-delayed systems.
-\newblock \emph{International Journal for Numerical Methods in Engineering}
-  92(8): 693--714.
+\bibitem[{Bachrathy and St{\'e}p{\'a}n(2012)}]{BachrathyStepan2012mdbm}
+Bachrathy D and St{\'e}p{\'a}n G (2012) Bisection method in higher dimensions
+  and the efficiency number.
+\newblock \emph{Periodica Polytechnica Mechanical Engineering} 56(2): 81--86.
+\newblock \doi{10.3311/pp.me.2012-2.01}.
 
 \bibitem[{Bellen and Zennaro(2003)}]{BellenZennaro2003}
 Bellen A and Zennaro M (2003) \emph{Numerical Methods for Delay Differential
@@ -56,6 +56,13 @@ Hairer E and Wanner G (1996) \emph{Solving Ordinary Differential Equations
 \newblock 2nd edition. Berlin: Springer.
 \newblock \doi{10.1007/978-3-642-05221-7}.
 
+\bibitem[{Insperger(2006)}]{Insperger2006aw}
+Insperger T (2006) Act-and-wait concept for continuous-time control systems
+  with feedback delay.
+\newblock \emph{IEEE Transactions on Control Systems Technology} 14(5):
+  974--977.
+\newblock \doi{10.1109/TCST.2006.876938}.
+
 \bibitem[{Insperger and St{\'e}p{\'a}n(2002)}]{Insperger2002}
 Insperger T and St{\'e}p{\'a}n G (2002) Semi-discretization method for delayed
   systems.
@@ -84,21 +91,15 @@ Long XH and Balachandran B (2007) Stability of milling process with random
 Munoa J et~al. (2016) Chatter suppression techniques in metal cutting.
 \newblock \emph{CIRP Annals} 65(2): 785--808.
 
-\bibitem[{Saad and Schultz(1986)}]{Saad1986}
-Saad Y and Schultz MH (1986) Gmres: A generalized minimal residual algorithm
-  for solving nonsymmetric linear systems.
-\newblock \emph{SIAM Journal on Scientific and Statistical Computing} 7(3):
-  856--869.
-
 \bibitem[{Seguy et~al.(2008)}]{Seguy2008}
 Seguy S et~al. (2008) High-speed multiple spindle drilling stability with
   random perturbations.
 \newblock \emph{Journal of Sound and Vibration} 311(3-5): 833--849.
 
 \bibitem[{St{\'e}p{\'a}n(1989)}]{Stepan1989}
-St{\'e}p{\'a}n G (1989) Retarded dynamical systems: Stability and
-  characteristic functions.
-\newblock \emph{Longman Scientific \& Technical} .
+St{\'e}p{\'a}n G (1989) \emph{Retarded Dynamical Systems: Stability and
+  Characteristic Functions}.
+\newblock Harlow: Longman Scientific \& Technical.
 
 \bibitem[{Tobias(1965)}]{Tobias1965}
 Tobias SA (1965) \emph{Machine-Tool Vibration}.

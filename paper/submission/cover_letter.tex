@@ -1,0 +1,66 @@
+\documentclass[11pt]{letter}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+
+\signature{Daniel Bachrathy\\
+Department of Applied Mechanics\\
+Faculty of Mechanical Engineering\\
+Budapest University of Technology and Economics\\
+M\H{u}egyetem rkp.~3., H-1111 Budapest, Hungary\\
+bachrathy@mm.bme.hu}
+
+\address{Department of Applied Mechanics\\
+Budapest University of Technology and Economics\\
+M\H{u}egyetem rkp.~3.\\
+H-1111 Budapest, Hungary}
+
+\begin{document}
+
+\begin{letter}{Editors-in-Chief\\
+Journal of Vibration and Control\\
+SAGE Publications}
+
+\opening{Dear Editors,}
+
+Please consider the enclosed manuscript, \emph{``Solution-Operator
+Semi-Discretization: General-Order Multiplication-Free Stability Analysis of
+Time-Periodic Delayed Systems and the Accuracy--Sparsity Trade-Off''}, for
+publication in the \emph{Journal of Vibration and Control} as an original
+research article.
+
+The manuscript is the direct continuation of my recent JVC article on the
+multiplication-free semi-discretization method (MFSD), which established the
+linear-time-complexity representation of the one-period solution operator of
+time-periodic delay differential equations. The present work answers the
+natural follow-up question: once the analysis is written in that
+multiplication-free form, \emph{which integrator should be placed inside each
+step?} I show that the per-step integrator is a free design choice --- any
+explicit Runge--Kutta or implicit collocation-type scheme embeds through its
+Butcher tableau --- and that the resulting accuracy--sparsity continuum
+possesses a quantifiable, problem-dependent CPU-time optimum (a ``sweet
+spot'') at moderate order and many steps. A Shannon-type sampling bound turns
+this observation into an a~priori recipe for selecting the stage number and
+step count, validated on four benchmark systems including machining
+applications, and demonstrated end-to-end by high-resolution stability charts
+computed in seconds. All methods and every figure are reproducible through
+the open-source Julia package \textsf{SOSD.jl}.
+
+The paper is deliberately explicit about its relation to prior art: neither
+the multiplication-free assembly (my previous JVC article) nor collocation
+itself is claimed as new; the contributions are the general-order embedding,
+the fair order-versus-step benchmarking methodology, the measured
+accuracy--sparsity trade-off, and the resulting practical guidance. I
+believe this continuity makes JVC the natural venue, and the same readership
+that received the predecessor article will find the sequel directly useful.
+
+The manuscript is not under consideration elsewhere, and I have no conflicts
+of interest to declare. The research was supported by the Hungarian
+Scientific Research Fund (NKFIH-152125).
+
+Thank you for your consideration.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}

@@ -4,6 +4,12 @@
 \def\journalname{Journal of Vibration and Control}
 \def\volumeyear{2026}
 
+% The SageH author template leaves headings unnumbered (secnumdepth = -2 in
+% sagej.cls), which makes Section~\ref{...}/Appendix~\ref{...} render empty.
+% Numbering is restored here so the manuscript's cross-references resolve;
+% SAGE production restyles headings at typesetting anyway.
+\setcounter{secnumdepth}{2}
+
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
@@ -437,7 +443,10 @@ The measurements bracket exactly this range: on the seasonal model
 ($\tau = 2$, never mesh-aligned) GL2 and GL3 reduce to fitted orders
 $2.9$ and $3.8 \approx s{+}1$, while on the SSV turning system (time-varying
 delay) GL2 retains the full $4.0$ and GL3 attains $5.3$ --- between
-$s{+}1$ and $2s$. The explicit family is capped harder: the
+$s{+}1$ and $2s$. Convergence curves for both non-commensurate cases, with
+the $[s{+}1,\, 2s]$ guide bands drawn explicitly, are collected in
+Appendix~\ref{app:morewp} (Figure~\ref{fig:order-offmesh}). The explicit
+family is capped harder: the
 observed order is limited by its continuous extension, so RK4 with its
 classical third-order dense output converges with slope $\approx 3.2$
 instead of $4$, and RK5 with a generic stage-value interpolant collapses to
@@ -882,8 +891,47 @@ end. In the act-and-wait configuration the feedback matrix is active only for
 $t < 0.8\,T$. Reference multipliers: $\mu = 373.008322$ (smooth) and
 $\mu = 319.636074$ (act-and-wait, aligned-grid reference).
 
-\section{Additional work--precision studies}
+\section{Additional convergence and work--precision studies}
 \label{app:morewp}
+
+Figure~\ref{fig:order-offmesh} isolates the delay-commensurability effect
+quoted in Section~\ref{sec:order}. For the two systems whose delayed
+arguments never coincide with grid nodes --- the seasonal model, where
+$\tau/\Delta t = p/\pi$ is never an integer, and the SSV turning system with
+its time-varying delay --- the relative error of the dominant multiplier is
+re-plotted against $p$ for the Gauss stages alone. Each method carries a
+shaded guide band spanning its interpolation-limited guaranteed order
+$s{+}1$ and its superconvergent cap $2s$, anchored at the finest pre-floor
+data point. Every measured curve stays within its band. On the seasonal
+model the fitted slopes ($2.9$ for GL2, $3.8$ for GL3) press against the
+$s{+}1$ edge --- the continuous-extension cap is active --- while on the SSV
+system partial error cancellation keeps the observed orders higher: GL2
+retains the full $4.0 = 2s$, GL3 attains $5.3$, and GL5 attains $7.2$, both
+strictly inside $(s{+}1,\, 2s)$. The one-stage GL1, whose bracket is
+degenerate ($s{+}1 = 2s = 2$), converges at second order regardless of
+commensurability. The GL5 tail flattens at $\varepsilon \approx 10^{-13}$,
+the agreement level of the two-resolution reference for this system; the
+plateau is displayed but excluded from the slope fit. Together with the
+mesh-commensurate orders of Table~\ref{tab:orders}, these measurements
+substantiate the bracket $[s{+}1,\, 2s]$ stated in Section~\ref{sec:order}:
+$s{+}1$ is the guaranteed floor, $2s$ the attainable ceiling, and where a
+particular problem lands between them is a property of the problem, not of
+the method.
+
+\begin{figure*}[t]
+  \centering
+  \figok{width=\linewidth}{figures/order_offmesh.pdf}
+  \caption{Convergence of the dominant multiplier for non-mesh-commensurate
+  delays: seasonal model (left) and SSV turning system (right). Shaded
+  bands span the order bracket $[s{+}1,\, 2s]$ per method (dotted edges),
+  anchored at the finest pre-floor point; legend entries give the fitted
+  log--log slope. All curves remain inside their bands: the seasonal model
+  presses the interpolation-limited $s{+}1$ edge, whereas the SSV system
+  retains orders up to the superconvergent cap. The GL5 plateau at
+  $\varepsilon \approx 10^{-13}$ marks the accuracy of the two-resolution
+  reference, not of the method.}
+  \label{fig:order-offmesh}
+\end{figure*}
 
 Figures~\ref{fig:wp-bio}--\ref{fig:wp-beam} repeat the three-panel
 work--precision study of Figure~\ref{fig:wp-mathieu} for the remaining test

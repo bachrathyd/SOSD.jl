@@ -67,3 +67,21 @@ affected by the delay bug fixed above and must be regenerated before use.)
   submission kit under paper/submission/ (cover letter, title page,
   highlights, checklist). Remaining before submission: commit hash into the
   reproducibility appendix, ORCID verification, funding AG-mark confirmation.
+
+## 2026-07-20 (phase 4): off-mesh convergence figure + section numbering
+
+- New Figure (order_offmesh, appendix B): controlled visualization of the
+  [s+1, 2s] order bracket for non-mesh-commensurate delays. Two panels from
+  existing WP data: seasonal model (GL1/GL2/GL3, fits 2.2/2.9/3.8 -- presses
+  the s+1 interpolation floor) and SSV turning (GL2/GL3/GL5, fits
+  4.0/5.3/7.2 -- up to the 2s cap). Shaded guide bands s+1..2s anchored at
+  the finest pre-floor point; every curve stays inside its band. SSV fits
+  exclude the ~1e-13 two-resolution-reference plateau (fit window lo=1e-11);
+  GL1 dropped from the SSV panel (pre-asymptotic over the whole p-range).
+- All fitted slopes match the numbers already quoted in Section 5.2 text.
+- Defect found and fixed while verifying the PDF: sagej/SageH sets
+  secnumdepth=-2 (unnumbered headings), so all 28 Section~\ref/Appendix~\ref
+  cross-references rendered EMPTY ("Section .") -- pre-existing since the
+  first draft, missed by all three review rounds. Restored numbering via
+  \setcounter{secnumdepth}{2} in the preamble; verified "Section 5.2",
+  "Appendix B", lettered appendices all resolve. 12 pages, 0 errors.

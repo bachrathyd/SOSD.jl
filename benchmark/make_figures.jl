@@ -79,6 +79,66 @@ function fig_order()
 end
 
 # ---------------------------------------------------------------------------
+# 1b. Off-mesh delay convergence: the [s+1, 2s] order bracket
+#     Seasonal model (tau/dt never integer) and SSV turning (time-varying
+#     delay). Shaded band per method = guide slopes s+1 .. 2s anchored at the
+#     finest pre-floor point; the measured curve must stay inside the band.
+# ---------------------------------------------------------------------------
+function fig_order_offmesh()
+    # GL1 is omitted on the SSV panel (pre-asymptotic over the whole p-range);
+    # GL5 is shown there instead (bracket [6, 10]).
+    # fit windows exclude the reference-accuracy plateau (SSV reference is a
+    # two-resolution agreement, trustworthy only to ~1e-12)
+    specs = [("bio",         L"\mathrm{seasonal\ model}\ (\tau/\Delta t\ \mathrm{never\ integer})",
+              ("GL1", "GL2", "GL3"), 1e-14),
+             ("turning_ssv", L"\mathrm{turning\ with\ SSV\ (time\ varying\ delay)}",
+              ("GL2", "GL3", "GL5"), 1e-11)]
+    stages = Dict("GL1" => 1, "GL2" => 2, "GL3" => 3, "GL5" => 5)
+    panels = []
+    for (sysname, ttl, mlist, fit_lo) in specs
+        path = joinpath(RESULTS, "work_precision_$sysname.csv")
+        isfile(path) || (println("skip fig_order_offmesh ($sysname)"); return)
+        d = load_csv(path)
+        plt = plot(xscale=:log10, yscale=:log10, xlabel=L"p",
+                   ylabel=L"\varepsilon", legend=:bottomleft,
+                   title=ttl, ylims=(1e-15, 3.0),
+                   yticks=10.0 .^ (0:-4:-14))
+        for m in mlist
+            s = stages[m]
+            idx = findall(==(m), String.(d["method"]))
+            isempty(idx) && continue
+            ps = fnum(d["p"][idx]); errs = fnum(d["rel_error"][idx])
+            ord = sortperm(ps); ps = ps[ord]; errs = errs[ord]
+            # anchor the guide band at the finest safely-pre-floor point
+            ia = findlast(i -> errs[i] > max(1e-12, fit_lo), eachindex(errs))
+            if !isnothing(ia) && s > 1
+                pa, ea = ps[ia], errs[ia]
+                pband = ps[1:ia]
+                e_hi = ea .* (pband ./ pa) .^ (-(s + 1))   # guaranteed floor s+1
+                e_lo = ea .* (pband ./ pa) .^ (-(2s))      # superconvergent cap 2s
+                keep = e_hi .< 3.0
+                plot!(plt, pband[keep], max.(e_lo[keep], 1e-15),
+                      fillrange=min.(e_hi[keep], 3.0), fillalpha=0.13,
+                      linealpha=0, color=mcolor(m), label="")
+                plot!(plt, pband[keep], min.(e_hi[keep], 3.0), ls=:dot,
+                      lw=0.8, color=mcolor(m), alpha=0.6, label="")
+                plot!(plt, pband[keep], max.(e_lo[keep], 1e-15), ls=:dot,
+                      lw=0.8, color=mcolor(m), alpha=0.6, label="")
+            end
+            k = -fit_slope_window(ps, errs; lo=fit_lo)
+            lbl = isfinite(k) ?
+                "$m " * L"(s{+}1{=}%$(s+1),\ 2s{=}%$(2s);\ \mathrm{fit}\ %$(round(k, digits=1)))" : m
+            plot!(plt, ps, max.(errs, 1e-15), marker=:circle, ms=3,
+                  lw=mwidth(m), color=mcolor(m), label=lbl)
+        end
+        push!(panels, plt)
+    end
+    plt = plot(panels..., layout=(1, 2), size=(880, 340),
+               left_margin=5Plots.mm, bottom_margin=5Plots.mm)
+    saveboth(plt, "order_offmesh")
+end
+
+# ---------------------------------------------------------------------------
 # 2. Work-precision (per system): p-err | p-time(+ribbon,slope) | time-err
 # ---------------------------------------------------------------------------
 function fig_work_precision(sysname)
@@ -364,6 +424,7 @@ end
 # ---------------------------------------------------------------------------
 println("Generating figures...")
 fig_order()
+fig_order_offmesh()
 fig_classic()
 for s in ("mathieu", "bio", "turning_ssv", "beam")
     fig_work_precision(s)

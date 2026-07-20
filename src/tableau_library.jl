@@ -3,11 +3,12 @@ using StaticArrays
 using LinearAlgebra
 
 """
-    from_rkjl(tab::Tableau; strategy=nothing)
+    from_rkjl(tab::Tableau; strategy=nothing, b_embedded=nothing)
 
-Converts a RungeKutta.jl tableau to an SOSD.RKTableau.
+Converts a RungeKutta.jl tableau to an SOSD.RKTableau. `b_embedded` optionally
+attaches the classical lower-order companion weights of an embedded pair.
 """
-function from_rkjl(tab::Tableau; strategy=nothing)
+function from_rkjl(tab::Tableau; strategy=nothing, b_embedded=nothing)
     s = tab.s
     a_mat = SMatrix{s, s}(tab.a)
     b_vec = SVector{s}(tab.b)
@@ -86,7 +87,22 @@ function from_rkjl(tab::Tableau; strategy=nothing)
         end
     end
     
-    return RKTableau{s, Float64, typeof(ce)}(a_mat, b_vec, c_vec, ce, nodes_raw, order, strategy)
+    b_emb = b_embedded === nothing ? nothing : SVector{s, Float64}(b_embedded)
+    return RKTableau{s, Float64, typeof(ce)}(a_mat, b_vec, c_vec, ce, nodes_raw, order, strategy, b_emb)
+end
+
+"""
+    BS3(; strategy=denseoutput)
+
+Bogacki–Shampine 3(2) pair — the method behind MATLAB's `ode23`. The order-2
+embedded weights are attached, so `error_estimation` uses the classical pair.
+"""
+function BS3(; strategy=denseoutput)
+    a = [0 0 0 0; 1/2 0 0 0; 0 3/4 0 0; 2/9 1/3 4/9 0]
+    b = [2/9, 1/3, 4/9, 0]
+    c = [0, 1/2, 3/4, 1]
+    tab = Tableau(:BS3, 3, 4, float.(a), float.(b), float.(c))
+    return from_rkjl(tab, strategy=strategy, b_embedded=[7/24, 1/4, 1/3, 1/8])
 end
 
 function RK8(; strategy=denseoutput)

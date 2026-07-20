@@ -22,4 +22,7 @@ using SOSD
     
     println("Running Inhomogeneous Periodic Solution Tests...")
     include("inhomogeneous_test.jl")
+
+    println("Running Error Estimation Tests...")
+    include("test_error_estimation.jl")
 end

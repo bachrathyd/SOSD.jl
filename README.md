@@ -29,6 +29,22 @@ while keeping O(p) time complexity.
   `extract_SDM_system(rhs, p, Val(D); delays=[τ1, ...])`. Out-of-window delayed
   lookups raise an error instead of silently clamping.
 - **MDBM Integration:** Ready for multi-dimensional stability chart generation.
+- **Embedded-pair error estimation** (`error_estimation = true`): ode23-style
+  error bars for the spectral radius / dominant multiplier, the mode shape and
+  the periodic fixed point, from a lower-order companion of the mapping matrix
+  (matrix perturbation analysis + cross-family collocation pairs). The bar is
+  returned as a **separate output**, so the plain interface is unchanged:
+
+  ```julia
+  rho             = spectral_radius(prob, grid, GL(3), r)
+  rho, rho_bar    = spectral_radius(prob, grid, GL(3), r; error_estimation=true)
+  sol, est        = floquet_analysis(prob, grid, GL(3), r; error_estimation=true,
+                                     periodic_solution=true)
+  # est.mu_error, est.mode_error, est.fixpoint_error, est.eigenvalue_condition, ...
+  ```
+
+  Validated on all benchmark systems (`benchmark/run_error_estimation.jl` +
+  `make_error_figures.jl`); design notes in `ERROR_ESTIMATION_PLAN.md`.
 
 ## Benchmark suite & paper
 `benchmark/` contains the full fair-comparison harness (order verification,

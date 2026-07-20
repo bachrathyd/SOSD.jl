@@ -85,3 +85,41 @@ affected by the delay bug fixed above and must be regenerated before use.)
   first draft, missed by all three review rounds. Restored numbering via
   \setcounter{secnumdepth}{2} in the preamble; verified "Section 5.2",
   "Appendix B", lettered appendices all resolve. 12 pages, 0 errors.
+
+## 2026-07-21 (phase 5): embedded-pair error estimation (branch error-estimation)
+
+- NEW FEATURE: `error_estimation = true/false` option — ode23-style error bars
+  for the spectral radius / dominant Floquet multiplier, the mode shape and
+  the periodic fixed point, delivered as a SEPARATE output so the original
+  interface is untouched. New API: `floquet_analysis` (returns FloquetSolution,
+  or (FloquetSolution, FloquetErrorEstimate) with the option on) and the
+  `spectral_radius` convenience wrapper. Design doc: ERROR_ESTIMATION_PLAN.md.
+- Mechanism: the monodromy operator is assembled twice on the SAME grid — the
+  user's tableau and an embedded lower-order companion — and the difference is
+  treated as a mapping-matrix perturbation. Companion per family: classical
+  pair when the tableau carries one (new BS3() = Bogacki–Shampine/ode23, with
+  b_embedded attached); cross-family same-s collocation companion
+  (Gauss(s)→Radau IIA(s), Radau→Lobatto IIIA(s), s=1→implicit Euler); generic
+  drop-node quadrature rule otherwise. Non-collocation tableaux add a separate
+  interpolation channel (CE with one interior node dropped).
+- Two negative results worth remembering (both verified numerically):
+  (1) every added-sample interpolatory rule on Gauss nodes degenerates
+  (∫ℓ_new ∝ ∫P_s = 0, Legendre orthogonality) — no same-node weight swap can
+  beat order s−1; (2) the drop-node CE perturbation is EXACTLY NULL for
+  collocation (block data lie on the collocation polynomial), so the
+  cross-family companion carries the interpolation uncertainty there.
+- Analysis: left eigenvector via a new transpose action of SparseMonodromyMap
+  (adjoint-correct to 1e-16, dense-verified); first-order δμ = yᵀΔΦx/yᵀx for
+  same-(a,c) companions; exact μ−μ̂ difference for cross-family ones (their
+  O(h) stage-row "gauge" differences invalidate the first-order formula —
+  measured, not assumed). Eigenvalue condition number κ(μ) reported. Mode
+  error: resolvent bound / node-restricted principal angle. Fixed point:
+  exact two-method difference on node components. Default safety_factor = 2.
+- Tests: test/test_error_estimation.jl — 100/100 pass (companion order
+  conditions, transpose correctness, interface compatibility, first-order
+  consistency vs μ−μ̂, coverage on Mathieu+bio × GL2/GL3/BS3, fixpoint bars);
+  full suite 7/7 legacy groups still green.
+- Validation study: benchmark/run_error_estimation.jl (3 systems × GL2/GL3/
+  GL5/BS3/RK4 × p-sweep, references from the cached two-resolution values) +
+  benchmark/make_error_figures.jl (error_prediction_<sys>, error_coverage,
+  error_bars_demo, error_fixpoint).

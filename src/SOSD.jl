@@ -12,11 +12,17 @@ export extract_SDM_system, build_system_matrices, build_system_matrices_dense
 export GL, GL2Tableau, GL3Tableau, ExplicitEuler, Heun, RK3, RK4, RK5, RK8, ImplicitEuler, ImplicitTrapezoidal
 export solve_periodic_solution, inhomogeneous_sweep, SparseMonodromyMap
 export build_explicit_matrices, get_explicit_transition_matrix
+export BS3, embedded_tableau, embedded_weights
+export floquet_analysis, spectral_radius, FloquetSolution, FloquetErrorEstimate
 
 @enum InterpStrategy collocation endpoint denseoutput
 
 """
     RKTableau{S, T, CE}
+
+`b_embedded` optionally stores a lower-order companion weight vector on the
+same stages (a classical embedded pair, e.g. Bogacki–Shampine). When absent,
+[`embedded_tableau`](@ref) constructs a generic order-(s−1) companion.
 """
 struct RKTableau{S, T, CE}
     a::SMatrix{S, S, T}
@@ -26,6 +32,11 @@ struct RKTableau{S, T, CE}
     interp_nodes::Vector{T}
     order::Int
     strategy::InterpStrategy
+    b_embedded::Union{Nothing, SVector{S, T}}
+end
+
+function RKTableau{S, T, CE}(a, b, c, ce, interp_nodes, order, strategy) where {S, T, CE}
+    return RKTableau{S, T, CE}(a, b, c, ce, interp_nodes, order, strategy, nothing)
 end
 
 """
@@ -128,5 +139,7 @@ include("tableau_library.jl")
 include("solver.jl")
 include("sparse_builder.jl")
 include("sparse_map.jl")
+include("embedded.jl")
+include("error_estimation.jl")
 
 end # module

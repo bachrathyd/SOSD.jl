@@ -312,6 +312,9 @@ function fig_cliff()
         d = load_csv(path)
         ps = Int.(d["p"]); Ns = Int.(d["N"])
         errs = clamp.(fnum(d["rel_error"]), 1e-16, 3.0)
+        # unified p-set across both panels
+        keep = map(p -> p in (1, 10, 20, 30, 40), ps)
+        ps = ps[keep]; Ns = Ns[keep]; errs = errs[keep]
         plt = plot(xscale=:log10, yscale=:log10, xlabel=L"N = p(s+1)",
                    ylabel=L"\varepsilon", legend=:bottomleft, title=ttl,
                    ylims=(1e-16, 3.0))

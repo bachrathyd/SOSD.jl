@@ -16,9 +16,7 @@ Submission portal: ScholarOne — https://mc.manuscriptcentral.com/jvc
 - [ ] Replace the red commit-hash placeholder in the Reproducibility appendix
       with the final commit hash (`git rev-parse --short HEAD`), delete the
       `\TODOnum` macro.
-- [ ] Confirm the funding line: published predecessor uses "NKFIH-152125"
-      (together with NKFIH 138500). If the Advanced-Grant mark must appear,
-      set the exact official string.
+- [x] Funding line confirmed by the author: "NKFIH-AG-152125"
 - [ ] Verify ORCID on the title page.
 - [ ] Decide repository visibility (currently public) and tag a release
       (e.g. `v0.2.0-submission`) so the paper's link is stable.

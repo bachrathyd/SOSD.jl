@@ -1,12 +1,17 @@
-struct SparseMonodromyMap{T, LS, RM, BSIZE, R} <: LinearMaps.LinearMap{T}
+# r (delay steps) and bsize are plain fields, not type parameters: r changes at every point
+# of a parameter sweep, and as a type parameter it forced a full recompile per call.
+struct SparseMonodromyMap{T, LS, RM} <: LinearMaps.LinearMap{T}
     L_solver::LS
     R::RM
     state_size::Int
+    bsize::Int
+    r::Int
 end
 
 Base.size(m::SparseMonodromyMap) = (m.state_size, m.state_size)
 
-function LinearMaps._unsafe_mul!(y_out::AbstractVector, m::SparseMonodromyMap{T, LS, RM, BSIZE, R}, x_in::AbstractVector) where {T, LS, RM, BSIZE, R}
+function LinearMaps._unsafe_mul!(y_out::AbstractVector, m::SparseMonodromyMap, x_in::AbstractVector)
+    BSIZE = m.bsize; R = m.r
     # x_in: [v_0, ..., v_{-r}]
     # We need v_hist: [v_{-r}, ..., v_0] for the sparse system
     # Use eltype(x_in) to support complex vectors if x_in is complex
@@ -47,5 +52,5 @@ function SparseMonodromyMap(m::MonodromyMap{D, S, T, W, BSIZE}) where {D, S, T, 
     Q_hist, Q_period = build_explicit_matrices(m)
     # L = Q_period, R = -Q_hist
     L_solver = lu(Q_period)
-    return SparseMonodromyMap{T, typeof(L_solver), typeof(Q_hist), BSIZE, m.r}(L_solver, -Q_hist, m.state_size)
+    return SparseMonodromyMap{T, typeof(L_solver), typeof(Q_hist)}(L_solver, -Q_hist, m.state_size, BSIZE, m.r)
 end

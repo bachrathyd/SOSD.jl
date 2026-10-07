@@ -21,9 +21,10 @@ _ldiv_transposed(F, w::AbstractVector{<:Real}) = F' \ w
 _ldiv_transposed(F, w::AbstractVector{<:Complex}) = (F' \ real.(w)) .+ im .* (F' \ imag.(w))
 
 function LinearMaps._unsafe_mul!(y_out::AbstractVector,
-                                 tm::LinearMaps.TransposeMap{T, SparseMonodromyMap{T, LS, RM, BSIZE, R}},
-                                 x_in::AbstractVector) where {T, LS, RM, BSIZE, R}
+                                 tm::LinearMaps.TransposeMap{T, <:SparseMonodromyMap{T}},
+                                 x_in::AbstractVector) where {T}
     m = tm.lmap
+    BSIZE = m.bsize; R = m.r
     p = size(m.R, 1) ÷ BSIZE
     TE = eltype(x_in)
     # Forward: y[i] = (L⁻¹ R P x)[p−i−1] for k = p−i ≥ 1, plus y[i] = x[i−p] for i ≥ p

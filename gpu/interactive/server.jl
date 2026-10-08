@@ -23,6 +23,8 @@ include(joinpath(@__DIR__, "..", "..", "test", "batched_models.jl"))
 BLAS.set_num_threads(1)
 
 const BACKEND = USE_GPU ? CUDABackend() : KernelAbstractions.CPU()
+# synchronised per-phase timings (build / sweeps / orthogonalisation / host); costs ~1 %
+const PROFILE = Ref(true)
 device_name() = USE_GPU ? CUDA.name(CUDA.device()) : "CPU ($(Threads.nthreads()) threads)"
 
 # --------------------------------------------------------------------------
@@ -95,7 +97,7 @@ function chart(q)
     θs = [θof(x, y * ex.yscale) for y in ys for x in xs]       # ix fastest, iy = 0 bottom
     kw = fast ? (krylovdim = kd, keep = max(2, kd ÷ 2), maxiter = 8, retry = false) :
                 (krylovdim = max(kd, 30), keep = max(15, kd ÷ 2))
-    res = spectral_radii(prob, θs, GL(3), p, rof(p); backend = BACKEND, T = T, kw...)
+    res = spectral_radii(prob, θs, GL(3), p, rof(p); backend = BACKEND, T = T, profile = PROFILE[], kw...)
     t1 = time()
     write(q["out"], Float32.(res.rho))
     tm = res.timing
@@ -141,4 +143,4 @@ function serve()
     end
 end
 
-serve()
+abspath(PROGRAM_FILE) == @__FILE__ && serve()

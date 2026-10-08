@@ -28,6 +28,27 @@ Two ways to get the chart (both can be on):
   the ρ = 1 boundary at the resolution of (initial grid × 2^iterations) with a fraction of the
   evaluations. A lobe narrower than the initial grid spacing can be missed — refine the initial grid.
 
+### Speed (AMD Vega 8 iGPU of a Ryzen 7 5800H, Chrome, GPU time per ρ from timestamp queries, 256×128 grid)
+
+| example, default (s, p, m) | µs per ρ | of which step-matrix build |
+|---|---|---|
+| delayed Mathieu, GL3, p = 16, m = 6 | 3.7 | 0.4 |
+| 2-DOF milling, GL3, p = 40, m = 8 | 42 | 14 |
+| turning SSV, GL3, p = 200, m = 6 | 18 | 5 |
+
+The defaults come from a scan against high-resolution references (`validate/bench.mjs`, `scan`):
+for Mathieu, GL3 with p = 16, m = 6 is as fast as GL2 with p = 20, m = 7 but has 0 instead of 15
+misclassified points of 8192; m = 6 gives the turning-SSV chart of m = 12 at half the cost; milling
+needs m = 8. The Krylov dimension matters: the Gram–Schmidt cost grows like m² N and dominates at
+small p.
+
+**Float16.** The Krylov basis can be stored in Float16 (option; arithmetic stays Float32): ρ to
+about 1e-3, 5–25 % faster depending on the model. Float16 for the sweep history or the step
+matrices was tested and dropped: the rounding of every one of the p steps accumulates in the
+monodromy (median |Δρ|/ρ 1–4 %, up to 6 % of the points misclassified). The Nyquist count of
+InterpolatedNyquist tolerates Float16 because an integer winding number is robust to small phase
+errors; ρ near 1 is not.
+
 | file | content |
 |---|---|
 | `index.html` | page, layout, styles |
@@ -39,6 +60,7 @@ Two ways to get the chart (both can be on):
 | `mdbm.js` | MDBM boundary refinement, batched per iteration, neighbour tracing |
 | `cpu.js`, `cpuworker.js`, `cpusolver.js` | Float64 CPU solver (twin of `sosd.wgsl`) in a web-worker pool |
 | `examples.js` | delayed Mathieu, 2-DOF milling, turning with spindle-speed variation — written like their Julia twins in `test/batched_models.jl` |
+| `validate/bench.mjs` | console benchmark: GPU µs per ρ (prep / main), accuracy vs a kept run, (s, p, m) scans against a reference |
 | `stats.js` | anonymous usage counts (GoatCounter site `sosdgpu`: page views, examples and features used; no cookies, never the model text; `GOATCOUNTER = ''` turns it off) |
 | `validate/reference.jl` | Float64 CPU reference (SOSD.jl) on 16×10 grids → `validate/ref.json`, compared by `?validate=1` |
 

@@ -9,12 +9,14 @@
 //          elimination, partial pivoting), giving the BS×BS step matrix
 //              [y_{n+1}; Y_1..Y_S] = W_n [y_n; yd_1..yd_S]      (yd_s = x(t_s − τ(t_s)))
 //          and per stage the delayed-lookup record (block index, flag, Lagrange weights);
-//   main — one thread per point: Arnoldi (m steps, classical Gram–Schmidt with one full
-//          reorthogonalization) on the monodromy, every matvec = p small mat-vecs with the
-//          stored W_n; eigenvalues of the m×m Hessenberg matrix by Francis QR (hqr, as
-//          webgpu/hqr.js) -> ρ = max |λ|.
+//   main — LPP threads per point (G = 64/LPP points per workgroup): Arnoldi (m steps,
+//          classical Gram–Schmidt with DGKS reorthogonalization) on the monodromy, every
+//          matvec = p small mat-vecs with the stored W_n, rows shared by the lanes; eigenvalues
+//          of the m×m Hessenberg matrix by Francis QR (hqr, as webgpu/hqr.js) -> ρ = max |λ|.
+//          Several lanes per point cut the latency of a small batch (MDBM stages), one lane per
+//          point is best for large grids; the host chooses.
 // The host replaces the two marker lines below by the model (D, NP, m_period, m_tau, m_AB from
-// expr.js) and the tableau (S, MMAX = Krylov dimension, AT, BT, CT, interpolation nodes XN).
+// expr.js) and the tableau (S, MMAX = Krylov dimension, LPP, AT, BT, CT, interpolation nodes XN).
 
 //@MODEL@
 //@TABLEAU@
@@ -25,6 +27,7 @@ const DD: u32 = D * D;
 const NN: u32 = S + 2u;                // interpolation nodes {0, c_1..c_S, 1}
 const LR: u32 = NN + 2u;               // lookup record: block index, flag, NN weights
 const WW: u32 = BS * BS;
+const G: u32 = 64u / LPP;             // points per workgroup = chunk size of the storage layout
 
 struct U {
   npts: u32, p: u32, r: u32, m: u32,
@@ -41,17 +44,18 @@ struct U {
 
 var<private> b: u32;        // this point (local index inside the band)
 var<private> npts: u32;
-var<private> cb: u32;       // its chunk of 64 points
-var<private> lane: u32;     // its lane in the chunk
+var<private> cb: u32;       // its chunk of G points
+var<private> lane: u32;     // its slot in the chunk
 
-// Every per-point array is stored in chunks of 64 points, element-major inside a chunk:
-// neighbouring threads touch neighbouring words AND one thread's data stays on a few pages
+// Every per-point array is stored in chunks of G points, element-major inside a chunk:
+// neighbouring threads touch neighbouring words AND one point's data stays on a few pages
 // (a plain point-fastest layout puts consecutive elements npts·4 bytes apart, and the TLB misses
-// then dominate as soon as the working set grows).
-fn Hx(k: u32) -> u32 { return (cb * ((u.p + u.r + 1u) * BS) + k) * 64u + lane; }
-fn Vx(j: u32, i: u32, N: u32) -> u32 { return (cb * ((min(u.m, MMAX) + 1u) * N) + j * N + i) * 64u + lane; }
-fn Wx(n: u32, k: u32) -> u32 { return (cb * (u.p * WW) + n * WW + k) * 64u + lane; }     // n = 0..p-1
-fn Lx(n: u32, s: u32, k: u32) -> u32 { return (cb * (u.p * S * LR) + (n * S + s) * LR + k) * 64u + lane; }
+// then dominate as soon as the working set grows). W_n is stored column-major, so the lanes of a
+// point (consecutive rows) read consecutive words.
+fn Hx(k: u32) -> u32 { return (cb * ((u.p + u.r + 1u) * BS) + k) * G + lane; }
+fn Vx(j: u32, i: u32, N: u32) -> u32 { return (cb * ((min(u.m, MMAX) + 1u) * N) + j * N + i) * G + lane; }
+fn Wx(n: u32, k: u32) -> u32 { return (cb * (u.p * WW) + n * WW + k) * G + lane; }      // n = 0..p-1
+fn Lx(n: u32, s: u32, k: u32) -> u32 { return (cb * (u.p * S * LR) + (n * S + s) * LR + k) * G + lane; }
 
 fn params() -> array<f32, NP> {
   var P: array<f32, NP>;
@@ -65,11 +69,11 @@ fn params() -> array<f32, NP> {
 fn prep(@builtin(global_invocation_id) gid: vec3<u32>) {
   npts = u.npts;
   let g = gid.x;
-  lane = g % 64u;
-  let rest = g / 64u;
+  lane = g % G;
+  let rest = g / G;
   let n = rest % u.p;                    // step 0..p-1
   cb = rest / u.p;
-  b = cb * 64u + lane;
+  b = cb * G + lane;
   if (b >= npts) { return; }
   let P = params();
   let h = m_period(P) / f32(u.p);
@@ -151,48 +155,74 @@ fn prep(@builtin(global_invocation_id) gid: vec3<u32>) {
         if (c >= D + j * D && c < D + (j + 1u) * D) { ay += Bs[j * DD + ri * D + (c - D - j * D)]; }
         acc += h * BT[j] * ay;
       }
-      Wb[Wx(n, ri * BS + c)] = acc;
+      Wb[Wx(n, c * BS + ri)] = acc;
     }
   }
-  for (var k = 0u; k < SD * BS; k++) { Wb[Wx(n, D * BS + k)] = R[k]; }
+  for (var k = 0u; k < SD * BS; k++) { Wb[Wx(n, (k % BS) * BS + D + k / BS)] = R[k]; }
+}
+
+// Workgroup = G points × LPP lanes per point. The lanes of a point share every loop over the
+// state (row / element index ≡ lane mod LPP); the sweep's step-to-step dependency and the
+// Gram–Schmidt sums are synchronized with barriers. All loop bounds come from the uniform
+// buffer, so every invocation reaches every barrier (a finished point idles along).
+var<workgroup> Xs: array<f32, G * BS>;                     // [y_n; yd_1..yd_S] per point
+var<workgroup> red: array<f32, 64u * (MMAX + 1u)>;         // per-lane partial sums
+
+var<private> ln: u32;       // lane of this invocation inside its point
+var<private> gp: u32;       // point inside the workgroup
+
+/** sum over the LPP lanes of this point of red[lane][0..cnt) -> out (identical in every lane) */
+fn reduce(cnt: u32, out: ptr<function, array<f32, MMAX + 1u>>) {
+  workgroupBarrier();
+  for (var l = 0u; l < cnt; l++) {
+    var acc = 0.0;
+    for (var q = 0u; q < LPP; q++) { acc += red[(gp * LPP + q) * (MMAX + 1u) + l]; }
+    (*out)[l] = acc;
+  }
+  workgroupBarrier();
 }
 
 // Y[jout] = Φ Y[jin] (monodromy applied to basis column jin, result in column jout)
 fn sweep(jin: u32, jout: u32) -> u32 {
   let p = u.p; let r = u.r; let N = (r + 1u) * BS;
   var flags = 0u;
-  for (var e = 0u; e < N; e++) {
+  for (var e = ln; e < N; e += LPP) {
     let i = e / BS; let q = e % BS;
     hist[Hx((r - i) * BS + q)] = V[Vx(jin, e, N)];
   }
-  var X: array<f32, BS>;
+  storageBarrier();
   for (var n = 0u; n < p; n++) {
     let bc = (n + r) * BS;
-    for (var d = 0u; d < D; d++) { X[d] = hist[Hx(bc + d)]; }
-    for (var s = 0u; s < S; s++) {
-      let mi = u32(Lb[Lx(n, s, 0u)]);
-      if (Lb[Lx(n, s, 1u)] != 0.0) { flags |= 1u; }
-      var w: array<f32, NN>;
-      for (var i = 0u; i < NN; i++) { w[i] = Lb[Lx(n, s, 2u + i)]; }
-      let b0 = (mi - 1u) * BS; let b1 = mi * BS;
-      for (var d = 0u; d < D; d++) {
-        var acc = w[0] * hist[Hx(b0 + d)];
-        for (var i = 0u; i < S; i++) { acc += w[i + 1u] * hist[Hx(b1 + (i + 1u) * D + d)]; }
-        acc += w[S + 1u] * hist[Hx(b1 + d)];
-        X[D + s * D + d] = acc;
+    for (var k = ln; k < BS; k += LPP) {
+      var x = 0.0;
+      if (k < D) {
+        x = hist[Hx(bc + k)];
+      } else {
+        let s = (k - D) / D; let d = (k - D) % D;
+        let mi = u32(Lb[Lx(n, s, 0u)]);
+        if (Lb[Lx(n, s, 1u)] != 0.0) { flags |= 1u; }
+        let b0 = (mi - 1u) * BS; let b1 = mi * BS;
+        x = Lb[Lx(n, s, 2u)] * hist[Hx(b0 + d)];
+        for (var i = 0u; i < S; i++) { x += Lb[Lx(n, s, 3u + i)] * hist[Hx(b1 + (i + 1u) * D + d)]; }
+        x += Lb[Lx(n, s, 2u + S + 1u)] * hist[Hx(b1 + d)];
       }
+      Xs[gp * BS + k] = x;
     }
+    workgroupBarrier();
     let bn = (n + r + 1u) * BS;
-    for (var row = 0u; row < BS; row++) {
+    for (var row = ln; row < BS; row += LPP) {
       var acc = 0.0;
-      for (var c = 0u; c < BS; c++) { acc += Wb[Wx(n, row * BS + c)] * X[c]; }
+      for (var c = 0u; c < BS; c++) { acc += Wb[Wx(n, c * BS + row)] * Xs[gp * BS + c]; }
       hist[Hx(bn + row)] = acc;
     }
+    storageBarrier();
+    workgroupBarrier();
   }
-  for (var e = 0u; e < N; e++) {
+  for (var e = ln; e < N; e += LPP) {
     let i = e / BS; let q = e % BS;
     V[Vx(jout, e, N)] = hist[Hx((p + r - i) * BS + q)];
   }
+  storageBarrier();
   return flags;
 }
 
@@ -302,50 +332,78 @@ fn hqr(n: i32) -> vec4<f32> {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  b = gid.x; npts = u.npts;
-  if (b >= npts) { return; }
-  cb = b / 64u; lane = b % 64u;
+fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) lid: u32) {
+  npts = u.npts;
+  gp = lid / LPP; ln = lid % LPP;
+  cb = wid.x; lane = gp;
+  b = cb * G + gp;
+  let valid = b < npts;                  // a padding point computes garbage, its result is not written
   let N = (u.r + 1u) * BS;
   let m = min(u.m, MMAX);
   // start vector (deterministic, as SOSD._det_start)
+  var sv: array<f32, MMAX + 1u>;
   var nrm = 0.0;
-  for (var i = 0u; i < N; i++) { let v = 1.0 + 0.1 * sin(7.3 * f32(i + 1u)); V[Vx(0u, i, N)] = v; nrm += v * v; }
-  nrm = 1.0 / sqrt(nrm);
-  for (var i = 0u; i < N; i++) { V[Vx(0u, i, N)] *= nrm; }
+  for (var i = ln; i < N; i += LPP) { let v = 1.0 + 0.1 * sin(7.3 * f32(i + 1u)); nrm += v * v; }
+  red[lid * (MMAX + 1u)] = nrm;
+  reduce(1u, &sv);
+  nrm = 1.0 / sqrt(sv[0]);
+  for (var i = ln; i < N; i += LPP) { V[Vx(0u, i, N)] = (1.0 + 0.1 * sin(7.3 * f32(i + 1u))) * nrm; }
+  storageBarrier();
   var H: array<f32, (MMAX + 1u) * MMAX>;
-  var mm = m; var flags = 0u;
+  var mm = m; var flags = 0u; var alive = true;
   for (var j = 0u; j < m; j++) {
     flags |= sweep(j, j + 1u);
     // classical Gram–Schmidt: one pass for all the dots, one for the update; repeated only when
     // the norm dropped by more than 1/√2 (DGKS criterion), which keeps the basis orthogonal in f32
-    var n0 = 0.0; var beta = 0.0; var nprev = 0.0;
+    var n0 = 0.0; var beta = 0.0; var nprev = 0.0; var again = true;
     for (var pss = 0u; pss < 2u; pss++) {
-      var hc: array<f32, MMAX>;
-      for (var i = 0u; i < N; i++) {
-        let w = V[Vx(j + 1u, i, N)];
-        if (pss == 0u) { n0 += w * w; }
-        for (var l = 0u; l <= j; l++) { hc[l] += V[Vx(l, i, N)] * w; }
+      var hp: array<f32, MMAX + 1u>;
+      var w2 = 0.0;
+      if (again) {
+        for (var i = ln; i < N; i += LPP) {
+          let w = V[Vx(j + 1u, i, N)];
+          w2 += w * w;
+          for (var l = 0u; l <= j; l++) { hp[l] += V[Vx(l, i, N)] * w; }
+        }
       }
-      if (pss == 0u) { nprev = n0; }
-      beta = 0.0;
-      for (var i = 0u; i < N; i++) {
-        var w = V[Vx(j + 1u, i, N)];
-        for (var l = 0u; l <= j; l++) { w -= hc[l] * V[Vx(l, i, N)]; }
-        V[Vx(j + 1u, i, N)] = w;
-        beta += w * w;
+      for (var l = 0u; l <= j; l++) { red[lid * (MMAX + 1u) + l] = hp[l]; }
+      red[lid * (MMAX + 1u) + MMAX] = w2;
+      var hc: array<f32, MMAX + 1u>;
+      reduce(MMAX + 1u, &hc);
+      var b2 = 0.0;
+      if (again) {
+        if (pss == 0u) { n0 = hc[MMAX]; nprev = n0; }
+        for (var i = ln; i < N; i += LPP) {
+          var w = V[Vx(j + 1u, i, N)];
+          for (var l = 0u; l <= j; l++) { w -= hc[l] * V[Vx(l, i, N)]; }
+          V[Vx(j + 1u, i, N)] = w;
+          b2 += w * w;
+        }
       }
-      for (var l = 0u; l <= j; l++) { H[l * MMAX + j] += hc[l]; }
-      if (beta > 0.5 * nprev) { break; }
-      nprev = beta;
+      red[lid * (MMAX + 1u)] = b2;
+      var bs: array<f32, MMAX + 1u>;
+      reduce(1u, &bs);
+      if (again) {
+        for (var l = 0u; l <= j; l++) { H[l * MMAX + j] += hc[l]; }
+        beta = bs[0];
+        if (beta > 0.5 * nprev) { again = false; }
+        nprev = beta;
+      }
     }
     beta = sqrt(beta);
-    if (!(beta == beta) || beta > 3.0e38 || !(n0 < 3.0e38)) { flags |= 2u; mm = j + 1u; break; }   // overflow
-    H[(j + 1u) * MMAX + j] = beta;
-    if (beta <= 1e-6 * sqrt(n0)) { mm = j + 1u; break; }                                          // invariant subspace
-    let ib = 1.0 / beta;
-    for (var i = 0u; i < N; i++) { V[Vx(j + 1u, i, N)] *= ib; }
+    if (alive) {
+      if (!(beta == beta) || beta > 3.0e38 || !(n0 < 3.0e38)) { flags |= 2u; mm = j + 1u; alive = false; }   // overflow
+      else {
+        H[(j + 1u) * MMAX + j] = beta;
+        if (beta <= 1e-6 * sqrt(n0)) { mm = j + 1u; alive = false; }                                      // invariant subspace
+      }
+    }
+    // a finished point keeps sweeping (barriers) on a harmless normalized vector
+    let ib = select(1.0 / max(sqrt(n0), 1e-30), 1.0 / beta, alive);
+    for (var i = ln; i < N; i += LPP) { V[Vx(j + 1u, i, N)] *= ib; }
+    storageBarrier();
   }
+  if (ln != 0u || !valid) { return; }
   if ((flags & 2u) != 0u) { outv[u.off + b] = vec4<f32>(3.0e38, 0.0, 0.0, f32(flags)); return; }
   for (var i = 0u; i < MMAX * MMAX; i++) { a[i] = 0.0; }
   for (var i = 0u; i < mm; i++) { for (var j = 0u; j < mm; j++) { a[i * MMAX + j] = H[i * MMAX + j]; } }

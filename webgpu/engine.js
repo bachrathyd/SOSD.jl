@@ -39,11 +39,11 @@ export function gaussTableau(s) {
   return { s, a, b, c, order: 2 * s };
 }
 
-function tableauWGSL(tab, MMAX) {
+function tableauWGSL(tab, MMAX, LPP) {
   const f = (v) => { let t = v.toPrecision(9); if (!/[.eE]/.test(t)) t += '.0'; return t; };
   const arr = (v) => `array<f32, ${v.length}>(${v.map(f).join(', ')})`;
   const nodes = [0, ...tab.c, 1];
-  return `const S: u32 = ${tab.s}u;\nconst MMAX: u32 = ${MMAX}u;\n` +
+  return `const S: u32 = ${tab.s}u;\nconst MMAX: u32 = ${MMAX}u;\nconst LPP: u32 = ${LPP}u;\n` +
     `const AT = ${arr(tab.a)};\nconst BT = ${arr(tab.b)};\nconst CT = ${arr(tab.c)};\nconst XN = ${arr(nodes)};\n`;
 }
 
@@ -93,8 +93,8 @@ export class Engine {
     return [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(' ') || 'GPU';
   }
 
-  async pipeline(model, S, m) {
-    const code = this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m));
+  async pipeline(model, S, m, lpp) {
+    const code = this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp));
     let p = this.pipelines.get(code);
     if (p) return p;
     const module = this.device.createShaderModule({ code, label: 'sosd' });
@@ -124,14 +124,17 @@ export class Engine {
     const N = (r + 1) * BS;
     const wFloats = p * BS * BS, lFloats = p * S * (S + 4);     // step matrices, lookup records
     const bytesPerPt = 4 * ((p + r + 1) * BS + (m + 1) * N + wFloats + lFloats);
-    const pl = await this.pipeline(model, S, m);
+    // lanes per point: several for a small batch (latency of one point), one for a large grid
+    const lpp = opt.lpp ?? this.lanesPerPoint(n, BS);
+    const G = 64 / lpp;
+    const pl = await this.pipeline(model, S, m, lpp);
     const dev = this.device;
     const ptsBuf = dev.createBuffer({ size: Math.max(16, xy.byteLength), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     dev.queue.writeBuffer(ptsBuf, 0, xy);
     const outBuf = dev.createBuffer({ size: Math.max(16, n * OUT_BYTES), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     // per-buffer size limit, and the prep dispatch (one thread per point and step) ≤ 65535 groups
     const perPt = Math.max((p + r + 1) * BS, (m + 1) * N, wFloats, lFloats) * 4;
-    const maxBand = Math.max(64, Math.min(Math.floor(65535 / p) * 64, Math.floor(this.maxBuf / perPt / 64) * 64 - 64,
+    const maxBand = Math.max(64, Math.min(Math.floor(65535 / p) * 64, 65535 * G, Math.floor(this.maxBuf / perPt / 64) * 64 - 64,
                                           Math.floor(1.5e9 / bytesPerPt)));
     let band = Math.min(maxBand, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget)) : 256);
     let hist = null, V = null, Wb = null, Lb = null, cap = 0;
@@ -156,11 +159,11 @@ export class Engine {
       const pass = enc.beginComputePass();
       if (opt.only !== 'main') {
         pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, [0, 1, 5, 6]));
-        pass.dispatchWorkgroups(Math.ceil(nb / 64) * p);
+        pass.dispatchWorkgroups(Math.ceil(Math.ceil(nb / G) * G * p / 64));
       }
       if (opt.only !== 'prep') {
         pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, [0, 2, 3, 4, 5, 6]));
-        pass.dispatchWorkgroups(Math.ceil(nb / 64));
+        pass.dispatchWorkgroups(Math.ceil(nb / G));
       }
       pass.end();
       const tb = performance.now();
@@ -185,7 +188,17 @@ export class Engine {
     for (let i = 0; i < n; i++) {
       rho[i] = out[4 * i]; mu[2 * i] = out[4 * i + 1]; mu[2 * i + 1] = out[4 * i + 2]; flags[i] = out[4 * i + 3];
     }
-    return { rho, mu, flags, r, ms, bytesPerPt };
+    return { rho, mu, flags, r, ms, bytesPerPt, lpp };
+  }
+
+  /** lanes per point: enough threads in flight (≈ 16384) for a batch of n points, at most one
+   *  lane per row of the step matrix (BS) and 16 (measured on an AMD Vega iGPU: a 4-point batch
+   *  3–8× faster than one lane per point, an 8192-point grid as fast) */
+  lanesPerPoint(n, BS) {
+    const cap = Math.min(16, 1 << Math.floor(Math.log2(Math.max(1, BS))));
+    let l = 1;
+    while (l < cap && n * l < 16384) l *= 2;
+    return l;
   }
 
   /** delay window r: the largest τ(t)/h over the points (Float64 on the host, 24 samples per period) */

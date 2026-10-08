@@ -3,6 +3,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/bachrathyd/SOSD.jl/gpu/gpu/colab_run.sh | bash
 # or, with options:  ... | bash -s -- quick      (short benchmark)
 #                    ... | bash -s -- testonly
+#                    ... | bash -s -- setup      (only install; e.g. before the interactive charts)
 # Installs Julia (juliaup) if missing, clones/updates the `gpu` branch, instantiates the
 # gpu/ environment, then runs gpu/test_gpu.jl and gpu/bench_gpu.jl in the background.
 # Everything is logged to <Drive>/Colab Notebooks/SOSD_GPU/runs/<date>_<gpu>/ (or to
@@ -37,6 +38,7 @@ run() {
     cd "$DIR"
     echo "[$(date +%T)] instantiate + precompile (log: setup.log)"
     julia --project=gpu -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()' > "$OUT/setup.log" 2>&1
+    if [ "$MODE" = "setup" ]; then echo "[$(date +%T)] done (setup only)"; return; fi
     echo "[$(date +%T)] GPU tests (log: test_gpu.log)"
     julia -t auto --project=gpu gpu/test_gpu.jl > "$OUT/test_gpu.log" 2>&1
     grep -a "Test Summary" -A2 "$OUT/test_gpu.log"

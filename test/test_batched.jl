@@ -66,7 +66,7 @@ end
                             T=T, retry=false, maxiter=5).rho
         rel = abs.(ρl .- ρm) ./ ρm
         @test sort(rel)[end ÷ 2] < tolρ                                  # median error
-        @test all((ρl .>= 1) .== (ρm .>= 1) .| (abs.(ρm .- 1) .< 5tolρ))   # classification
+        @test all(((ρl .>= 1) .== (ρm .>= 1)) .| (abs.(ρm .- 1) .< 5tolρ))   # classification
     end
 
     # history window too short is flagged, not silently wrong

@@ -81,18 +81,35 @@ thread level : the R threads of one point share the rows of each
 delay gives exactly that: h = T(θ)/p varies per point, p and r do not. Time-varying
 delays are fine (indices are per point and per step).
 
-## 4. Float32 vs Float64 (measured — Float32 not recommended)
+## 4. Precision: Float64 / Float32 / Float16 (measured)
 
-Consumer/inference GPUs (T4, L4) run FP64 at a fraction of the FP32 rate (T4 GEMM
-measured on Colab: 2.89 TFLOPS FP32, 0.25 TFLOPS FP64); A100/H100 run FP64 at 1/2.
-The a-priori estimate (round-off ~√p·6·10⁻⁸ per sweep) suggested ~10⁻⁵ on ρ. The
-measurement is worse: relative ρ error vs Float64 on the T4 was 4.6·10⁻⁷ (Mathieu),
-1.1·10⁻⁵ (SSV), 1.2·10⁻⁴ (2-DOF milling), 1.1·10⁻³ (4-DOF milling); over 4096 milling
-points the median was 7·10⁻⁴ with single points off by O(1) (the Krylov–Schur
-residual test is meaningless near the Float32 round-off floor of these strongly
-non-normal operators). Speed gain: only 1.3× on the T4 (the batch is not FP64-bound).
-Decision: Float64 everywhere; `T = Float32` stays available but is documented as
-not recommended.
+Consumer GPUs (T4, L4) run FP64 at a fraction of the FP32 rate (T4 GEMM on Colab:
+2.89 TFLOPS FP32 vs 0.25 TFLOPS FP64); A100/H100 run FP64 at 1/2 of FP32.
+
+**First T4 measurement (physical units, milling with ω₁² ≈ 3.4·10⁷ s⁻²):** Float32 was
+poor — median relative ρ error 7·10⁻⁴, single points off by O(1), and only 1.3× faster;
+Float16 overflowed (range 6·10⁻⁵ … 6.5·10⁴).
+
+**Cause and fix: scaling, not the method.** `rescale(prob, ω₀, s)` writes the same DDE in
+non-dimensional form (t̃ = ω₀t, x̃ = diag(s)x); the monodromy becomes SΦS⁻¹ over the same
+period, so the multipliers are identical, but the step blocks are O(1). Milling chart,
+200 points, after rescaling (`milling_model_nd`, ω₀ = first natural frequency, velocities
+divided by ω₀):
+
+| precision | median \|Δρ\|/ρ | 90 % | max | misclassified (ρ ≷ 1) |
+|---|---|---|---|---|
+| Float32 (before rescaling) | 3.2·10⁻⁴ | 4.5·10⁻³ | 2.5·10⁻² | 2 / 200 |
+| Float32 (rescaled) | 5.4·10⁻⁷ | 1.3·10⁻⁶ | 9.4·10⁻⁶ | 0 / 200 |
+| Float16 (rescaled) | 2.6·10⁻³ | 5.8·10⁻³ | 9.8·10⁻³ | 0 / 200 |
+
+(delayed Mathieu, already O(1): Float32 2.4·10⁻⁷, Float16 7.9·10⁻⁴, 0 / 200 misclassified)
+
+Implementation of the low-precision path: the step blocks are *built* in ≥ Float32 and
+only stored/swept in Float16; all dot products, norms and Krylov coefficients accumulate
+in ≥ Float32; tolerances scale with eps(T); chart mode uses no retry pass and a short
+restart budget (`retry = false, maxiter = 8`). Decision: Float64 for boundaries and
+validation, Float32/Float16 on a rescaled model for fast chart pictures — the A100
+interactive benchmark below quantifies the speed side.
 
 ## 5. Stability-chart drivers
 

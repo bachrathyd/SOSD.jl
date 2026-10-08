@@ -25,4 +25,7 @@ using SOSD
 
     println("Running Error Estimation Tests...")
     include("test_error_estimation.jl")
+
+    println("Running Batched (GPU-capable) Solver Tests on the CPU backend...")
+    include("test_batched.jl")
 end

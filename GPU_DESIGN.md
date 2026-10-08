@@ -153,3 +153,40 @@ non-isbits tableau struct (CUDA refuses the launch; now checked on the host), a
 clustered complex pairs (D = 24: 5 % wrong ρ from an unconverged Ritz value → basis
 30/15, straggler retry with 60/30, and a warning if still unconverged).
 * CPU path is untouched; the batched path is additive (`src/batched.jl`).
+
+## 8. Measured performance (deliverable 4)
+
+All charts: 2-DOF milling (textbook tool, down-milling a/D = 0.05, `milling_model_nd`),
+GL(3), p = r steps per tooth period, n ∈ [5000, 25000] rpm × w ∈ [0, 5] mm. GPU times
+are complete charts (build + eigensolve + transfers, min of 3 after a warm-up compile),
+from `gpu/interactive/bench_chart.jl`. "Misclassified" = points whose ρ ≷ 1 differs from
+the Float64 chart. CPU = the existing SOSD solver (build + sparse LU + KrylovKit,
+tol 1e-11), one point per thread, AMD Ryzen 7 5800H, 16 threads.
+
+| chart | CPU 16 thr. | T4 F64 acc. | T4 F32 fast k10 | A100 F64 acc. | A100 F64 fast k16 | A100 F32 fast k10 |
+|---|---|---|---|---|---|---|
+| 128×64, p = 40 | 14.5 s | 1.75 s | 0.31 s | 0.75 s | 0.28 s | **0.17 s** |
+| 128×64, p = 100 | 39.1 s | 3.01 s | 0.62 s | 1.03 s | 0.53 s | **0.33 s** |
+| 256×128, p = 40 | 64.7 s | 7.64 s | 1.15 s | 2.44 s | 1.05 s | **0.54 s** |
+| 512×256, p = 40 | – | – | – | 10.2 s | 4.09 s | **2.30 s** |
+| 512×256, p = 100 | – | – | – | 14.9 s | 8.02 s | **4.88 s** |
+
+Per ρ on the A100: 16–40 µs (Float32 fast), 75–125 µs (Float64 accurate), versus
+1.8–4.8 ms on 16 CPU threads — **19–38× (Float64, same accuracy) and 85–120× (Float32
+chart mode)**. Misclassified points: 0 for Float64 fast and Float32 on every grid except
+1 of 131 072 points (512×256, p = 100); Float16 0.36–0.9 % (the points within its ~10⁻³
+resolution of ρ = 1) and no faster than Float32 → Float32 is the chart format.
+Delayed Mathieu 128×64, p = 40 on the A100: 94 ms per chart (11 µs/ρ, Float32, 0 misclassified).
+
+Interactive page on the A100 (128×64, p = 60, Float32, Krylov 10): median **219 ms per
+chart** (benchmark button, 5 repeats) — 4–5 charts per second while a slider moves.
+
+Where the time goes (A100, 256×128, p = 40, Float32 Krylov 10, 0.54 s): host-side Schur
+steps 0.20 s, orthogonalisation, build and sweeps the rest. With the GPU this fast the
+per-point host work (12 Colab CPU cores) is the next bottleneck; moving the small
+Hessenberg eigenproblems to the device is the obvious next step.
+
+Earlier per-ρ benchmark (`gpu/bench_gpu.jl`, T4, Float64, 2-DOF milling, 4096 points):
+p = 100: 0.73 ms, p = 300: 1.34 ms, p = 1000: 3.73 ms per ρ (Colab VM CPU, 2 cores:
+24.8 / 70.6 / 324 ms per ρ). 12-DOF milling (D = 24, p = 300, 128 points, build on the
+device): 35 ms per ρ on the T4.

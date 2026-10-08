@@ -124,13 +124,24 @@ res.rho          # spectral radii, same order as θs (also res.mu, res.converged
 
 - `backend = CUDABackend()` runs the batched kernels on the GPU; `backend = CPU()`
   (default) runs the reference solver threaded over points — the CPU fallback.
-- `T = Float32` is **not recommended**: on a T4 it was only 1.3× faster and its ρ
-  error reached 10⁻³ (median) with occasional unusable points — see `GPU_DESIGN.md`.
+- `T = Float32` gives the same stability classification as Float64 on rescaled models
+  (median |Δρ|/ρ ~ 10⁻⁷) at 2–5× the speed; `T = Float16` is not worth it (≥ 0.4 %
+  misclassified, not faster). On models in physical units low precision is unreliable.
 - Batch size (from free device memory) and thread mapping (threads per point grow when
   there are few points to fill the device) are chosen automatically. The step operators
   are assembled on the device; `build = :host` assembles them on CPU threads instead
   and uploads them.
 - `res.flag[i] == 1` marks points whose lag exceeds `r·h`: increase `r`.
+
+**Speed** (2-DOF milling chart, 256×128 points, p = 40): 65 s on 16 CPU threads, 2.4 s on
+an A100 in Float64, 0.54 s in Float32 chart mode (`T = Float32, retry = false,
+maxiter = 8, krylovdim = 10` on a `rescale`d model; no misclassified points). Details and
+T4 numbers in `GPU_DESIGN.md` §8. Low precision needs O(1) step blocks: use
+`rescale(prob, ω0, s)` (non-dimensional time and state; identical multipliers).
+
+**Interactive charts on Colab:** `gpu/colab/interactive_app.py` (sliders for the model
+parameters, precision, grid and steps; ρ = 1 boundary; benchmark and Float64 comparison
+buttons) — see `colab/SOSD_GPU_Colab.ipynb`.
 
 **Boundary curves.** `boundary_multisection` replaces per-speed bisection: every round
 evaluates `nsub` depths for *all* speeds in one batched call.

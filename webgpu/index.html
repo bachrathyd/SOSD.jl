@@ -127,8 +127,12 @@
     </div>
     <div class="panel">
       <h2>Method</h2>
-      <label class="check"><input type="checkbox" id="bfOn" checked> Brute force: ρ on a grid (colour map)</label>
-      <label class="row"><span>grid</span><select id="bfGrid"></select></label>
+      <label class="check"><input type="checkbox" id="bfOn" checked> Brute force: ρ at every pixel (colour map)</label>
+      <div class="grid2">
+        <label class="row"><span>start resolution</span><select id="bfStart"></select></label>
+        <label class="row"><span>frames / s while dragging</span><input type="number" id="fps" min="1" max="60" step="1" value="15"></label>
+      </div>
+      <div class="muted" id="bfInfo" style="margin:-4px 0 8px"></div>
       <label class="check"><input type="checkbox" id="mdOn" checked> MDBM: boundary ρ = 1 only</label>
       <div class="grid2">
         <label class="row"><span>initial grid</span><select id="mdGrid"></select></label>
@@ -149,7 +153,7 @@
       </div>
       <label class="check" style="font-weight:400"><input type="checkbox" id="auto" checked> recompute while moving sliders</label>
       <label class="row"><span>time limit per chart [s] (stops a computation that runs longer)</span>
-        <input type="number" id="tLimit" min="0.1" step="any" value="5"></label>
+        <input type="number" id="tLimit" min="0.1" step="any" value="10"></label>
       <div class="buttons"><button class="primary" id="go">Compute</button><button id="stop" disabled>Stop</button>
         <button id="reset">Reset example</button><button id="bench">Benchmark</button></div>
     </div>
@@ -197,10 +201,12 @@
       contain the boundary, halving them at every iteration — the boundary at the resolution of a
       (initial grid × 2<sup>iterations</sup>) grid with a fraction of the evaluations. Both can be on together.</li></ul>
   <h3>Interactive and progressive</h3>
-  <p>The brute-force map is computed on nested grids (every 8th, 4th, 2nd node, then all; only the new nodes each
-    time) and redrawn after every level, so it sharpens step by step. While a slider is dragged only the first level is
-    computed, sized from the measured speed to keep ≥ 25 frames per second; the full chart and the MDBM boundary follow
-    when the slider stops. The time limit stops a chart and keeps its last complete level.</p>
+  <p>The brute-force map ends at one ρ per screen pixel of the plot. It is computed on nested grids (every 8th, 4th,
+    2nd pixel, then all; only the new points each time) and redrawn after every level, so it sharpens step by step.
+    While a slider is dragged only the first level (the <i>start resolution</i>) is computed; the full chart and the
+    MDBM boundary follow when the slider stops. Start resolution and frames per second set each other from the
+    measured speed (default 15 fps). MDBM is drawn after every refinement step; its neighbour check runs at the end.
+    The time limit stops a chart and keeps its last complete level.</p>
   <p>MDBM can start from the brute-force grid (initial grid: <i>from the brute-force grid</i>): its sign-changing cells
     are refined further. With an MDBM boundary the (coarser) grid boundary is not drawn.</p>
   <h3>Zoom and pan</h3>

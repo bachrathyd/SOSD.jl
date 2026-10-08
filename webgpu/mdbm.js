@@ -50,6 +50,27 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     return pos && neg;
   };
 
+  // boundary segments: edge crossings of f inside each cell (first-order interpolation)
+  function segmentsOf(list) {
+    const segments = [];
+    for (const c of list) {
+      const P = corners(c), v = P.map(([i, j]) => f(i, j)), pts = [];
+      for (let e = 0; e < 4; e++) {
+        const a = v[e], b = v[(e + 1) % 4];
+        if ((a >= 0) !== (b >= 0)) {
+          const t = a / (a - b), A = P[e], B = P[(e + 1) % 4];
+          pts.push([X(A[0] + t * (B[0] - A[0])), Y(A[1] + t * (B[1] - A[1]))]);
+        }
+      }
+      if (pts.length >= 2) segments.push([...pts[0], ...pts[1]]);
+      if (pts.length === 4) segments.push([...pts[2], ...pts[3]]);
+    }
+    return segments;
+  }
+  const partial = () => ({ segments: segmentsOf(cells), points: Float32Array.from(allPts), rho: Float32Array.from(allRho),
+                           stages, cells: cells.length, finest: [NXf + 1, NYf + 1] });
+
+  let cells = [];
   // initial grid: evaluated here, or given (init: ρ on the nx0 × ny0 grid, row-major in y, e.g.
   // the brute-force chart)
   if (init) {
@@ -63,10 +84,9 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     for (let a = 0; a < nx0; a++) for (let b = 0; b < ny0; b++) pts0.push([a * F, b * F]);
     stages.push({ stage: 'initial grid', n: await evalMissing(pts0) });
   }
-  let cells = [];
   for (let a = 0; a < nx0 - 1; a++) for (let b = 0; b < ny0 - 1; b++) cells.push({ i: a * F, j: b * F, s: F });
   cells = cells.filter(brackets);
-  onStage?.(stages[stages.length - 1], cells.length);
+  onStage?.(stages[stages.length - 1], cells.length, partial());
 
   // neighbour tracing at the current cell size (cells of equal size s)
   const FACES = [[0, 3, -1, 0], [1, 2, 1, 0], [0, 1, 0, -1], [3, 2, 0, 1]];   // corner pair, direction
@@ -95,7 +115,7 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     }
     if (nEval || added) {
       stages.push({ stage: label, n: nEval, added, rounds });
-      onStage?.(stages[stages.length - 1], cells.length);
+      onStage?.(stages[stages.length - 1], cells.length, partial());
     }
   }
 
@@ -107,25 +127,12 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     const n = await evalMissing(kids.flatMap(corners));
     cells = kids.filter(brackets);
     stages.push({ stage: `iteration ${it}`, n });
-    onStage?.(stages[stages.length - 1], cells.length);
+    onStage?.(stages[stages.length - 1], cells.length, partial());
     if (neighbour === 'every') await traceNeighbours(`neighbour check ${it}`, evalBatch);
   }
   if (neighbour === 'end' || (neighbour === 'every' && iters === 0)) await traceNeighbours('neighbour check', evalNeighbour);
 
-  // boundary segments: edge crossings of f inside each final cell
-  const segments = [];
-  for (const c of cells) {
-    const P = corners(c), v = P.map(([i, j]) => f(i, j)), pts = [];
-    for (let e = 0; e < 4; e++) {
-      const a = v[e], b = v[(e + 1) % 4];
-      if ((a >= 0) !== (b >= 0)) {
-        const t = a / (a - b), A = P[e], B = P[(e + 1) % 4];
-        pts.push([X(A[0] + t * (B[0] - A[0])), Y(A[1] + t * (B[1] - A[1]))]);
-      }
-    }
-    if (pts.length >= 2) segments.push([...pts[0], ...pts[1]]);
-    if (pts.length === 4) segments.push([...pts[2], ...pts[3]]);
-  }
+  const segments = segmentsOf(cells);
   return { segments, points: Float32Array.from(allPts), rho: Float32Array.from(allRho), stages,
            cells: cells.length, finest: [NXf + 1, NYf + 1] };
 }

@@ -3,7 +3,9 @@
 // banded dispatches (each submission stays far below the browser / OS GPU watchdog; the band
 // adapts to the measured time), read-back of ρ.
 
-import { modelWGSL, hostEvaluator } from './expr.js';
+import { modelWGSL, modelJS } from './expr.js';
+
+const compiled = new WeakMap();                    // model -> { T, tau, AB } (JavaScript)
 
 export class WebGPUUnavailable extends Error {}
 
@@ -211,11 +213,13 @@ export class Engine {
   }
 
   /** delay window r: the largest τ(t)/h over the points (Float64 on the host, 24 samples per
-   *  period, a subsample of at most ~4000 points: enough for smooth τ, T); at(i) -> [x, y] */
+   *  period, at most ~400 of the points: enough for smooth τ, T); at(i) -> [x, y]. T and τ are
+   *  compiled to JavaScript once per model (a tree walk cost tens of ms per call). */
   delaySteps(model, values, xi, yi, n, at, p) {
-    const ev = hostEvaluator(model);
+    let ev = compiled.get(model);
+    if (!ev) { ev = new Function(modelJS(model))(); compiled.set(model, ev); }
     const P = Float64Array.from(values);
-    const stride = Math.max(1, Math.floor(n / 4000));
+    const stride = Math.max(1, Math.floor(n / 400));
     let rmax = 1;
     const check = (i) => {
       const q = at(i);
@@ -230,4 +234,5 @@ export class Engine {
     if (n > 0) check(n - 1);
     return Math.min(rmax, 4096);
   }
+
 }

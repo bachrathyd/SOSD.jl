@@ -36,7 +36,8 @@ Two ways to get the chart (both can be on):
 | `engine.js` | WebGPU host code: Gauss–Legendre tableaux, pipelines (cached per model), banded dispatches below the GPU watchdog |
 | `sosd.wgsl` | the per-point solver: collocation sweep, Arnoldi, Francis QR (`hqr`) |
 | `hqr.js` | the same Francis QR on the host (unit-tested against Julia `eigvals`: `validate/hqr_test.mjs`) |
-| `mdbm.js` | MDBM boundary refinement, batched per iteration |
+| `mdbm.js` | MDBM boundary refinement, batched per iteration, neighbour tracing |
+| `cpu.js`, `cpuworker.js`, `cpusolver.js` | Float64 CPU solver (twin of `sosd.wgsl`) in a web-worker pool |
 | `examples.js` | delayed Mathieu, 2-DOF milling, turning with spindle-speed variation — written like their Julia twins in `test/batched_models.jl` |
 | `stats.js` | anonymous usage counts (GoatCounter site `sosdgpu`: page views, examples and features used; no cookies, never the model text; `GOATCOUNTER = ''` turns it off) |
 | `validate/reference.jl` | Float64 CPU reference (SOSD.jl) on 16×10 grids → `validate/ref.json`, compared by `?validate=1` |
@@ -44,6 +45,16 @@ Two ways to get the chart (both can be on):
 Validation (AMD Radeon iGPU, Chrome, Float32, Krylov m = 24) vs the Float64 CPU solver:
 median |Δρ|/ρ 4·10⁻⁷ (Mathieu), 5·10⁻⁷ (milling), 2·10⁻⁶ (turning SSV), worst 3·10⁻⁵,
 **0 misclassified** points out of 3 × 160.
+
+Interaction: a running chart is finished (not restarted) while a slider moves, then the newest
+values are computed, so the chart keeps updating while dragging; a structural change or Stop
+cancels it, and so does the time limit (default 5 s, editable). The old chart stays until the new
+one is complete. The MDBM neighbour check runs once at the end, by default on the CPU: a Float64
+twin of the kernel (`cpusolver.js`, equal to SOSD.jl to 1e-15: `node validate/cpu_test.mjs`) in a
+pool of web workers (`cpu.js`), because those few, almost sequential evaluations are faster there
+than GPU round trips. *High-resolution image*: HD … 8K PNG with one ρ per plot pixel (points are
+generated band by band on the host, so 8K = 25 M ρ fits), with the expected time estimated from
+the last brute-force chart.
 
 Chart: mouse wheel zooms about the cursor, left-drag zooms into a box, middle- or shift-drag
 pans, two fingers pinch / pan on touch screens, double-click resets; the new range is written

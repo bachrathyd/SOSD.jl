@@ -41,12 +41,17 @@ export function gaussTableau(s) {
   return { s, a, b, c, order: 2 * s };
 }
 
-function tableauWGSL(tab, MMAX, LPP) {
+function tableauWGSL(tab, MMAX, LPP, f16 = false, ORTH = 1) {
   const f = (v) => { let t = v.toPrecision(9); if (!/[.eE]/.test(t)) t += '.0'; return t; };
   const arr = (v) => `array<f32, ${v.length}>(${v.map(f).join(', ')})`;
   const nodes = [0, ...tab.c, 1];
-  return `const S: u32 = ${tab.s}u;\nconst MMAX: u32 = ${MMAX}u;\nconst LPP: u32 = ${LPP}u;\n` +
-    `const AT = ${arr(tab.a)};\nconst BT = ${arr(tab.b)};\nconst CT = ${arr(tab.c)};\nconst XN = ${arr(nodes)};\n`;
+  // end value of the collocation polynomial: Lagrange weights at θ = 1 on the nodes {0, c}
+  const n0 = [0, ...tab.c];
+  const EW = n0.map((xi, i) => n0.reduce((l, xk, k) => (k === i ? l : l * (1 - xk) / (xi - xk)), 1));
+  const t = (k) => (f16 && (f16 === true || f16.includes(k)) ? 'f16' : 'f32');
+  return `alias SW = ${t('W')};\nalias SH = ${t('H')};\nalias SV = ${t('V')};\nconst S: u32 = ${tab.s}u;\nconst MMAX: u32 = ${MMAX}u;\nconst LPP: u32 = ${LPP}u;\n` +
+    `const AT = ${arr(tab.a)};\nconst BT = ${arr(tab.b)};\nconst CT = ${arr(tab.c)};\nconst XN = ${arr(nodes)};\n` +
+    `const EW = ${arr(EW)};\nconst ORTH: u32 = ${ORTH}u;\n`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -66,7 +71,9 @@ export class Engine {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) throw new WebGPUUnavailable('WebGPU is present, but no GPU adapter is available.');
     const lim = adapter.limits;
+    const features = ['timestamp-query', 'shader-f16'].filter((x) => adapter.features.has(x));
     const device = await adapter.requestDevice({
+      requiredFeatures: features,
       requiredLimits: {
         maxStorageBufferBindingSize: Math.min(lim.maxStorageBufferBindingSize, 1 << 30),
         maxBufferSize: Math.min(lim.maxBufferSize, 1 << 30),
@@ -87,16 +94,36 @@ export class Engine {
     device.addEventListener?.('uncapturederror', (ev) => log('WebGPU error: ' + ev.error.message));
     this.ubuf = device.createBuffer({ size: U_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.bandTarget = 300;     // ms per submitted band (well below the ~2 s watchdog; fewer syncs)
-    this.ptsPerMs = null;      // measured throughput, per pipeline
+    this.hasTS = device.features.has('timestamp-query');
+    this.hasF16 = device.features.has('shader-f16');
+    if (this.hasTS) {          // GPU time of the prep and main passes of a band
+      this.qset = device.createQuerySet({ type: 'timestamp', count: 4 });
+      this.qres = device.createBuffer({ size: 32, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      this.qread = device.createBuffer({ size: 32, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    }
+    this.pool = new Map();     // work buffers kept between calls (grow-only; release() frees them)
   }
+
+  /** a pooled buffer of at least `bytes` (contents undefined) */
+  buffer(name, bytes, usage) {
+    const b = this.pool.get(name);
+    if (b && b.size >= bytes) return b;
+    b?.destroy();
+    const nb = this.device.createBuffer({ size: Math.max(16, Math.ceil(bytes / 256) * 256), usage });
+    this.pool.set(name, nb);
+    return nb;
+  }
+
+  release() { for (const b of this.pool.values()) b.destroy(); this.pool.clear(); }
 
   get deviceName() {
     const i = this.info;
     return [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(' ') || 'GPU';
   }
 
-  async pipeline(model, S, m, lpp) {
-    const code = this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp));
+  async pipeline(model, S, m, lpp, f16 = false, orth = 1) {
+    const code = (f16 ? 'enable f16;\n' : '') +
+      this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp, f16, orth));
     let p = this.pipelines.get(code);
     if (p) return p;
     const module = this.device.createShaderModule({ code, label: 'sosd' });
@@ -135,19 +162,30 @@ export class Engine {
     const D = model.D, BS = (S + 1) * D;
     const r = this.delaySteps(model, values, xi, yi, n, (i) => { const t = new Float32Array(2); fill(t, i, 1); return t; }, p);
     const N = (r + 1) * BS;
-    const wFloats = p * BS * BS, lFloats = p * S * (S + 4);     // step matrices, lookup records
+    const wFloats = p * S * D * BS, lFloats = p * S * (S + 4);  // step matrices (stage rows), lookup records
     const bytesPerPt = 4 * ((p + r + 1) * BS + (m + 1) * N + wFloats + lFloats) + 8 + OUT_BYTES;
     // lanes per point: several for a small batch (latency of one point), one for a large grid
     const lpp = opt.lpp ?? this.lanesPerPoint(n, BS);
     const G = 64 / lpp;
-    const pl = await this.pipeline(model, S, m, lpp);
+    // fast mode: hist, V and W stored as f16 (half the memory traffic), arithmetic in f32
+    const f16 = this.hasF16 && opt.f16 ? opt.f16 : false;   // true, or a subset of 'WHV'
+    const eb = (k) => (f16 && (f16 === true || f16.includes(k)) ? 2 : 4);
+    const pl = await this.pipeline(model, S, m, lpp, f16, opt.orth ?? 1);
     const dev = this.device;
     // per-buffer size limit, and the prep dispatch (one thread per point and step) ≤ 65535 groups
     const perPt = Math.max((p + r + 1) * BS, (m + 1) * N, wFloats, lFloats) * 4;
     const maxBand = Math.max(64, Math.min(Math.floor(65535 / p) * 64, 65535 * G, Math.floor(this.maxBuf / perPt / 64) * 64 - 64,
                                           Math.floor(1.5e9 / bytesPerPt)));
-    let band = Math.min(maxBand, n, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget)) : 256);
+    // first band of a new pipeline: from the work per point (p·BS²·m), so that it stays well below
+    // the GPU watchdog even for an expensive model; later bands follow the measured rate
+    // (the measured rate is kept per pipeline as work units per ms: p and r are uniforms, so one
+    // pipeline serves models of very different cost per point)
+    const work = p * BS * BS * m + m * m * N;
+    const band0 = Math.max(64, Math.min(4096, Math.floor(3e8 / work)));
+    let band = Math.min(maxBand, n, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget / work)) : band0);
     let hist = null, V = null, Wb = null, Lb = null, ptsBuf = null, outBuf = null, read = null, cap = 0;
+    let gpuPrep = 0, gpuMain = 0;
+    const S_ = GPUBufferUsage.STORAGE;
     const rho = new Float32Array(n), flags = new Uint8Array(n), mu = n <= 2e6 ? new Float32Array(2 * n) : null;
     const t0 = performance.now();
     let off = 0;
@@ -155,14 +193,15 @@ export class Engine {
       if (cancel && cancel()) break;
       const nb = Math.min(band, n - off);
       if (nb > cap) {
-        [hist, V, Wb, Lb, ptsBuf, outBuf, read].forEach((bfr) => bfr?.destroy());
         cap = Math.min(maxBand, Math.max(nb, Math.min(n - off, 2 * nb)));
         const slots = Math.ceil(cap / 64) * 64;
-        const mk = (floats) => dev.createBuffer({ size: 4 * floats * slots, usage: GPUBufferUsage.STORAGE });
-        hist = mk((p + r + 1) * BS); V = mk((m + 1) * N); Wb = mk(wFloats); Lb = mk(lFloats);
-        ptsBuf = dev.createBuffer({ size: 8 * slots, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-        outBuf = dev.createBuffer({ size: OUT_BYTES * slots, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-        read = dev.createBuffer({ size: OUT_BYTES * slots, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+        hist = this.buffer('hist', eb('H') * (p + r + 1) * BS * slots, S_);
+        V = this.buffer('V', eb('V') * (m + 1) * N * slots, S_);
+        Wb = this.buffer('W', eb('W') * wFloats * slots, S_);
+        Lb = this.buffer('L', 4 * lFloats * slots, S_);
+        ptsBuf = this.buffer('pts', 8 * slots, S_ | GPUBufferUsage.COPY_DST);
+        outBuf = this.buffer('out', OUT_BYTES * slots, S_ | GPUBufferUsage.COPY_SRC);
+        read = this.buffer('read', OUT_BYTES * slots, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
       }
       const xy = new Float32Array(2 * nb);
       fill(xy, off, nb);
@@ -175,16 +214,27 @@ export class Engine {
       const group = (pipe, ids) => dev.createBindGroup({ layout: pipe.getBindGroupLayout(0),
         entries: ids.map((k) => ({ binding: k, resource: { buffer: all[k] } })) });
       const enc = dev.createCommandEncoder();
-      const pass = enc.beginComputePass();
+      const ts = (k) => (this.hasTS ? { timestampWrites: { querySet: this.qset, beginningOfPassWriteIndex: k, endOfPassWriteIndex: k + 1 } } : {});
+      let pass = enc.beginComputePass(ts(0));
       pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, [0, 1, 5, 6]));
       pass.dispatchWorkgroups(Math.ceil(Math.ceil(nb / G) * G * p / 64));
+      pass.end();
+      pass = enc.beginComputePass(ts(2));
       pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, [0, 2, 3, 4, 5, 6]));
       pass.dispatchWorkgroups(Math.ceil(nb / G));
       pass.end();
       enc.copyBufferToBuffer(outBuf, 0, read, 0, OUT_BYTES * nb);
+      if (this.hasTS) { enc.resolveQuerySet(this.qset, 0, 4, this.qres, 0); enc.copyBufferToBuffer(this.qres, 0, this.qread, 0, 32); }
       const tb = performance.now();
       dev.queue.submit([enc.finish()]);
       await read.mapAsync(GPUMapMode.READ, 0, OUT_BYTES * nb);
+      if (this.hasTS) {
+        await this.qread.mapAsync(GPUMapMode.READ);
+        const t = new BigUint64Array(this.qread.getMappedRange());
+        if (t[1] > t[0]) gpuPrep += Number(t[1] - t[0]) / 1e6;
+        if (t[3] > t[2]) gpuMain += Number(t[3] - t[2]) / 1e6;
+        this.qread.unmap();
+      }
       const out = new Float32Array(read.getMappedRange(0, OUT_BYTES * nb));
       for (let i = 0; i < nb; i++) {
         rho[off + i] = out[4 * i]; flags[off + i] = out[4 * i + 3];
@@ -192,14 +242,13 @@ export class Engine {
       }
       read.unmap();
       const dt = performance.now() - tb;
-      pl.rate = nb / Math.max(dt, 1);                            // points per ms
+      pl.rate = nb * work / Math.max(dt, 1);                     // work units per ms
       off += nb;
-      band = Math.min(maxBand, Math.max(64, Math.floor(pl.rate * this.bandTarget)));
+      band = Math.min(maxBand, Math.max(64, Math.floor(pl.rate * this.bandTarget / work)));
       onProgress?.(off / n);
     }
     const ms = performance.now() - t0;
-    [hist, V, Wb, Lb, ptsBuf, outBuf, read].forEach((bfr) => bfr?.destroy());
-    return { rho, mu, flags, r, ms, bytesPerPt, lpp, done: off >= n };
+    return { rho, mu, flags, r, ms, bytesPerPt, lpp, done: off >= n, gpuPrep, gpuMain };
   }
 
   /** lanes per point: enough threads in flight (≈ 16384) for a batch of n points, at most one

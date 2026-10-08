@@ -23,7 +23,7 @@ T = 2*pi
 τ = 2*pi
 A = [0, 1; -(δ + ε*cos(t)), -a₁]
 B = [0, 0; b₀, 0]`,
-    axes: ['δ', 'ε'], p: 20, S: 2, m: 7,
+    axes: ['δ', 'ε'], p: 16, S: 3, m: 6,
     brute: [256, 128], mdbm: ['bf', 0, 1],
   },
   {
@@ -62,7 +62,7 @@ B = [0, 0, 0, 0;
      0, 0, 0, 0;
      κ*hxx, κ*hxy, 0, 0;
      κ*hyx, κ*hyy, 0, 0]`,
-    axes: ['n', 'w'], p: 40, S: 3, m: 12,
+    axes: ['n', 'w'], p: 40, S: 3, m: 8,
     brute: [256, 128], mdbm: [48, 12, 4], bf: false,
     note: 'The cutting-force coefficient switches when a tooth enters or leaves the cut, so the ' +
           'step functions make A(t), B(t) discontinuous: expect first-order convergence in p. ' +
@@ -84,7 +84,7 @@ T = Tp
 τ = 2*pi/Ω*(1 + R*sin(2*pi*t/Tp))
 A = [0, 1; -1 - k_w, -ζ]
 B = [0, 0; k_w, 0]`,
-    axes: ['Ω', 'k_w'], p: 200, S: 3, m: 12,
+    axes: ['Ω', 'k_w'], p: 200, S: 3, m: 6,
     brute: [256, 128], mdbm: ['bf', 0, 1],
   },
 ];

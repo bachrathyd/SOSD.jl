@@ -547,6 +547,9 @@ rotation `Q[b, :, 1:k]` and the restarted `H[b]`. Returns (k, ρ, μ, relative r
 """
 function _host_ks_step!(H, Q, b, m, keep, tol, ::Type{CT}) where {CT}
     Hb = H[b]
+    # overflow of the storage format (Float16 range 6.5e4) on strongly unstable points:
+    # report ρ = Inf (unstable) and stop iterating that point instead of failing the batch
+    all(isfinite, view(Hb, 1:m+1, 1:m)) || return 0, Inf, ComplexF64(Inf), 0.0
     F = schur(Hb[1:m, 1:m])
     λ = F.values
     i1 = argmax(abs.(λ)); λ1 = λ[i1]; ρ = abs(λ1)
@@ -697,7 +700,10 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
                 act[b] == 0 && continue
                 for l in 1:j; H[b][l, j] = Float64(hc[b, l]) + Float64(hc2[b, l]); end
                 β = Float64(nr[b]); H[b][j + 1, j] = β
-                if β <= bd_tol * Float64(nr0[b])
+                if !(isfinite(β) && all(isfinite, view(H[b], 1:j, j)))
+                    rho[b] = Inf; mu[b] = ComplexF64(Inf); res[b] = 0.0     # overflow: unstable
+                    conv[b] = true; done[b] = true; act[b] = 0
+                elseif β <= bd_tol * Float64(nr0[b])
                     # invariant subspace: the Ritz values of H[1:j, 1:j] are exact
                     λ = eigvals(H[b][1:j, 1:j]); i1 = argmax(abs.(λ))
                     rho[b] = abs(λ[i1]); mu[b] = λ[i1]; res[b] = 0.0

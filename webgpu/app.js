@@ -11,7 +11,8 @@ import { CpuPool } from './cpu.js';
 
 const $ = (id) => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
-const BF_GRIDS = [[32, 16], [64, 32], [128, 64], [192, 96], [256, 128], [384, 192], [512, 256], [768, 384], [1024, 512]];
+const STRIDES = [1, 2, 4, 8, 16, 32, 64];        // start resolution = final grid / stride
+const MAX_PTS = 2.5e6;                            // cap of the final (pixel) grid
 const MD_GRIDS = [[6, 4], [8, 5], [12, 7], [16, 8], [24, 8], [24, 12], [32, 16], [48, 12], [64, 16], [96, 24]];
 const CR = 0.5;                                   // colour range of log10 ρ: [-CR, CR]
 const STOPS = [[5, 48, 97], [33, 102, 172], [67, 147, 195], [146, 197, 222], [247, 247, 247],
@@ -32,7 +33,8 @@ function showMsg(s) { $('msg').style.display = s ? 'block' : 'none'; $('msg').in
 async function main() {
   initStats();
   EXAMPLES.forEach((e) => $('ex').add(new Option(e.title, e.key)));
-  BF_GRIDS.forEach(([a, b], i) => $('bfGrid').add(new Option(`${a} × ${b} = ${(a * b).toLocaleString()}`, i)));
+  STRIDES.forEach((st) => $('bfStart').add(new Option(`1/${st}`, st)));
+  $('bfStart').value = 8;
   EXPORTS.forEach((e, i) => $('exRes').add(new Option(`${e.name} ${e.w} × ${e.h}`, i)));
   $('mdGrid').add(new Option('from the brute-force grid', -1));
   MD_GRIDS.forEach(([a, b], i) => $('mdGrid').add(new Option(`${a} × ${b}`, i)));
@@ -53,7 +55,9 @@ async function main() {
   $('exGo').onclick = exportImage;
   $('bench').onclick = () => bench();
   $('mdIt').oninput = () => { $('mdItV').textContent = $('mdIt').value; schedule(); };
-  for (const id of ['bfOn', 'bfGrid', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
+  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
+  $('bfStart').onchange = () => { master = 'res'; updateEtas(); };
+  $('fps').onchange = () => { master = 'fps'; updateEtas(); };
   $('mdPts').onchange = draw;
   let eqTimer = null;
   $('eq').oninput = () => { clearTimeout(eqTimer); eqTimer = setTimeout(() => setModelText($('eq').value, true), 400); };
@@ -64,7 +68,7 @@ async function main() {
   $('resetAxes').onclick = resetAxes;
   $('savePng').onclick = savePng;
   let rz = null;
-  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { sizeCanvas(); draw(); }, 60); });
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { sizeCanvas(); draw(); updateEtas(); schedule(); }, 150); });
   if (Q.has('validate')) { await validate(); return; }
   loadExample(EXAMPLES[0].key);
   if (Q.has('bench')) bench();
@@ -78,7 +82,6 @@ function loadExample(key) {
   $('eq').value = ex.text;
   $('p').value = ex.p; $('m').value = ex.m; $('S').value = ex.S;
   $('bfOn').checked = ex.bf !== false; $('mdOn').checked = ex.md !== false;
-  $('bfGrid').value = BF_GRIDS.findIndex(([a, b]) => a === ex.brute[0] && b === ex.brute[1]);
   $('mdGrid').value = ex.mdbm[0] === 'bf' ? -1 : MD_GRIDS.findIndex(([a, b]) => a === ex.mdbm[0] && b === ex.mdbm[1]);
   $('mdIt').value = ex.mdbm[2]; $('mdItV').textContent = ex.mdbm[2];
   setModelText(ex.text, false);
@@ -164,8 +167,9 @@ function timeLimit() { const v = parseFloat($('tLimit').value); return v > 0 ? 1
 // of 2), then s0/2, …, 1; every level evaluates only its new points in one GPU call and is drawn
 // at once, so the picture sharpens step by step for barely more work than one full call.
 // While a slider is being dragged only the first level runs, its stride chosen from the measured
-// throughput so that a frame stays within FRAME_MS (≥ 25 fps); MDBM waits until the drag stops.
-const FRAME_MS = 35, CALL_MS = 12;                // frame budget, latency of one GPU call
+// throughput and the frames-per-second target (start resolution); MDBM waits until the drag stops.
+const CALL_MS = 12;                               // latency of one GPU call (measured, AMD iGPU)
+let master = 'fps';                               // which of start resolution / fps the user set last
 let lastInput = -Infinity, idleTimer = null;
 const interacting = () => performance.now() - lastInput < 200;
 function noteInput() {
@@ -174,11 +178,20 @@ function noteInput() {
   idleTimer = setTimeout(() => schedule(), 220);    // the full chart once the drag stops
 }
 
-/** stride of the first level: the finest power of 2 whose points fit into one frame */
-function firstStride(nx, ny, us) {
+/** the final brute-force grid: one point per device pixel of the plot area (capped) */
+function finalGrid() {
+  const { W, H } = geom(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  let nx = Math.max(16, Math.round(W * dpr)), ny = Math.max(8, Math.round(H * dpr));
+  const f = Math.sqrt(Math.min(1, MAX_PTS / (nx * ny)));
+  return [Math.round(nx * f), Math.round(ny * f)];
+}
+const levelCount = (nx, ny, s) => Math.ceil(nx / s) * Math.ceil(ny / s);
+/** expected frame time of a level with stride s [ms] */
+const frameMs = (nx, ny, s, us) => CALL_MS + levelCount(nx, ny, s) * us / 1000;
+/** stride of the first level: the finest power of 2 whose frame fits the fps target */
+function strideForFps(nx, ny, us, fps) {
   let s = 1;
-  const count = (s) => Math.ceil(nx / s) * Math.ceil(ny / s);
-  while (s < 64 && count(s) * us / 1000 + CALL_MS > FRAME_MS) s *= 2;
+  while (s < STRIDES[STRIDES.length - 1] && frameMs(nx, ny, s, us) > 1000 / fps) s *= 2;
   return s;
 }
 
@@ -233,10 +246,9 @@ async function compute() {
   try {
     if (bfOn) {
       countOnce('brute-force');
-      const [nx, ny] = BF_GRIDS[+$('bfGrid').value];
-      const us = lastRate && lastRate.key === rateKey() ? lastRate.us : 20;
+      const [nx, ny] = finalGrid();
       const key = JSON.stringify([modelText, vals, box, o, nx, ny, axes]);
-      const s0 = firstStride(nx, ny, us);
+      const s0 = +$('bfStart').value;
       const rho = new Float32Array(nx * ny);
       let s = s0, from = s0;
       if (!drag && dragCache && dragCache.key === key && dragCache.s >= s0) {
@@ -255,7 +267,8 @@ async function compute() {
         const ms0 = res.ms;
         const r = await evalBatch(xy, s < from ? stale : () => false);
         idx.forEach((k, q) => { rho[k] = r[q]; });
-        if (idx.length >= 1024) { lastRate = { key: rateKey(), us: 1000 * (res.ms - ms0) / idx.length }; updateEtas(); }
+        // throughput without the latency of the call (small levels would overestimate it)
+        if (idx.length >= 16384) { lastRate = { key: rateKey(), us: 1000 * Math.max(0.2 * (res.ms - ms0), res.ms - ms0 - CALL_MS) / idx.length }; updateEtas(); }
         res.bf = s === 1 ? { nx, ny, rho, box } : levelGrid(nx, ny, rho, s, box);
         // the map at once; the previous boundary stays on it until the new one is ready
         result = { ...res, md: mdOn && !drag && result ? result.md : null };
@@ -272,7 +285,8 @@ async function compute() {
       countOnce('mdbm');
       const nb = $('mdNb').value, it = +$('mdIt').value;
       const mdCancel = () => { if (cancel() || stale()) throw new Cancelled(); return false; };
-      const common = { neighbour: nb, evalNeighbour: nb === 'end' ? evalCpu : evalBatch, cancel: mdCancel };
+      const onStage = (st, nc, part) => { if (!cancel()) { result = { ...res, md: part }; draw(); stats({ ...res, md: part }); } };
+      const common = { neighbour: nb, evalNeighbour: nb === 'end' ? evalCpu : evalBatch, cancel: mdCancel, onStage };
       const g = +$('mdGrid').value;
       if (g < 0 && res.bf) {
         // start from the brute-force grid: its sign-changing cells are the initial cells
@@ -282,7 +296,7 @@ async function compute() {
         res.md = await mdbmBoundary(evalBatch, box, a, b, it, common);
       }
     }
-    result = res; draw(); stats(res);
+    if (!(drag && bfOn)) { result = res; draw(); stats(res); }   // a drag frame is already drawn
     showMsg('');
   } catch (e) {
     if (e instanceof Cancelled) {
@@ -331,14 +345,21 @@ function fmtTime(ms) {
   return `${(ms / 60e3).toPrecision(2)} min`;
 }
 function updateEtas() {
-  const us = lastRate && lastRate.key === rateKey() ? lastRate.us : null;
-  [...$('bfGrid').options].forEach((op, i) => {
-    const [a, b] = BF_GRIDS[i];
-    op.text = `${a} × ${b} = ${(a * b).toLocaleString()}` + (us ? `  (≈ ${fmtTime(us * a * b / 1000)})` : '');
+  const us = lastRate && lastRate.key === rateKey() ? lastRate.us : 20;
+  const known = lastRate && lastRate.key === rateKey();
+  const [nx, ny] = finalGrid();
+  if (master === 'fps') $('bfStart').value = strideForFps(nx, ny, us, Math.max(1, +$('fps').value || 15));
+  const s0 = +$('bfStart').value;
+  [...$('bfStart').options].forEach((op) => {
+    const st = +op.value;
+    op.text = `${Math.ceil(nx / st)} × ${Math.ceil(ny / st)}` + (known ? `  (≈ ${Math.min(99, 1000 / frameMs(nx, ny, st, us)).toFixed(0)} fps)` : '');
   });
+  if (master === 'res') $('fps').value = Math.max(1, Math.round(1000 / frameMs(nx, ny, s0, us)));
+  $('bfInfo').textContent = `final: ${nx} × ${ny} = ${(nx * ny).toLocaleString()} ρ (one per pixel)` +
+    (known ? `, ≈ ${fmtTime(us * nx * ny / 1000)}` : '');
   [...$('exRes').options].forEach((op, i) => {
-    const e = EXPORTS[i], [nx, ny] = exportGrid(e.w, e.h);
-    op.text = `${e.name} ${e.w} × ${e.h}` + (us ? `  (≈ ${fmtTime(us * nx * ny / 1000)})` : '');
+    const e = EXPORTS[i], [ex_, ey] = exportGrid(e.w, e.h);
+    op.text = `${e.name} ${e.w} × ${e.h}` + (known ? `  (≈ ${fmtTime(us * ex_ * ey / 1000)})` : '');
   });
 }
 
@@ -352,6 +373,26 @@ function cmap(v) {
   const t = Math.min(1, Math.max(0, (v / CR + 1) / 2)) * (STOPS.length - 1);
   const i = Math.min(STOPS.length - 2, Math.floor(t)), w = t - i;
   return STOPS[i].map((c, k) => Math.round(c + w * (STOPS[i + 1][k] - c)));
+}
+const LUT_N = 1024;
+let lutCache = null, barCache = null;
+/** colour map as packed RGBA (little-endian Uint32) over [-CR, CR] */
+function colourLut() {
+  if (lutCache) return lutCache;
+  lutCache = new Uint32Array(LUT_N);
+  for (let k = 0; k < LUT_N; k++) {
+    const c = cmap(CR * (2 * k / (LUT_N - 1) - 1));
+    lutCache[k] = (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
+  }
+  return lutCache;
+}
+/** the colour bar as a 1×256 image (top = +CR) */
+function colourBar() {
+  if (barCache) return barCache;
+  const img = new ImageData(1, 256), px = new Uint32Array(img.data.buffer), lut = colourLut();
+  for (let k = 0; k < 256; k++) px[k] = lut[Math.round((1 - k / 255) * (LUT_N - 1))];
+  barCache = new OffscreenCanvas(1, 256); barCache.getContext('2d').putImageData(img, 0, 0);
+  return barCache;
 }
 function nice(a, b, n) {
   const span = (b - a) / n, mag = Math.pow(10, Math.floor(Math.log10(span)));
@@ -408,10 +449,11 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
   if (res.bf) {
     const { nx, ny, rho } = res.bf, box = res.bf.box || res.box;
     if (!res.bf.img) {
-      const img = new ImageData(nx, ny);
+      const img = new ImageData(nx, ny), px32 = new Uint32Array(img.data.buffer), lut = colourLut();
       for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-        const c = cmap(Math.log10(Math.max(rho[j * nx + i], 1e-30))), o = 4 * (i + nx * (ny - 1 - j));
-        img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+        const v = Math.log10(Math.max(rho[j * nx + i], 1e-30));
+        const t = Math.min(LUT_N - 1, Math.max(0, Math.round((v / CR + 1) / 2 * (LUT_N - 1))));
+        px32[i + nx * (ny - 1 - j)] = lut[t];
       }
       res.bf.img = new OffscreenCanvas(nx, ny); res.bf.img.getContext('2d').putImageData(img, 0, 0);
     }
@@ -467,7 +509,8 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
   cx.fillText(axisLabel(res.yname), 0, 0); cx.restore();
   // colour bar
   const bx = L + W + 18 * sc, bw = 16 * sc;
-  for (let k = 0; k < H; k++) { const c = cmap(CR * (1 - 2 * k / H)); cx.fillStyle = `rgb(${c})`; cx.fillRect(bx, T + k, bw, 1.5); }
+  cx.imageSmoothingEnabled = true;
+  cx.drawImage(colourBar(), bx, T, bw, H);
   cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
   for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H + 4 * sc);
   cx.save(); cx.translate(bx + bw + 46 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';

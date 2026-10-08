@@ -173,3 +173,14 @@ affected by the delay bug fixed above and must be regenerated before use.)
   1e-15); HD–8K PNG export with time estimates; 256×128 default; Mathieu GL2/p=20/m=7
   (256×128 + MDBM ≈ 0.3 s; 0.23 % of points misclassified vs GL3/p=40 — the discretization, not m);
   header cross-links SOSD ↔ InterpolatedNyquist WebGPU pages (both gh-pages updated).
+
+### 2026-10-09 (night) — WebGPU speed round
+- GPU timestamp queries per pass; `validate/bench.mjs` (run / keep / compare / reference / scan).
+- Kernel: W without the y-rows (collocation end value via Lagrange weights EW), stage rows stored
+  minus the identity part, lookup record once per stage, no barriers with one lane per point,
+  fused CGS2, pooled buffers, first band from the work estimate (a p = 160 run hit the watchdog).
+- Defaults from (s, p, m) scans vs references: Mathieu GL3/16/6, milling GL3/40/8, SSV GL3/200/6.
+  GPU µs/ρ: Mathieu 4.9 → 3.7, milling 82 → 42, SSV 45 → 18.
+- Float16: basis only as an option (~5–25 %, ρ to 1e-3); history / W in f16 rejected (accumulates).
+- Column-wise LU in prep: correct in Float64 JS, but miscompiled on this driver for D = 4, S ≥ 2
+  (D3D12 / dynamic private-array indexing) → reverted; do not reintroduce without a GPU check.

@@ -110,46 +110,63 @@ export class Engine {
   }
 
   /**
-   * ρ for every (x, y) in `xy` (Float32Array, interleaved): parameters `values` (Float64 array
-   * in model.params order) with params[xi] = x, params[yi] = y. Options: S (stages), p (steps
-   * per period), m (Krylov dimension), onProgress(fraction).
-   * Returns { rho, flags, r, ms (GPU wall time) }.
+   * ρ for every point of `pts`: a Float32Array of interleaved (x, y), or a regular grid
+   * { nx, ny, box: {x0, x1, y0, y1} } (point k = i + nx·j, generated band by band, so even an
+   * 8K image needs no full point list). Parameters `values` (in model.params order) with
+   * params[xi] = x, params[yi] = y. Options: S (stages), p (steps per period), m (Krylov
+   * dimension), lpp (lanes per point), onProgress(fraction), cancel() -> true stops between bands.
+   * Points, results and work buffers live per band. Returns { rho, mu, flags, r, ms, done }.
    */
-  async evaluate(model, values, xi, yi, xy, opt) {
+  async evaluate(model, values, xi, yi, pts, opt) {
     const { S = 3, p = 40, onProgress = null, cancel = null } = opt;
     const m = Math.min(Math.max(opt.m ?? 12, 2), MMAX);
-    const n = xy.length / 2;
+    const grid = !(pts instanceof Float32Array);
+    const n = grid ? pts.nx * pts.ny : pts.length / 2;
+    const fill = (dst, off, cnt) => {                       // band points -> dst (interleaved)
+      if (!grid) { dst.set(pts.subarray(2 * off, 2 * (off + cnt))); return; }
+      const { nx, ny, box } = pts, dx = (box.x1 - box.x0) / Math.max(1, nx - 1), dy = (box.y1 - box.y0) / Math.max(1, ny - 1);
+      for (let q = 0; q < cnt; q++) {
+        const k = off + q, i = k % nx, j = (k - i) / nx;
+        dst[2 * q] = box.x0 + i * dx; dst[2 * q + 1] = box.y0 + j * dy;
+      }
+    };
     const D = model.D, BS = (S + 1) * D;
-    const r = this.delaySteps(model, values, xi, yi, xy, p);
+    const r = this.delaySteps(model, values, xi, yi, n, (i) => { const t = new Float32Array(2); fill(t, i, 1); return t; }, p);
     const N = (r + 1) * BS;
     const wFloats = p * BS * BS, lFloats = p * S * (S + 4);     // step matrices, lookup records
-    const bytesPerPt = 4 * ((p + r + 1) * BS + (m + 1) * N + wFloats + lFloats);
+    const bytesPerPt = 4 * ((p + r + 1) * BS + (m + 1) * N + wFloats + lFloats) + 8 + OUT_BYTES;
     // lanes per point: several for a small batch (latency of one point), one for a large grid
     const lpp = opt.lpp ?? this.lanesPerPoint(n, BS);
     const G = 64 / lpp;
     const pl = await this.pipeline(model, S, m, lpp);
     const dev = this.device;
-    const ptsBuf = dev.createBuffer({ size: Math.max(16, xy.byteLength), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-    dev.queue.writeBuffer(ptsBuf, 0, xy);
-    const outBuf = dev.createBuffer({ size: Math.max(16, n * OUT_BYTES), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     // per-buffer size limit, and the prep dispatch (one thread per point and step) ≤ 65535 groups
     const perPt = Math.max((p + r + 1) * BS, (m + 1) * N, wFloats, lFloats) * 4;
     const maxBand = Math.max(64, Math.min(Math.floor(65535 / p) * 64, 65535 * G, Math.floor(this.maxBuf / perPt / 64) * 64 - 64,
                                           Math.floor(1.5e9 / bytesPerPt)));
-    let band = Math.min(maxBand, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget)) : 256);
-    let hist = null, V = null, Wb = null, Lb = null, cap = 0;
+    let band = Math.min(maxBand, n, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget)) : 256);
+    let hist = null, V = null, Wb = null, Lb = null, ptsBuf = null, outBuf = null, read = null, cap = 0;
+    const rho = new Float32Array(n), flags = new Uint8Array(n), mu = n <= 2e6 ? new Float32Array(2 * n) : null;
     const t0 = performance.now();
-    for (let off = 0; off < n;) {
+    let off = 0;
+    while (off < n) {
       if (cancel && cancel()) break;
       const nb = Math.min(band, n - off);
       if (nb > cap) {
-        [hist, V, Wb, Lb].forEach((bfr) => bfr?.destroy());
-        cap = nb;
-        const mk = (floats) => dev.createBuffer({ size: 4 * floats * Math.ceil(cap / 64) * 64, usage: GPUBufferUsage.STORAGE });
+        [hist, V, Wb, Lb, ptsBuf, outBuf, read].forEach((bfr) => bfr?.destroy());
+        cap = Math.min(maxBand, Math.max(nb, Math.min(n - off, 2 * nb)));
+        const slots = Math.ceil(cap / 64) * 64;
+        const mk = (floats) => dev.createBuffer({ size: 4 * floats * slots, usage: GPUBufferUsage.STORAGE });
         hist = mk((p + r + 1) * BS); V = mk((m + 1) * N); Wb = mk(wFloats); Lb = mk(lFloats);
+        ptsBuf = dev.createBuffer({ size: 8 * slots, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        outBuf = dev.createBuffer({ size: OUT_BYTES * slots, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+        read = dev.createBuffer({ size: OUT_BYTES * slots, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
       }
+      const xy = new Float32Array(2 * nb);
+      fill(xy, off, nb);
+      dev.queue.writeBuffer(ptsBuf, 0, xy);
       const ub = new ArrayBuffer(U_BYTES), u32 = new Uint32Array(ub), f = new Float32Array(ub);
-      u32.set([nb, p, r, m, xi, yi, off, 0]);
+      u32.set([nb, p, r, m, xi, yi, 0, 0]);
       values.forEach((v, k) => { f[8 + k] = v; });
       dev.queue.writeBuffer(this.ubuf, 0, ub);
       const all = { 0: this.ubuf, 1: ptsBuf, 2: hist, 3: V, 4: outBuf, 5: Wb, 6: Lb };
@@ -157,38 +174,30 @@ export class Engine {
         entries: ids.map((k) => ({ binding: k, resource: { buffer: all[k] } })) });
       const enc = dev.createCommandEncoder();
       const pass = enc.beginComputePass();
-      if (opt.only !== 'main') {
-        pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, [0, 1, 5, 6]));
-        pass.dispatchWorkgroups(Math.ceil(Math.ceil(nb / G) * G * p / 64));
-      }
-      if (opt.only !== 'prep') {
-        pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, [0, 2, 3, 4, 5, 6]));
-        pass.dispatchWorkgroups(Math.ceil(nb / G));
-      }
+      pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, [0, 1, 5, 6]));
+      pass.dispatchWorkgroups(Math.ceil(Math.ceil(nb / G) * G * p / 64));
+      pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, [0, 2, 3, 4, 5, 6]));
+      pass.dispatchWorkgroups(Math.ceil(nb / G));
       pass.end();
+      enc.copyBufferToBuffer(outBuf, 0, read, 0, OUT_BYTES * nb);
       const tb = performance.now();
       dev.queue.submit([enc.finish()]);
-      await dev.queue.onSubmittedWorkDone();
+      await read.mapAsync(GPUMapMode.READ, 0, OUT_BYTES * nb);
+      const out = new Float32Array(read.getMappedRange(0, OUT_BYTES * nb));
+      for (let i = 0; i < nb; i++) {
+        rho[off + i] = out[4 * i]; flags[off + i] = out[4 * i + 3];
+        if (mu) { mu[2 * (off + i)] = out[4 * i + 1]; mu[2 * (off + i) + 1] = out[4 * i + 2]; }
+      }
+      read.unmap();
       const dt = performance.now() - tb;
       pl.rate = nb / Math.max(dt, 1);                            // points per ms
       off += nb;
       band = Math.min(maxBand, Math.max(64, Math.floor(pl.rate * this.bandTarget)));
       onProgress?.(off / n);
     }
-    const read = dev.createBuffer({ size: Math.max(16, n * OUT_BYTES), usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    const enc = dev.createCommandEncoder();
-    enc.copyBufferToBuffer(outBuf, 0, read, 0, Math.max(16, n * OUT_BYTES));
-    dev.queue.submit([enc.finish()]);
-    await read.mapAsync(GPUMapMode.READ);
-    const out = new Float32Array(read.getMappedRange().slice(0));
-    read.unmap();
     const ms = performance.now() - t0;
-    [ptsBuf, outBuf, read, hist, V, Wb, Lb].forEach((bfr) => bfr?.destroy());
-    const rho = new Float32Array(n), flags = new Uint32Array(n), mu = new Float32Array(2 * n);
-    for (let i = 0; i < n; i++) {
-      rho[i] = out[4 * i]; mu[2 * i] = out[4 * i + 1]; mu[2 * i + 1] = out[4 * i + 2]; flags[i] = out[4 * i + 3];
-    }
-    return { rho, mu, flags, r, ms, bytesPerPt, lpp };
+    [hist, V, Wb, Lb, ptsBuf, outBuf, read].forEach((bfr) => bfr?.destroy());
+    return { rho, mu, flags, r, ms, bytesPerPt, lpp, done: off >= n };
   }
 
   /** lanes per point: enough threads in flight (≈ 16384) for a batch of n points, at most one
@@ -201,15 +210,16 @@ export class Engine {
     return l;
   }
 
-  /** delay window r: the largest τ(t)/h over the points (Float64 on the host, 24 samples per period) */
-  delaySteps(model, values, xi, yi, xy, p) {
+  /** delay window r: the largest τ(t)/h over the points (Float64 on the host, 24 samples per
+   *  period, a subsample of at most ~4000 points: enough for smooth τ, T); at(i) -> [x, y] */
+  delaySteps(model, values, xi, yi, n, at, p) {
     const ev = hostEvaluator(model);
     const P = Float64Array.from(values);
-    const n = xy.length / 2;
-    const stride = Math.max(1, Math.floor(n / 4000));            // a subsample is enough for smooth τ, T
+    const stride = Math.max(1, Math.floor(n / 4000));
     let rmax = 1;
     const check = (i) => {
-      P[xi] = xy[2 * i]; P[yi] = xy[2 * i + 1];
+      const q = at(i);
+      P[xi] = q[0]; P[yi] = q[1];
       const T = ev.T(P), h = T / p;
       for (let k = 0; k < 24; k++) {
         const tau = ev.tau(T * k / 24, P);

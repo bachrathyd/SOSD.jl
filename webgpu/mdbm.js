@@ -15,7 +15,7 @@
  * @returns { segments: [[x0,y0,x1,y1], ...], points: Float32Array xy, rho: Float32Array, stages: [...] }
  */
 export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
-  const { neighbour = 'end', cancel = () => false, onStage = null, evalNeighbour = evalBatch } = opt;
+  const { neighbour = 'end', cancel = () => false, onStage = null, evalNeighbour = evalBatch, init = null } = opt;
   const F = 1 << iters;                       // fine lattice units per initial cell
   const NXf = (nx0 - 1) * F, NYf = (ny0 - 1) * F;
   const key = (i, j) => i * (NYf + 1) + j;
@@ -50,10 +50,19 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     return pos && neg;
   };
 
-  // initial grid
-  const init = [];
-  for (let a = 0; a < nx0; a++) for (let b = 0; b < ny0; b++) init.push([a * F, b * F]);
-  stages.push({ stage: 'initial grid', n: await evalMissing(init) });
+  // initial grid: evaluated here, or given (init: ρ on the nx0 × ny0 grid, row-major in y, e.g.
+  // the brute-force chart)
+  if (init) {
+    for (let a = 0; a < nx0; a++) for (let b = 0; b < ny0; b++) {
+      const r = init[b * nx0 + a];
+      val.set(key(a * F, b * F), r > 0 && isFinite(r) ? Math.log(r) : (r > 0 ? 50 : -50));
+    }
+    stages.push({ stage: 'initial grid (given)', n: 0 });
+  } else {
+    const pts0 = [];
+    for (let a = 0; a < nx0; a++) for (let b = 0; b < ny0; b++) pts0.push([a * F, b * F]);
+    stages.push({ stage: 'initial grid', n: await evalMissing(pts0) });
+  }
   let cells = [];
   for (let a = 0; a < nx0 - 1; a++) for (let b = 0; b < ny0 - 1; b++) cells.push({ i: a * F, j: b * F, s: F });
   cells = cells.filter(brackets);

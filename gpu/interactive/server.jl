@@ -143,4 +143,6 @@ function serve()
     end
 end
 
-abspath(PROGRAM_FILE) == @__FILE__ && serve()
+if abspath(PROGRAM_FILE) == @__FILE__
+    serve()
+end

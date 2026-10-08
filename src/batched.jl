@@ -660,9 +660,10 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     nmv = 0
     wg2(a) = (min(a, 64), 1)
     nrm0 = KA.zeros(backend, CT, nb)
-    # breakdown shortcut (invariant subspace): meaningless near Float16 round-off, where it
-    # stopped points after 2–3 steps on noise (0.4 % misclassified on a T4 chart) — off there
-    bd_tol = T === Float64 ? 100 * eps(T) : T === Float32 ? 10 * eps(T) : 0.0
+    # breakdown shortcut (invariant subspace). For Float16 it is near the round-off level, but
+    # switching it off there was slower on a T4 with the same misclassification (0.36 % of a
+    # milling chart = the points within Float16 resolution of ρ = 1), so it stays on.
+    bd_tol = T === Float64 ? 100 * eps(T) : 10 * eps(T)
 
     for it in 1:maxiter
         jstart = minimum(kb[.!done]) + 1

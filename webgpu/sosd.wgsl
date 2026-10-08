@@ -29,7 +29,7 @@ const DD: u32 = D * D;
 const NN: u32 = S + 2u;                // interpolation nodes {0, c_1..c_S, 1}
 const LR: u32 = NN + 2u;               // lookup record: block index, flag, NN weights
 const WW: u32 = SD * BS;              // step matrix: stage rows only
-const G: u32 = 64u / LPP;             // points per workgroup = chunk size of the storage layout
+const G: u32 = WG / LPP;              // points per workgroup = chunk size of the storage layout
 
 struct U {
   npts: u32, p: u32, r: u32, m: u32,
@@ -164,7 +164,7 @@ fn prep(@builtin(global_invocation_id) gid: vec3<u32>) {
 // Gram–Schmidt sums are synchronized with barriers. All loop bounds come from the uniform
 // buffer, so every invocation reaches every barrier (a finished point idles along).
 var<workgroup> Xs: array<f32, G * BS>;                     // [y_n; yd_1..yd_S] per point
-var<workgroup> red: array<f32, 64u * (MMAX + 1u)>;         // per-lane partial sums
+var<workgroup> red: array<f32, WG * (MMAX + 1u)>;         // per-lane partial sums
 
 var<private> ln: u32;       // lane of this invocation inside its point
 var<private> gp: u32;       // point inside the workgroup
@@ -337,7 +337,7 @@ fn hqr(n: i32) -> vec4<f32> {
   return vec4<f32>(best, br, bi, ok);
 }
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(WG)
 fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) lid: u32) {
   npts = u.npts;
   gp = lid / LPP; ln = lid % LPP;

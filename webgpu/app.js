@@ -34,6 +34,7 @@ async function main() {
   EXAMPLES.forEach((e) => $('ex').add(new Option(e.title, e.key)));
   BF_GRIDS.forEach(([a, b], i) => $('bfGrid').add(new Option(`${a} × ${b} = ${(a * b).toLocaleString()}`, i)));
   EXPORTS.forEach((e, i) => $('exRes').add(new Option(`${e.name} ${e.w} × ${e.h}`, i)));
+  $('mdGrid').add(new Option('from the brute-force grid', -1));
   MD_GRIDS.forEach(([a, b], i) => $('mdGrid').add(new Option(`${a} × ${b}`, i)));
   try {
     engine = await Engine.create(log);
@@ -78,7 +79,7 @@ function loadExample(key) {
   $('p').value = ex.p; $('m').value = ex.m; $('S').value = ex.S;
   $('bfOn').checked = ex.bf !== false; $('mdOn').checked = ex.md !== false;
   $('bfGrid').value = BF_GRIDS.findIndex(([a, b]) => a === ex.brute[0] && b === ex.brute[1]);
-  $('mdGrid').value = MD_GRIDS.findIndex(([a, b]) => a === ex.mdbm[0] && b === ex.mdbm[1]);
+  $('mdGrid').value = ex.mdbm[0] === 'bf' ? -1 : MD_GRIDS.findIndex(([a, b]) => a === ex.mdbm[0] && b === ex.mdbm[1]);
   $('mdIt').value = ex.mdbm[2]; $('mdItV').textContent = ex.mdbm[2];
   setModelText(ex.text, false);
   countEvent('example/' + key);
@@ -126,7 +127,7 @@ function buildParams() {
     const setRange = () => { r.min = q.lo; r.max = q.hi; r.step = (q.hi - q.lo) / 400 || 1e-6; r.value = values[i]; lo.value = q.lo; hi.value = q.hi; };
     setRange();
     v.textContent = fmt(values[i]);
-    r.oninput = () => { values[i] = +r.value; v.textContent = fmt(values[i]); schedule(); };
+    r.oninput = () => { values[i] = +r.value; v.textContent = fmt(values[i]); noteInput(); schedule(); };
     lo.onchange = () => { q.lo = +lo.value; setRange(); schedule(true, true); };
     hi.onchange = () => { q.hi = +hi.value; setRange(); schedule(true, true); };
     const bx = tr.querySelector('.bx'), by = tr.querySelector('.by');
@@ -159,6 +160,40 @@ function opts() {
 
 function timeLimit() { const v = parseFloat($('tLimit').value); return v > 0 ? 1000 * v : Infinity; }
 
+// Brute force is computed progressively on nested lattices of the final grid: stride s0 (a power
+// of 2), then s0/2, …, 1; every level evaluates only its new points in one GPU call and is drawn
+// at once, so the picture sharpens step by step for barely more work than one full call.
+// While a slider is being dragged only the first level runs, its stride chosen from the measured
+// throughput so that a frame stays within FRAME_MS (≥ 25 fps); MDBM waits until the drag stops.
+const FRAME_MS = 35, CALL_MS = 12;                // frame budget, latency of one GPU call
+let lastInput = -Infinity, idleTimer = null;
+const interacting = () => performance.now() - lastInput < 200;
+function noteInput() {
+  lastInput = performance.now();
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => schedule(), 220);    // the full chart once the drag stops
+}
+
+/** stride of the first level: the finest power of 2 whose points fit into one frame */
+function firstStride(nx, ny, us) {
+  let s = 1;
+  const count = (s) => Math.ceil(nx / s) * Math.ceil(ny / s);
+  while (s < 64 && count(s) * us / 1000 + CALL_MS > FRAME_MS) s *= 2;
+  return s;
+}
+
+/** the computed sub-lattice of stride s as a grid result (its own box: the nodes i·s ≤ nx−1) */
+function levelGrid(nx, ny, rho, s, box) {
+  const cw = Math.floor((nx - 1) / s) + 1, ch = Math.floor((ny - 1) / s) + 1;
+  const sub = new Float32Array(cw * ch);
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) sub[j * cw + i] = rho[j * s * nx + i * s];
+  const dx = (box.x1 - box.x0) / (nx - 1), dy = (box.y1 - box.y0) / (ny - 1);
+  return { nx: cw, ny: ch, rho: sub, stride: s,
+           box: { x0: box.x0, x1: box.x0 + (cw - 1) * s * dx, y0: box.y0, y1: box.y0 + (ch - 1) * s * dy } };
+}
+
+let dragCache = null;                             // { key, s, rho } of the last drag frame
+
 async function compute() {
   if (!engine || !model) return;
   busy = true; pending = false;
@@ -174,16 +209,21 @@ async function compute() {
   const [xi, yi] = axes, px = model.params[xi], py = model.params[yi];
   const box = { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
   const o = opts(), vals = values.slice(), mdl = model;
+  const drag = interacting();
+  const bfOn = $('bfOn').checked, mdOn = $('mdOn').checked;
   const res = { box, xname: px.name, yname: py.name, bf: null, md: null, n: 0, ms: 0, r: 0, N: 0, nCpu: 0, msCpu: 0 };
   const progress = (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; };
-  const evalBatch = async (pts) => {
-    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, cancel, onProgress: progress });
+  // newer values waiting: refinement of these ones is stale (MDBM too, when a map is shown)
+  const stale = () => pending && bfOn;
+  const evalBatch = async (pts, extraCancel = () => false) => {
+    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, onProgress: progress,
+      cancel: () => cancel() || extraCancel() });
     if (!out.done) throw new Cancelled();
     res.n += out.rho.length; res.ms += out.ms; res.r = out.r; res.N = (out.r + 1) * (o.S + 1) * mdl.D;
     return out.rho;
   };
   const evalCpu = async (xy) => {
-    if (cancel()) throw new Cancelled();
+    if (cancel() || stale()) throw new Cancelled();
     const tc = performance.now();
     const r = engine.delaySteps(mdl, vals, xi, yi, xy.length / 2, (i) => [xy[2 * i], xy[2 * i + 1]], o.p);
     const rho = await cpu.evaluate(mdl, vals, xi, yi, xy, { ...o, r });
@@ -191,30 +231,62 @@ async function compute() {
     return rho;
   };
   try {
-    const prevMd = result && result.md;
-    if ($('bfOn').checked) {
+    if (bfOn) {
       countOnce('brute-force');
       const [nx, ny] = BF_GRIDS[+$('bfGrid').value];
-      const rho = await evalBatch({ nx, ny, box });
-      res.bf = { nx, ny, rho };
-      lastRate = { key: rateKey(), us: 1000 * res.ms / (nx * ny) };
-      updateEtas();
-      // the new map at once, the old boundary on it until the new one is ready
-      result = { ...res, md: $('mdOn').checked ? prevMd : null };
-      draw(); stats(res);
+      const us = lastRate && lastRate.key === rateKey() ? lastRate.us : 20;
+      const key = JSON.stringify([modelText, vals, box, o, nx, ny, axes]);
+      const s0 = firstStride(nx, ny, us);
+      const rho = new Float32Array(nx * ny);
+      let s = s0, from = s0;
+      if (!drag && dragCache && dragCache.key === key && dragCache.s >= s0) {
+        rho.set(dragCache.rho); from = s = dragCache.s;    // the last drag frame is level one
+        s /= 2;
+      }
+      for (; s >= 1; s /= 2) {
+        // new nodes of this level: on the stride-s lattice, not on the stride-2s one (except the first)
+        const idx = [];
+        for (let j = 0; j < ny; j += s) for (let i = 0; i < nx; i += s) {
+          if (s < from && i % (2 * s) === 0 && j % (2 * s) === 0) continue;
+          idx.push(j * nx + i);
+        }
+        const xy = new Float32Array(2 * idx.length), dx = (box.x1 - box.x0) / (nx - 1), dy = (box.y1 - box.y0) / (ny - 1);
+        idx.forEach((k, q) => { xy[2 * q] = box.x0 + (k % nx) * dx; xy[2 * q + 1] = box.y0 + Math.floor(k / nx) * dy; });
+        const ms0 = res.ms;
+        const r = await evalBatch(xy, s < from ? stale : () => false);
+        idx.forEach((k, q) => { rho[k] = r[q]; });
+        if (idx.length >= 1024) { lastRate = { key: rateKey(), us: 1000 * (res.ms - ms0) / idx.length }; updateEtas(); }
+        res.bf = s === 1 ? { nx, ny, rho, box } : levelGrid(nx, ny, rho, s, box);
+        // the map at once; the previous boundary stays on it until the new one is ready
+        result = { ...res, md: mdOn && !drag && result ? result.md : null };
+        draw(); stats(res);
+        if (drag) { dragCache = { key, s, rho: rho.slice() }; break; }
+      }
+      if (!res.bf) {                                    // everything came from the drag frame
+        res.bf = from === 1 ? { nx, ny, rho, box } : levelGrid(nx, ny, rho, from, box);
+        result = { ...res, md: mdOn && result ? result.md : null };
+        draw(); stats(res);
+      }
     }
-    if ($('mdOn').checked) {
+    if (mdOn && !(drag && bfOn)) {
       countOnce('mdbm');
-      const [a, b] = MD_GRIDS[+$('mdGrid').value];
-      const nb = $('mdNb').value;
-      res.md = await mdbmBoundary(evalBatch, box, a, b, +$('mdIt').value,
-        { neighbour: nb, evalNeighbour: nb === 'end' ? evalCpu : evalBatch, cancel: () => { if (cancel()) throw new Cancelled(); return false; } });
+      const nb = $('mdNb').value, it = +$('mdIt').value;
+      const mdCancel = () => { if (cancel() || stale()) throw new Cancelled(); return false; };
+      const common = { neighbour: nb, evalNeighbour: nb === 'end' ? evalCpu : evalBatch, cancel: mdCancel };
+      const g = +$('mdGrid').value;
+      if (g < 0 && res.bf) {
+        // start from the brute-force grid: its sign-changing cells are the initial cells
+        res.md = await mdbmBoundary(evalBatch, res.bf.box, res.bf.nx, res.bf.ny, it, { ...common, init: res.bf.rho });
+      } else {
+        const [a, b] = MD_GRIDS[g >= 0 ? g : MD_GRIDS.findIndex(([u, v]) => u === 16 && v === 8)];   // 16 × 8 without a map
+        res.md = await mdbmBoundary(evalBatch, box, a, b, it, common);
+      }
     }
     result = res; draw(); stats(res);
     showMsg('');
   } catch (e) {
     if (e instanceof Cancelled) {
-      if (timedOut) showMsg(`Stopped after the time limit (${(limit / 1000).toFixed(1)} s): the chart shows the last complete result. ` +
+      if (timedOut) showMsg(`Stopped after the time limit (${(limit / 1000).toFixed(1)} s): the chart shows the last complete level. ` +
                             'Raise the limit, or use a coarser grid / smaller p, m.');
     } else {
       log('error: ' + e.message);
@@ -334,7 +406,7 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
   const Y = (y) => T + H - (y - view.y0) / (view.y1 - view.y0) * H;
   cx.save(); cx.beginPath(); cx.rect(L, T, W, H); cx.clip();
   if (res.bf) {
-    const { box } = res, { nx, ny, rho } = res.bf;
+    const { nx, ny, rho } = res.bf, box = res.bf.box || res.box;
     if (!res.bf.img) {
       const img = new ImageData(nx, ny);
       for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -348,8 +420,9 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
     const hx = (box.x1 - box.x0) / (nx - 1) / 2, hy = (box.y1 - box.y0) / (ny - 1) / 2;
     const ax = X(box.x0 - hx), ay = Y(box.y1 + hy);
     cx.drawImage(res.bf.img, ax, ay, X(box.x1 + hx) - ax, Y(box.y0 - hy) - ay);
-    // boundary from the grid (marching squares on log ρ)
+    // boundary from the grid (marching squares on log ρ), only without an MDBM boundary
     cx.strokeStyle = '#000'; cx.lineWidth = 1.2 * sc; cx.beginPath();
+    if (!res.md) {
     const f = (i, j) => Math.log(Math.max(rho[j * nx + i], 1e-30));
     const px = (i) => X(box.x0 + i * 2 * hx), py = (j) => Y(box.y0 + j * 2 * hy);
     for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
@@ -362,6 +435,7 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
       if (pts.length >= 2) { cx.moveTo(...pts[0]); cx.lineTo(...pts[1]); }
       if (pts.length === 4) { cx.moveTo(...pts[2]); cx.lineTo(...pts[3]); }
     }
+    }
     cx.stroke();
   }
   if (res.md) {
@@ -372,7 +446,7 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
         cx.fillRect(X(points[2 * k]) - s, Y(points[2 * k + 1]) - s, 2 * s, 2 * s);
       }
     }
-    cx.strokeStyle = res.bf ? '#ffd400' : '#000'; cx.lineWidth = (res.bf ? 2.2 : 2) * sc;
+    cx.strokeStyle = '#333'; cx.lineWidth = 2 * sc;
     cx.lineCap = 'round'; cx.beginPath();
     for (const s of res.md.segments) { cx.moveTo(X(s[0]), Y(s[1])); cx.lineTo(X(s[2]), Y(s[3])); }
     cx.stroke();
@@ -476,7 +550,7 @@ function hover(ev) {
   if (!q.inside) { $('hover').textContent = ''; return; }
   let s = `${result.xname} = ${q.x.toPrecision(5)}, ${result.yname} = ${q.y.toPrecision(5)}`;
   if (result.bf) {
-    const { nx, ny, rho } = result.bf, { box } = result;
+    const { nx, ny, rho } = result.bf, box = result.bf.box || result.box;
     const i = Math.round((q.x - box.x0) / (box.x1 - box.x0) * (nx - 1)), j = Math.round((q.y - box.y0) / (box.y1 - box.y0) * (ny - 1));
     if (i >= 0 && j >= 0 && i < nx && j < ny) s += `   ρ ≈ ${rho[j * nx + i].toPrecision(5)} (nearest grid point)`;
   }

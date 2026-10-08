@@ -196,6 +196,13 @@
     <li><b>MDBM</b> (multi-dimensional bisection method) evaluates a small initial grid and then only the cells that
       contain the boundary, halving them at every iteration — the boundary at the resolution of a
       (initial grid × 2<sup>iterations</sup>) grid with a fraction of the evaluations. Both can be on together.</li></ul>
+  <h3>Interactive and progressive</h3>
+  <p>The brute-force map is computed on nested grids (every 8th, 4th, 2nd node, then all; only the new nodes each
+    time) and redrawn after every level, so it sharpens step by step. While a slider is dragged only the first level is
+    computed, sized from the measured speed to keep ≥ 25 frames per second; the full chart and the MDBM boundary follow
+    when the slider stops. The time limit stops a chart and keeps its last complete level.</p>
+  <p>MDBM can start from the brute-force grid (initial grid: <i>from the brute-force grid</i>): its sign-changing cells
+    are refined further. With an MDBM boundary the (coarser) grid boundary is not drawn.</p>
   <h3>Zoom and pan</h3>
   <p>Mouse wheel zooms about the cursor, a left-button drag zooms into the drawn box, middle-button (or shift + left)
     drag pans, two fingers pinch and pan on a touch screen, double-click resets the axes. The chart is recomputed for the

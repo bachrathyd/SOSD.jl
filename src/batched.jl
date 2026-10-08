@@ -517,15 +517,15 @@ struct BatchedEigResult
 end
 
 """
-    batched_eigs(op, backend; krylovdim=24, keep=10, tol=1e-13, maxiter=60, sweep=:auto, x0=nothing)
+    batched_eigs(op, backend; krylovdim=30, keep=15, tol=1e-13, maxiter=20, sweep=:auto)
 
 Dominant Floquet multiplier of every point of the batch by a synchronous batched
 Krylov–Schur iteration: device-side sweeps and CGS2 orthogonalisation, host-side
 m×m Schur decompositions (threaded). Converged when the Ritz residual of the dominant
 eigenpair satisfies `|h_{m+1}ᵀ s| ≤ tol · |λ₁|` for every point (or `maxiter` restarts).
 """
-function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=24, keep::Int=10,
-                      tol::Real=1e-13, maxiter::Int=60, sweep=:auto) where {D, S, K, T}
+function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=30, keep::Int=15,
+                      tol::Real=1e-13, maxiter::Int=20, sweep=:auto) where {D, S, K, T}
     nb = op.nb; N = state_size(op); m = min(krylovdim, N - 1)
     keep = clamp(keep, 1, m - 2)
     cfg = sweep === :auto ? auto_sweep_config(backend, nb, D, S, K, T) : sweep
@@ -667,13 +667,15 @@ end
 
 """
     spectral_radii(prob::BatchedLDDE, θs, tableau, p, r; backend=CPU(), T=Float64,
-                   batchsize=:auto, krylovdim=24, keep=10, tol=1e-13, maxiter=60,
+                   batchsize=:auto, krylovdim=30, keep=15, tol=1e-13, maxiter=20, retry=true,
                    sweep=:auto, build=:auto, cpu_mode=:reference, verbose=false)
 
 Spectral radius of the one-period monodromy operator for every parameter point in
 `θs`, all discretized with the same `tableau`, `p` steps per period and `r` delay
 steps (h = T(θ)/p per point; `r·h` must cover the largest lag). Points are processed
-in batches sized to the free device memory. Returns a [`BatchedEigResult`](@ref)
+in batches sized to the free device memory. A point that does not converge within
+`maxiter` restarts is solved again with a basis twice as large (`retry = true`);
+`matvecs` then counts the sweeps of all passes. Returns a [`BatchedEigResult`](@ref)
 (field `rho` holds the spectral radii, in the order of `θs`).
 
 `backend` is any KernelAbstractions backend: `CUDABackend()` after `using CUDA`, or
@@ -685,32 +687,44 @@ assembled (see [`build_batched_operators`](@ref)). `T = Float32` halves memory t
 of ~10⁻⁵ accuracy on ρ (see GPU_DESIGN.md).
 """
 function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTableau{S}, p::Int, r::Int;
-                        backend=CPU(), T::Type=Float64, batchsize=:auto, krylovdim::Int=24, keep::Int=10,
-                        tol::Real=1e-13, maxiter::Int=60, sweep=:auto, build::Symbol=:auto,
+                        backend=CPU(), T::Type=Float64, batchsize=:auto, krylovdim::Int=30, keep::Int=15,
+                        tol::Real=1e-13, maxiter::Int=20, retry::Bool=true, sweep=:auto, build::Symbol=:auto,
                         cpu_mode::Symbol=:reference, verbose::Bool=false) where {D, K, S}
     n = length(θs)
     if backend isa KA.CPU && cpu_mode === :reference
         return _spectral_radii_reference(prob, θs, tab, p, r, tol)
     end
-    bpp = bytes_per_point(D, S, K, p, r, min(krylovdim, (r + 1) * (S + 1) * D - 1), T)
-    bs = batchsize === :auto ? max(1, min(n, floor(Int, 0.8 * available_memory(backend) / bpp))) : batchsize
     rho = zeros(n); mu = zeros(ComplexF64, n); conv = fill(false, n); res = zeros(n); flag = zeros(Int32, n)
     nmv = 0
-    for lo in 1:bs:n
-        hi = min(n, lo + bs - 1)
-        t0 = time()
-        op = build_batched_operators(prob, view(θs, lo:hi), tab, p, r; backend=backend, T=T, build=build)
-        t1 = time()
-        er = batched_eigs(op, backend; krylovdim=krylovdim, keep=keep, tol=tol, maxiter=maxiter, sweep=sweep)
-        t2 = time()
-        verbose && println("batch $lo:$hi  build $(round(t1 - t0, digits=3)) s  eigs $(round(t2 - t1, digits=3)) s  " *
-                           "($(er.matvecs) sweeps, $(count(er.converged))/$(hi - lo + 1) converged)")
-        rho[lo:hi] .= er.rho; mu[lo:hi] .= er.mu; conv[lo:hi] .= er.converged
-        res[lo:hi] .= er.residual; flag[lo:hi] .= er.flag
-        nmv = max(nmv, er.matvecs)
+    # The batch iterates synchronously, so one slowly converging point would hold all the
+    # others: first pass with a short restart budget, then the stragglers again with a
+    # basis twice as large (clustered dominant multipliers need it).
+    passes = retry ? ((krylovdim, keep, maxiter), (2krylovdim, 2keep, 3maxiter)) : ((krylovdim, keep, maxiter),)
+    todo = collect(1:n)
+    for (pass, (kd, kp, mi)) in enumerate(passes)
+        isempty(todo) && break
+        bpp = bytes_per_point(D, S, K, p, r, min(kd, (r + 1) * (S + 1) * D - 1), T)
+        bs = batchsize === :auto ? max(1, min(length(todo), floor(Int, 0.8 * available_memory(backend) / bpp))) : batchsize
+        for lo in 1:bs:length(todo)
+            idx = todo[lo:min(length(todo), lo + bs - 1)]
+            t0 = time()
+            op = build_batched_operators(prob, θs[idx], tab, p, r; backend=backend, T=T, build=build)
+            t1 = time()
+            er = batched_eigs(op, backend; krylovdim=kd, keep=kp, tol=tol, maxiter=mi, sweep=sweep)
+            t2 = time()
+            verbose && println("pass $pass, $(length(idx)) points: build $(round(t1 - t0, digits=3)) s, eigs " *
+                               "$(round(t2 - t1, digits=3)) s ($(er.matvecs) sweeps, $(count(er.converged)) converged)")
+            rho[idx] .= er.rho; mu[idx] .= er.mu; conv[idx] .= er.converged
+            res[idx] .= er.residual; flag[idx] .= er.flag
+            nmv += er.matvecs
+            op = nothing
+        end
+        todo = findall(i -> !conv[i] && flag[i] == 0, 1:n)
     end
     any(!=(0), flag) && @warn "$(count(!=(0), flag)) point(s) look up delayed states before the stored " *
                               "history window (r·h < lag); their ρ is wrong — increase r" maxlog=1
+    isempty(todo) || @warn "$(length(todo)) point(s) did not converge (relative Ritz residual > tol); " *
+                           "see `converged` / `residual`" maxlog=1
     return BatchedEigResult(rho, mu, conv, res, nmv, flag)
 end
 

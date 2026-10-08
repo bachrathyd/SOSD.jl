@@ -380,3 +380,53 @@ function usesT(h, model) {
   };
   return rec(h.e);
 }
+
+// ---------------------------------------------------------------------------------------------
+// JavaScript generation (Float64 CPU path: web workers of cpu.js)
+// ---------------------------------------------------------------------------------------------
+function js(e, name) {
+  switch (e.k) {
+    case 'num': return String(e.v);
+    case 'id': return name(e.v);
+    case 'neg': return `(-${js(e.a, name)})`;
+    case '+': case '-': case '*': case '/': return `(${js(e.a, name)} ${e.k} ${js(e.b, name)})`;
+    case '^': return `Math.pow(${js(e.a, name)}, ${js(e.b, name)})`;
+    case 'f1': {
+      const a = js(e.a, name);
+      return e.f === 'step' ? `((${a}) >= 0 ? 1 : 0)` : `Math.${e.f}(${a})`;
+    }
+    case 'f2': {
+      const a = js(e.a, name), b = js(e.b, name);
+      return e.f === 'mod' ? `fmod(${a}, ${b})` : `Math.${e.f}(${a}, ${b})`;
+    }
+  }
+  throw new Error('bad node');
+}
+
+/**
+ * Source of a function body returning { T(P), tau(t, P), AB(t, P, A, B) } (A, B row-major
+ * Float64Array D*D), for `new Function(src)()`.
+ */
+export function modelJS(model) {
+  const D = model.D;
+  const pidx = new Map(model.params.map((q, i) => [q.name, i]));
+  const hname = (n) => 'h_' + [...n].map((c) => (/[A-Za-z0-9]/.test(c) ? c : 'u' + c.codePointAt(0))).join('');
+  const name = (n) => {
+    if (n === 't') return 't';
+    if (pidx.has(n)) return `P[${pidx.get(n)}]`;
+    if (model.consts.has(n)) return `(${model.consts.get(n)})`;
+    return hname(n);
+  };
+  const lets = (needT) => model.helpers
+    .filter((h) => needT || !usesT(h, model))
+    .map((h) => `  const ${hname(h.name)} = ${js(h.e, name)};`).join('\n');
+  let s = `'use strict';\nconst fmod = (a, b) => a - b * Math.floor(a / b);\n`;
+  s += `const T = (P) => {\n  const t = 0;\n${lets(false)}\n  return ${js(model.T, name)};\n};\n`;
+  s += `const tau = (t, P) => {\n${lets(true)}\n  return ${js(model.tau, name)};\n};\n`;
+  s += `const AB = (t, P, A, B) => {\n${lets(true)}\n`;
+  for (let i = 0; i < D; i++) for (let j = 0; j < D; j++) {
+    s += `  A[${i * D + j}] = ${js(model.A[i][j], name)};\n  B[${i * D + j}] = ${js(model.B[i][j], name)};\n`;
+  }
+  s += '};\nreturn { T, tau, AB };\n';
+  return s;
+}

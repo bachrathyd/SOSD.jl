@@ -23,6 +23,10 @@
   header { padding: 14px 20px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
   header h1 { margin: 0; font-size: 18px; font-weight: 650; }
   header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .xlink { float: right; margin-left: 12px; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 8px;
+    color: var(--accent); text-decoration: none; font-size: 13px; background: var(--chip); }
+  .xlink:hover { background: var(--accent); color: var(--accent-ink); }
+  @media (max-width: 860px) { .xlink { float: none; display: inline-block; margin: 0 0 8px; } }
   #helpBtn { float: right; margin-left: 12px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #helpBg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; }
   #helpBg[hidden] { display: none; }
@@ -98,6 +102,7 @@
 <body>
 <header>
   <button id="helpBtn">? Help</button>
+  <a class="xlink" href="https://bachrathyd.github.io/InterpolatedNyquist.jl/webgpu/">For faster solutions of LTI (time-invariant) delay systems see <b>InterpolatedNyquist WebGPU</b> →</a>
   <h1>SOSD in the browser: stability charts of time-periodic delay equations on your GPU</h1>
   <div class="sub">Float32 WebGPU port of the batched solver of <a href="https://github.com/bachrathyd/SOSD.jl">SOSD.jl</a>:
     collocation steps over one period, Arnoldi on the monodromy operator, one GPU thread per parameter point. <span id="device"></span></div>
@@ -129,7 +134,10 @@
         <label class="row"><span>initial grid</span><select id="mdGrid"></select></label>
         <label class="row"><span>iterations <b id="mdItV"></b></span><input type="range" id="mdIt" min="0" max="6" step="1" value="4"></label>
       </div>
-      <label class="check" style="font-weight:400"><input type="checkbox" id="mdNb" checked> neighbour check</label>
+      <label class="row"><span>neighbour check</span><select id="mdNb">
+        <option value="end" selected>at the end, on the CPU (Float64, web workers)</option>
+        <option value="every">after every iteration, on the GPU</option>
+        <option value="off">off</option></select></label>
       <label class="check" style="font-weight:400"><input type="checkbox" id="mdPts"> show MDBM evaluation points</label>
     </div>
     <div class="panel">
@@ -140,8 +148,17 @@
         <label class="row"><span>Krylov m</span><input type="number" id="m" min="4" max="24" step="1"></label>
       </div>
       <label class="check" style="font-weight:400"><input type="checkbox" id="auto" checked> recompute while moving sliders</label>
-      <div class="buttons"><button class="primary" id="go">Compute</button><button id="reset">Reset example</button>
-        <button id="bench">Benchmark</button></div>
+      <label class="row"><span>time limit per chart [s] (stops a computation that runs longer)</span>
+        <input type="number" id="tLimit" min="0.1" step="any" value="5"></label>
+      <div class="buttons"><button class="primary" id="go">Compute</button><button id="stop" disabled>Stop</button>
+        <button id="reset">Reset example</button><button id="bench">Benchmark</button></div>
+    </div>
+    <div class="panel">
+      <h2>High-resolution image</h2>
+      <div class="muted" style="margin-bottom:6px">One ρ per pixel of the plot area, saved as PNG with axes — no time limit;
+        the expected time comes from the last brute-force chart.</div>
+      <div class="grid2" style="align-items:end"><label class="row" style="margin:0"><span>size</span><select id="exRes"></select></label>
+        <button id="exGo" style="margin-bottom:0">Render PNG</button></div>
     </div>
   </aside>
   <div id="split" role="separator" aria-orientation="vertical" title="drag to resize · double-click to reset"></div>

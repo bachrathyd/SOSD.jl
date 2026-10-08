@@ -4,7 +4,7 @@
 //
 // Fields: key, title, formula (HTML, shown under the selector), text, axes [x, y] (parameter
 // names), p (steps per period), S (Gauss–Legendre stages), m (Krylov dimension), brute
-// (default grid), mdbm (initial grid and iterations), note.
+// (default grid), mdbm (initial grid and iterations), bf / md (methods on by default), note.
 
 export const EXAMPLES = [
   {
@@ -22,8 +22,8 @@ T = 2*pi
 τ = 2*pi
 A = [0, 1; -(δ + ε*cos(t)), -a₁]
 B = [0, 0; b₀, 0]`,
-    axes: ['δ', 'ε'], p: 40, S: 3, m: 12,
-    brute: [128, 64], mdbm: [16, 8, 4],
+    axes: ['δ', 'ε'], p: 20, S: 2, m: 7,
+    brute: [256, 128], mdbm: [16, 8, 4],
   },
   {
     key: 'milling',
@@ -62,7 +62,7 @@ B = [0, 0, 0, 0;
      κ*hxx, κ*hxy, 0, 0;
      κ*hyx, κ*hyy, 0, 0]`,
     axes: ['n', 'w'], p: 40, S: 3, m: 12,
-    brute: [128, 64], mdbm: [48, 12, 4],
+    brute: [256, 128], mdbm: [48, 12, 4], bf: false,
     note: 'The cutting-force coefficient switches when a tooth enters or leaves the cut, so the ' +
           'step functions make A(t), B(t) discontinuous: expect first-order convergence in p. ' +
           'MDBM finds a lobe only if the initial grid resolves its width (narrow low-speed lobes need a finer initial grid).',
@@ -84,6 +84,6 @@ T = Tp
 A = [0, 1; -1 - k_w, -ζ]
 B = [0, 0; k_w, 0]`,
     axes: ['Ω', 'k_w'], p: 200, S: 3, m: 12,
-    brute: [128, 64], mdbm: [16, 8, 4],
+    brute: [256, 128], mdbm: [16, 8, 4],
   },
 ];

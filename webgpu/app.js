@@ -7,16 +7,18 @@ import { parseModel, ParseError } from './expr.js';
 import { EXAMPLES } from './examples.js';
 import { mdbmBoundary } from './mdbm.js';
 import { initStats, countEvent, countOnce, countModel } from './stats.js';
+import { CpuPool } from './cpu.js';
 
 const $ = (id) => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
-const BF_GRIDS = [[32, 16], [64, 32], [96, 48], [128, 64], [192, 96], [256, 128], [384, 192], [512, 256]];
+const BF_GRIDS = [[32, 16], [64, 32], [128, 64], [192, 96], [256, 128], [384, 192], [512, 256], [768, 384], [1024, 512]];
 const MD_GRIDS = [[6, 4], [8, 5], [12, 7], [16, 8], [24, 8], [24, 12], [32, 16], [48, 12], [64, 16], [96, 24]];
 const CR = 0.5;                                   // colour range of log10 ρ: [-CR, CR]
 const STOPS = [[5, 48, 97], [33, 102, 172], [67, 147, 195], [146, 197, 222], [247, 247, 247],
                [244, 165, 130], [214, 96, 77], [178, 24, 43], [103, 0, 31]];
 
 let engine = null, model = null, modelText = '', ex = null;
+const cpu = new CpuPool();
 let values = [], axes = [0, 1];
 let result = null;                                // { box, bf: {nx, ny, rho}, md: {...}, stats }
 let busy = false, pending = false, generation = 0;
@@ -31,6 +33,7 @@ async function main() {
   initStats();
   EXAMPLES.forEach((e) => $('ex').add(new Option(e.title, e.key)));
   BF_GRIDS.forEach(([a, b], i) => $('bfGrid').add(new Option(`${a} × ${b} = ${(a * b).toLocaleString()}`, i)));
+  EXPORTS.forEach((e, i) => $('exRes').add(new Option(`${e.name} ${e.w} × ${e.h}`, i)));
   MD_GRIDS.forEach(([a, b], i) => $('mdGrid').add(new Option(`${a} × ${b}`, i)));
   try {
     engine = await Engine.create(log);
@@ -44,10 +47,12 @@ async function main() {
   }
   $('ex').onchange = () => loadExample($('ex').value);
   $('reset').onclick = () => loadExample(ex.key);
-  $('go').onclick = () => compute();
+  $('go').onclick = () => schedule(true, true);
+  $('stop').onclick = stop;
+  $('exGo').onclick = exportImage;
   $('bench').onclick = () => bench();
   $('mdIt').oninput = () => { $('mdItV').textContent = $('mdIt').value; schedule(); };
-  for (const id of ['bfOn', 'bfGrid', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm']) $(id).onchange = () => schedule(true);
+  for (const id of ['bfOn', 'bfGrid', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
   $('mdPts').onchange = draw;
   let eqTimer = null;
   $('eq').oninput = () => { clearTimeout(eqTimer); eqTimer = setTimeout(() => setModelText($('eq').value, true), 400); };
@@ -71,6 +76,7 @@ function loadExample(key) {
   $('note').textContent = ex.note || ''; $('note').style.display = ex.note ? '' : 'none';
   $('eq').value = ex.text;
   $('p').value = ex.p; $('m').value = ex.m; $('S').value = ex.S;
+  $('bfOn').checked = ex.bf !== false; $('mdOn').checked = ex.md !== false;
   $('bfGrid').value = BF_GRIDS.findIndex(([a, b]) => a === ex.brute[0] && b === ex.brute[1]);
   $('mdGrid').value = MD_GRIDS.findIndex(([a, b]) => a === ex.mdbm[0] && b === ex.mdbm[1]);
   $('mdIt').value = ex.mdbm[2]; $('mdItV').textContent = ex.mdbm[2];
@@ -97,7 +103,8 @@ function setModelText(text, edited) {
     if (edited) countModel(text);
     rememberHome();
     buildParams();
-    schedule(true);
+    updateEtas();
+    schedule(true, true);
   } catch (e) {
     $('eqStatus').className = 'status err';
     $('eqStatus').textContent = (e instanceof ParseError && e.line >= 0 ? `line ${e.line + 1}: ` : '') + e.message;
@@ -120,91 +127,147 @@ function buildParams() {
     setRange();
     v.textContent = fmt(values[i]);
     r.oninput = () => { values[i] = +r.value; v.textContent = fmt(values[i]); schedule(); };
-    lo.onchange = () => { q.lo = +lo.value; setRange(); schedule(true); };
-    hi.onchange = () => { q.hi = +hi.value; setRange(); schedule(true); };
+    lo.onchange = () => { q.lo = +lo.value; setRange(); schedule(true, true); };
+    hi.onchange = () => { q.hi = +hi.value; setRange(); schedule(true, true); };
     const bx = tr.querySelector('.bx'), by = tr.querySelector('.by');
     const isAx = axes.includes(i);
     r.disabled = isAx; tr2.style.display = isAx ? 'none' : '';
     if (isAx) v.textContent = axes[0] === i ? 'X axis' : 'Y axis';
     bx.classList.toggle('on', axes[0] === i); by.classList.toggle('on', axes[1] === i);
-    bx.onclick = () => { if (axes[1] === i) axes[1] = axes[0]; axes[0] = i; buildParams(); schedule(true); };
-    by.onclick = () => { if (axes[0] === i) axes[0] = axes[1]; axes[1] = i; buildParams(); schedule(true); };
+    bx.onclick = () => { if (axes[1] === i) axes[1] = axes[0]; axes[0] = i; buildParams(); updateEtas(); schedule(true, true); };
+    by.onclick = () => { if (axes[0] === i) axes[0] = axes[1]; axes[1] = i; buildParams(); updateEtas(); schedule(true, true); };
     tb.appendChild(tr); tb.appendChild(tr2);
   });
 }
 
 // ---------------------------------------------------------------------------------------------
-// computing
+// computing. A running computation is finished, not restarted, when a slider moves: the newest
+// values are computed next (so the chart keeps updating while dragging); a structural change
+// (model, axes, method) or Stop cancels it, and so does the time limit. The old chart stays on
+// screen until the new one is complete (brute force: the new map with the old MDBM boundary
+// until the new boundary arrives).
 // ---------------------------------------------------------------------------------------------
-function schedule(force = false) {
+function schedule(force = false, restart = false) {
   if (!force && !$('auto').checked) return;
-  if (busy) { pending = true; generation++; return; }
+  if (busy) { pending = true; if (restart) generation++; return; }
   compute();
 }
 
 function opts() {
-  return { S: +$('S').value, p: Math.max(4, +$('p').value | 0), m: Math.min(24, Math.max(4, +$('m').value | 0)) };
+  return { S: +$('S').value, p: Math.max(4, +$('p').value | 0), m: Math.min(24, Math.max(3, +$('m').value | 0)) };
 }
+
+function timeLimit() { const v = parseFloat($('tLimit').value); return v > 0 ? 1000 * v : Infinity; }
 
 async function compute() {
   if (!engine || !model) return;
   busy = true; pending = false;
+  setBusyUI(true);
   const gen = ++generation;
-  const cancel = () => gen !== generation;
+  const t0 = performance.now(), limit = timeLimit();
+  let timedOut = false;
+  const cancel = () => {
+    if (gen !== generation) return true;
+    if (performance.now() - t0 > limit) { timedOut = true; return true; }
+    return false;
+  };
   const [xi, yi] = axes, px = model.params[xi], py = model.params[yi];
   const box = { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
-  const o = opts(), vals = values.slice();
-  const res = { box, xname: px.name, yname: py.name, bf: null, md: null, n: 0, ms: 0, r: 0, N: 0 };
-  const evalBatch = async (xy) => {
-    const out = await engine.evaluate(model, vals, xi, yi, xy, { ...o, cancel,
-      onProgress: (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; } });
-    res.n += xy.length / 2; res.ms += out.ms; res.r = out.r; res.N = (out.r + 1) * (o.S + 1) * model.D;
+  const o = opts(), vals = values.slice(), mdl = model;
+  const res = { box, xname: px.name, yname: py.name, bf: null, md: null, n: 0, ms: 0, r: 0, N: 0, nCpu: 0, msCpu: 0 };
+  const progress = (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; };
+  const evalBatch = async (pts) => {
+    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, cancel, onProgress: progress });
+    if (!out.done) throw new Cancelled();
+    res.n += out.rho.length; res.ms += out.ms; res.r = out.r; res.N = (out.r + 1) * (o.S + 1) * mdl.D;
     return out.rho;
   };
+  const evalCpu = async (xy) => {
+    if (cancel()) throw new Cancelled();
+    const tc = performance.now();
+    const r = engine.delaySteps(mdl, vals, xi, yi, xy.length / 2, (i) => [xy[2 * i], xy[2 * i + 1]], o.p);
+    const rho = await cpu.evaluate(mdl, vals, xi, yi, xy, { ...o, r });
+    res.nCpu += rho.length; res.msCpu += performance.now() - tc;
+    return rho;
+  };
   try {
+    const prevMd = result && result.md;
     if ($('bfOn').checked) {
       countOnce('brute-force');
       const [nx, ny] = BF_GRIDS[+$('bfGrid').value];
-      const xy = new Float32Array(2 * nx * ny);
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-        const k = j * nx + i;
-        xy[2 * k] = box.x0 + (box.x1 - box.x0) * i / (nx - 1);
-        xy[2 * k + 1] = box.y0 + (box.y1 - box.y0) * j / (ny - 1);
-      }
-      const rho = await evalBatch(xy);
-      if (cancel()) return finish();
+      const rho = await evalBatch({ nx, ny, box });
       res.bf = { nx, ny, rho };
-      result = res; draw(); stats(res);
+      lastRate = { key: rateKey(), us: 1000 * res.ms / (nx * ny) };
+      updateEtas();
+      // the new map at once, the old boundary on it until the new one is ready
+      result = { ...res, md: $('mdOn').checked ? prevMd : null };
+      draw(); stats(res);
     }
     if ($('mdOn').checked) {
       countOnce('mdbm');
       const [a, b] = MD_GRIDS[+$('mdGrid').value];
+      const nb = $('mdNb').value;
       res.md = await mdbmBoundary(evalBatch, box, a, b, +$('mdIt').value,
-        { neighbour: $('mdNb').checked, cancel, onStage: () => { if (!cancel()) { result = res; draw(); stats(res); } } });
-      if (cancel()) return finish();
+        { neighbour: nb, evalNeighbour: nb === 'end' ? evalCpu : evalBatch, cancel: () => { if (cancel()) throw new Cancelled(); return false; } });
     }
     result = res; draw(); stats(res);
+    showMsg('');
   } catch (e) {
-    log('error: ' + e.message);
-    showMsg('<b>Error:</b> ' + e.message);
+    if (e instanceof Cancelled) {
+      if (timedOut) showMsg(`Stopped after the time limit (${(limit / 1000).toFixed(1)} s): the chart shows the last complete result. ` +
+                            'Raise the limit, or use a coarser grid / smaller p, m.');
+    } else {
+      log('error: ' + e.message);
+      showMsg('<b>Error:</b> ' + e.message);
+    }
   }
-  finish();
-  function finish() {
-    busy = false;
-    $('progress').firstChild.style.width = '0%';
-    if (pending) compute();
-  }
+  busy = false;
+  setBusyUI(false);
+  progress(0);
+  if (pending) compute();
 }
 
+class Cancelled extends Error {}
+
+function setBusyUI(on) {
+  $('stop').disabled = !on;
+}
+
+function stop() { generation++; pending = false; }
+
 function stats(res) {
-  $('sN').innerHTML = res.n.toLocaleString() + (res.md ? ` <small>(MDBM ${res.md.points.length / 2 | 0})</small>` : '');
-  $('sT').innerHTML = res.ms < 1000 ? `${res.ms.toFixed(0)} <small>ms</small>` : `${(res.ms / 1000).toFixed(2)} <small>s</small>`;
+  const nMd = res.md ? res.md.points.length / 2 | 0 : 0;
+  $('sN').innerHTML = (res.n + res.nCpu).toLocaleString() + (res.md ? ` <small>(MDBM ${nMd}${res.nCpu ? `, ${res.nCpu} on CPU` : ''})</small>` : '');
+  const tot = res.ms + res.msCpu;
+  $('sT').innerHTML = tot < 1000 ? `${tot.toFixed(0)} <small>ms</small>` : `${(tot / 1000).toFixed(2)} <small>s</small>`;
   $('sU').innerHTML = res.n ? `${(1000 * res.ms / res.n).toFixed(1)} <small>µs</small>` : '–';
   if (res.bf) {
     let u = 0; for (const v of res.bf.rho) if (v >= 1) u++;
     $('sUn').innerHTML = `${(100 * u / res.bf.rho.length).toFixed(1)} <small>%</small>`;
   } else $('sUn').textContent = '–';
   $('sR').innerHTML = `${res.r} <small>· N = ${res.N}</small>`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// expected times (from the last brute-force throughput of the same model and discretization)
+// ---------------------------------------------------------------------------------------------
+let lastRate = null;
+function rateKey() { const o = opts(); return `${modelText.length}:${modelText.slice(0, 200)}|${o.S}|${o.p}|${o.m}|${axes}`; }
+function fmtTime(ms) {
+  if (ms < 1000) return `${Math.max(10, Math.round(ms / 10) * 10)} ms`;
+  if (ms < 120e3) return `${(ms / 1000).toPrecision(2)} s`;
+  return `${(ms / 60e3).toPrecision(2)} min`;
+}
+function updateEtas() {
+  const us = lastRate && lastRate.key === rateKey() ? lastRate.us : null;
+  [...$('bfGrid').options].forEach((op, i) => {
+    const [a, b] = BF_GRIDS[i];
+    op.text = `${a} × ${b} = ${(a * b).toLocaleString()}` + (us ? `  (≈ ${fmtTime(us * a * b / 1000)})` : '');
+  });
+  [...$('exRes').options].forEach((op, i) => {
+    const e = EXPORTS[i], [nx, ny] = exportGrid(e.w, e.h);
+    op.text = `${e.name} ${e.w} × ${e.h}` + (us ? `  (≈ ${fmtTime(us * nx * ny / 1000)})` : '');
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -246,82 +309,150 @@ function sizeCanvas() {
 
 function draw() {
   const cv = $('chart'), cx = cv.getContext('2d'), dpr = cv.width / (cv.clientWidth || cv.width);
-  const { w, h, W, H } = geom();
+  const { w, h } = geom();
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const css = getComputedStyle(document.documentElement);
-  const ink = css.getPropertyValue('--ink').trim() || '#222', muted = css.getPropertyValue('--muted').trim() || '#666';
-  cx.clearRect(0, 0, w, h);
-  cx.fillStyle = '#f7f7f7'; cx.fillRect(PAD.l, PAD.t, W, H);
-  if (!result) return;
-  const view = viewBox();
-  const X = (x) => PAD.l + (x - view.x0) / (view.x1 - view.x0) * W;
-  const Y = (y) => PAD.t + H - (y - view.y0) / (view.y1 - view.y0) * H;
-  cx.save(); cx.beginPath(); cx.rect(PAD.l, PAD.t, W, H); cx.clip();
-  if (result.bf) {
-    const { box } = result, { nx, ny, rho } = result.bf;
-    if (!result.bf.img) {
-      const img = new ImageData(nx, ny);
-      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-        const c = cmap(Math.log10(Math.max(rho[j * nx + i], 1e-30))), o = 4 * (i + nx * (ny - 1 - j));
-        img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
-      }
-      result.bf.img = new OffscreenCanvas(nx, ny); result.bf.img.getContext('2d').putImageData(img, 0, 0);
-    }
-    cx.imageSmoothingEnabled = true;
-    // grid nodes at the box edges: the image spans half a cell beyond them
-    const hx = (box.x1 - box.x0) / (nx - 1) / 2, hy = (box.y1 - box.y0) / (ny - 1) / 2;
-    const ax = X(box.x0 - hx), ay = Y(box.y1 + hy);
-    cx.drawImage(result.bf.img, ax, ay, X(box.x1 + hx) - ax, Y(box.y0 - hy) - ay);
-    // boundary from the grid (marching squares on log ρ)
-    cx.strokeStyle = '#000'; cx.lineWidth = 1.2; cx.beginPath();
-    const f = (i, j) => Math.log(Math.max(rho[j * nx + i], 1e-30));
-    const px = (i) => X(box.x0 + i * 2 * hx), py = (j) => Y(box.y0 + j * 2 * hy);
-    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      const v = [f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], P = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], pts = [];
-      for (let e = 0; e < 4; e++) { const a = v[e], b = v[(e + 1) % 4];
-        if ((a >= 0) !== (b >= 0)) { const t = a / (a - b), A = P[e], B = P[(e + 1) % 4];
-          pts.push([px(A[0] + t * (B[0] - A[0])), py(A[1] + t * (B[1] - A[1]))]); } }
-      if (pts.length >= 2) { cx.moveTo(...pts[0]); cx.lineTo(...pts[1]); }
-      if (pts.length === 4) { cx.moveTo(...pts[2]); cx.lineTo(...pts[3]); }
-    }
-    cx.stroke();
-  }
-  if (result.md) {
-    if ($('mdPts').checked) {
-      const { points, rho } = result.md;
-      for (let k = 0; k < rho.length; k++) {
-        cx.fillStyle = rho[k] >= 1 ? '#b2182b' : '#2166ac';
-        cx.fillRect(X(points[2 * k]) - 1.5, Y(points[2 * k + 1]) - 1.5, 3, 3);
-      }
-    }
-    cx.strokeStyle = result.bf ? '#ffd400' : '#000'; cx.lineWidth = result.bf ? 2.2 : 2;
-    cx.lineCap = 'round'; cx.beginPath();
-    for (const s of result.md.segments) { cx.moveTo(X(s[0]), Y(s[1])); cx.lineTo(X(s[2]), Y(s[3])); }
-    cx.stroke();
-  }
-  cx.restore();
+  render(cx, w, h, 1, result, viewBox(), $('mdPts').checked);
   if (zoomRect) {
     const [a, b, c, d] = zoomRect;
     cx.fillStyle = 'rgba(47, 111, 219, 0.12)'; cx.strokeStyle = '#2f6fdb'; cx.lineWidth = 1.2;
     cx.fillRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b));
     cx.strokeRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b));
   }
+}
+
+/** the chart of `res` in the data box `view` on a w×h context; sc scales fonts, pads and lines */
+function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = null) {
+  const css = getComputedStyle(document.documentElement);
+  ink = ink || css.getPropertyValue('--ink').trim() || '#222';
+  muted = muted || css.getPropertyValue('--muted').trim() || '#666';
+  const L = PAD.l * sc, R = PAD.r * sc, T = PAD.t * sc, B = PAD.b * sc;
+  const W = w - L - R, H = h - T - B;
+  cx.clearRect(0, 0, w, h);
+  cx.fillStyle = '#f7f7f7'; cx.fillRect(L, T, W, H);
+  if (!res) return;
+  const X = (x) => L + (x - view.x0) / (view.x1 - view.x0) * W;
+  const Y = (y) => T + H - (y - view.y0) / (view.y1 - view.y0) * H;
+  cx.save(); cx.beginPath(); cx.rect(L, T, W, H); cx.clip();
+  if (res.bf) {
+    const { box } = res, { nx, ny, rho } = res.bf;
+    if (!res.bf.img) {
+      const img = new ImageData(nx, ny);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const c = cmap(Math.log10(Math.max(rho[j * nx + i], 1e-30))), o = 4 * (i + nx * (ny - 1 - j));
+        img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+      }
+      res.bf.img = new OffscreenCanvas(nx, ny); res.bf.img.getContext('2d').putImageData(img, 0, 0);
+    }
+    cx.imageSmoothingEnabled = true;
+    // grid nodes at the box edges: the image spans half a cell beyond them
+    const hx = (box.x1 - box.x0) / (nx - 1) / 2, hy = (box.y1 - box.y0) / (ny - 1) / 2;
+    const ax = X(box.x0 - hx), ay = Y(box.y1 + hy);
+    cx.drawImage(res.bf.img, ax, ay, X(box.x1 + hx) - ax, Y(box.y0 - hy) - ay);
+    // boundary from the grid (marching squares on log ρ)
+    cx.strokeStyle = '#000'; cx.lineWidth = 1.2 * sc; cx.beginPath();
+    const f = (i, j) => Math.log(Math.max(rho[j * nx + i], 1e-30));
+    const px = (i) => X(box.x0 + i * 2 * hx), py = (j) => Y(box.y0 + j * 2 * hy);
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const v = [f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)];
+      if ((v[0] >= 0) === (v[1] >= 0) && (v[1] >= 0) === (v[2] >= 0) && (v[2] >= 0) === (v[3] >= 0)) continue;
+      const P = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], pts = [];
+      for (let e = 0; e < 4; e++) { const a = v[e], b = v[(e + 1) % 4];
+        if ((a >= 0) !== (b >= 0)) { const t = a / (a - b), A = P[e], Bp = P[(e + 1) % 4];
+          pts.push([px(A[0] + t * (Bp[0] - A[0])), py(A[1] + t * (Bp[1] - A[1]))]); } }
+      if (pts.length >= 2) { cx.moveTo(...pts[0]); cx.lineTo(...pts[1]); }
+      if (pts.length === 4) { cx.moveTo(...pts[2]); cx.lineTo(...pts[3]); }
+    }
+    cx.stroke();
+  }
+  if (res.md) {
+    if (showPts) {
+      const { points, rho } = res.md, s = 1.5 * sc;
+      for (let k = 0; k < rho.length; k++) {
+        cx.fillStyle = rho[k] >= 1 ? '#b2182b' : '#2166ac';
+        cx.fillRect(X(points[2 * k]) - s, Y(points[2 * k + 1]) - s, 2 * s, 2 * s);
+      }
+    }
+    cx.strokeStyle = res.bf ? '#ffd400' : '#000'; cx.lineWidth = (res.bf ? 2.2 : 2) * sc;
+    cx.lineCap = 'round'; cx.beginPath();
+    for (const s of res.md.segments) { cx.moveTo(X(s[0]), Y(s[1])); cx.lineTo(X(s[2]), Y(s[3])); }
+    cx.stroke();
+  }
+  cx.restore();
   // axes, ticks, labels
-  cx.strokeStyle = muted; cx.lineWidth = 1; cx.strokeRect(PAD.l, PAD.t, W, H);
-  cx.fillStyle = ink; cx.font = '13px system-ui, sans-serif'; cx.textAlign = 'center';
-  for (const v of nice(view.x0, view.x1, Math.max(3, Math.round(W / 100)))) { const x = X(v); cx.fillRect(x, PAD.t + H, 1, 5); cx.fillText(+v.toPrecision(6), x, PAD.t + H + 19); }
-  cx.fillText(axisLabel(result.xname), PAD.l + W / 2, PAD.t + H + 44);
+  cx.strokeStyle = muted; cx.lineWidth = sc; cx.strokeRect(L, T, W, H);
+  cx.fillStyle = ink; cx.font = `${13 * sc}px system-ui, sans-serif`; cx.textAlign = 'center';
+  for (const v of nice(view.x0, view.x1, Math.max(3, Math.round(W / 100 / sc)))) {
+    const x = X(v); cx.fillRect(x, T + H, sc, 5 * sc); cx.fillText(+v.toPrecision(6), x, T + H + 19 * sc);
+  }
+  cx.fillText(axisLabel(res.xname), L + W / 2, T + H + 44 * sc);
   cx.textAlign = 'right';
-  for (const v of nice(view.y0, view.y1, Math.max(3, Math.round(H / 70)))) { const y = Y(v); cx.fillRect(PAD.l - 5, y, 5, 1); cx.fillText(+v.toPrecision(6), PAD.l - 8, y + 4); }
-  cx.save(); cx.translate(20, PAD.t + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
-  cx.fillText(axisLabel(result.yname), 0, 0); cx.restore();
+  for (const v of nice(view.y0, view.y1, Math.max(3, Math.round(H / 70 / sc)))) {
+    const y = Y(v); cx.fillRect(L - 5 * sc, y, 5 * sc, sc); cx.fillText(+v.toPrecision(6), L - 8 * sc, y + 4 * sc);
+  }
+  cx.save(); cx.translate(20 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
+  cx.fillText(axisLabel(res.yname), 0, 0); cx.restore();
   // colour bar
-  const bx = PAD.l + W + 18, bw = 16;
-  for (let k = 0; k < H; k++) { const c = cmap(CR * (1 - 2 * k / H)); cx.fillStyle = `rgb(${c})`; cx.fillRect(bx, PAD.t + k, bw, 1.5); }
-  cx.strokeRect(bx, PAD.t, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
-  for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4, PAD.t + (1 - v / CR) / 2 * H + 4);
-  cx.save(); cx.translate(bx + bw + 46, PAD.t + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
+  const bx = L + W + 18 * sc, bw = 16 * sc;
+  for (let k = 0; k < H; k++) { const c = cmap(CR * (1 - 2 * k / H)); cx.fillStyle = `rgb(${c})`; cx.fillRect(bx, T + k, bw, 1.5); }
+  cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
+  for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H + 4 * sc);
+  cx.save(); cx.translate(bx + bw + 46 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
   cx.fillText('log₁₀ ρ   (ρ < 1 stable, blue)', 0, 0); cx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------
+// high-resolution image: one ρ per pixel of the plot area, PNG with axes (not time limited)
+// ---------------------------------------------------------------------------------------------
+const EXPORTS = [{ name: 'HD', w: 1280, h: 720 }, { name: 'Full HD', w: 1920, h: 1080 },
+                 { name: '4K', w: 3840, h: 2160 }, { name: '8K', w: 7680, h: 4320 }];
+const exportScale = (w, h) => Math.min(w / 1100, h / 640);
+function exportGrid(w, h) {
+  const sc = exportScale(w, h);
+  return [Math.round(w - (PAD.l + PAD.r) * sc), Math.round(h - (PAD.t + PAD.b) * sc)];
+}
+
+let exporting = null;                             // { cancelled } while an export runs
+async function exportImage() {
+  if (exporting) { exporting.cancelled = true; return; }
+  if (!engine || !model) return;
+  const e = EXPORTS[+$('exRes').value];
+  const job = exporting = { cancelled: false };
+  countOnce('export/' + e.name);
+  stop();
+  while (busy) await new Promise((r) => setTimeout(r, 50));
+  busy = true;
+  const btn = $('exGo'), label = btn.textContent;
+  btn.textContent = 'Cancel';
+  const [nx, ny] = exportGrid(e.w, e.h), sc = exportScale(e.w, e.h);
+  const [xi, yi] = axes, px = model.params[xi], py = model.params[yi];
+  const box = { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
+  try {
+    const out = await engine.evaluate(model, values.slice(), xi, yi, { nx, ny, box }, { ...opts(),
+      cancel: () => job.cancelled,
+      onProgress: (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; btn.textContent = `Cancel (${(100 * f).toFixed(0)} %)`; } });
+    if (out.done) {
+      const same = result && result.box && ['x0', 'x1', 'y0', 'y1'].every((k) => result.box[k] === box[k]);
+      const res = { box, xname: px.name, yname: py.name, bf: { nx, ny, rho: out.rho }, md: same ? result.md : null };
+      const cv = new OffscreenCanvas(e.w, e.h), cx = cv.getContext('2d');
+      render(cx, e.w, e.h, sc, res, box, false, '#1d2230', '#5d6475');
+      cx.globalCompositeOperation = 'destination-over';
+      cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, e.w, e.h);
+      const blob = await cv.convertToBlob({ type: 'image/png' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `sosd_${ex ? ex.key : 'chart'}_${e.w}x${e.h}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      log(`${e.name} image: ${(nx * ny).toLocaleString()} ρ in ${(out.ms / 1000).toFixed(1)} s`);
+    }
+  } catch (err) {
+    showMsg('<b>Export failed:</b> ' + err.message);
+  }
+  btn.textContent = label;
+  $('progress').firstChild.style.width = '0%';
+  exporting = null;
+  busy = false;
+  if (pending) compute();
 }
 
 function axisLabel(name) {

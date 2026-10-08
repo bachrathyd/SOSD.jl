@@ -60,7 +60,7 @@ fn Lx(n: u32, s: u32, k: u32) -> u32 { return (cb * (u.p * S * LR) + (n * S + s)
 fn params() -> array<f32, NP> {
   var P: array<f32, NP>;
   for (var k = 0u; k < NP; k++) { P[k] = u.P0[k / 4u][k % 4u]; }
-  let xy = pts[u.off + b];
+  let xy = pts[b];
   P[u.xi] = xy.x; P[u.yi] = xy.y;
   return P;
 }
@@ -404,10 +404,10 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) 
     storageBarrier();
   }
   if (ln != 0u || !valid) { return; }
-  if ((flags & 2u) != 0u) { outv[u.off + b] = vec4<f32>(3.0e38, 0.0, 0.0, f32(flags)); return; }
+  if ((flags & 2u) != 0u) { outv[b] = vec4<f32>(3.0e38, 0.0, 0.0, f32(flags)); return; }
   for (var i = 0u; i < MMAX * MMAX; i++) { a[i] = 0.0; }
   for (var i = 0u; i < mm; i++) { for (var j = 0u; j < mm; j++) { a[i * MMAX + j] = H[i * MMAX + j]; } }
   let ev = hqr(i32(mm));
   if (ev.w == 0.0) { flags |= 4u; }
-  outv[u.off + b] = vec4<f32>(ev.x, ev.y, ev.z, f32(flags));
+  outv[b] = vec4<f32>(ev.x, ev.y, ev.z, f32(flags));
 }

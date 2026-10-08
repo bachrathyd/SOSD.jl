@@ -149,3 +149,10 @@ affected by the delay bug fixed above and must be regenerated before use.)
 - Colab: `colab/SOSD_GPU_Colab.ipynb` (Drive: Colab Notebooks/SOSD_GPU). Local
   timings today are indicative only (machine shared with other runs).
 - Open: T4 → A100 benchmark, design-note numbers, README numbers.
+
+### 2026-10-08 (later) — interactive charts, precision, A100
+- Interactive Colab charts (`gpu/colab/interactive_app.py` + `gpu/interactive/server.jl`).
+- `rescale()` (non-dimensional form): Float32 chart = Float64 classification; Float16 not worth it.
+- Host Krylov–Schur step leaner (residual from leading Schur block), overflow → ρ = Inf.
+- A100: 256×128 milling chart 0.54 s (Float32) / 2.4 s (Float64) vs 65 s on 16 CPU threads.
+- `GPU_USAGE.md` for downstream projects. Next: local web app with MDBM boundary option.

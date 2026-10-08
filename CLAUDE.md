@@ -266,3 +266,20 @@ References are computed by two-resolution agreement and **cached** in
   hash into the Reproducibility appendix (remove `\TODOnum`); verify ORCID
   (0000-0002-7268-2999) on the title page; decide repo visibility; tag a release
   (`v0.2.0-submission`).
+
+---
+
+## 11. GPU / batched path (branch `gpu`, 2026-10-08)
+
+- Read `GPU_USAGE.md` (how to call it) and `GPU_DESIGN.md` (design, measurements).
+- Code: `src/batched.jl` (BatchedLDDE, spectral_radii, rescale, boundary_multisection,
+  KernelAbstractions kernels, batched Krylov–Schur), `ext/SOSDCUDAExt.jl` (CUDA weak dep),
+  tests `test/test_batched.jl` (CPU backend) + `gpu/test_gpu.jl` (CUDA), models
+  `test/batched_models.jl`, Colab: `gpu/colab_run.sh`, `gpu/colab/interactive_app.py`,
+  `gpu/interactive/server.jl` + `bench_chart.jl`.
+- Chart recipe: `rescale`d model + Float32 + krylovdim 10 + retry=false. Float64 for
+  boundaries. Float16 not worth it.
+- This laptop: AMD iGPU only; its OpenCL driver (30.0.13044) segfaults on looped kernels
+  (see InterpolatedNyquist GPU_NOTES) → CPU threads unless the driver is updated.
+- Colab: compute units are scarce — develop on T4, measure on A100 only at the end;
+  always "Disconnect and delete runtime" afterwards.

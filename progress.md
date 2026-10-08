@@ -168,3 +168,8 @@ affected by the delay bug fixed above and must be regenerated before use.)
   Milling MDBM-only 48×12, 4 iterations: 7.0 s → 1.2 s on the Vega 8 iGPU.
 - Chart: wheel / box zoom, pan, pinch, double-click reset (ranges written into the model text),
   draggable splitter, HiDPI canvas, Save PNG. Validation: 0 of 480 misclassified.
+- (later) Continuous slider updates (finish-then-next), time limit, Stop; no flicker; MDBM
+  neighbour check at the end on CPU web workers (Float64 twin `cpusolver.js`, = SOSD.jl to
+  1e-15); HD–8K PNG export with time estimates; 256×128 default; Mathieu GL2/p=20/m=7
+  (256×128 + MDBM ≈ 0.3 s; 0.23 % of points misclassified vs GL3/p=40 — the discretization, not m);
+  header cross-links SOSD ↔ InterpolatedNyquist WebGPU pages (both gh-pages updated).

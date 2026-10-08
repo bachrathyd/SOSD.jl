@@ -9,6 +9,13 @@ function SOSD.resident_threads(::CUDABackend)
            CUDA.attribute(dev, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR)
 end
 
-SOSD.available_memory(::CUDABackend) = Int(CUDA.available_memory())
+# Free device memory. CUDA.jl's pool keeps freed buffers cached (invisible to the driver),
+# so collect and release them first — otherwise the automatic batch size collapses to a
+# few points after the first large batch.
+function SOSD.available_memory(::CUDABackend)
+    GC.gc(false)
+    CUDA.reclaim()
+    return Int(CUDA.available_memory())
+end
 
 end

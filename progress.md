@@ -123,3 +123,29 @@ affected by the delay bug fixed above and must be regenerated before use.)
   GL5/BS3/RK4 × p-sweep, references from the cached two-resolution values) +
   benchmark/make_error_figures.jl (error_prediction_<sys>, error_coverage,
   error_bars_demo, error_fixpoint).
+
+## 2026-10-08 — GPU capability (branch `gpu`, from `error-estimation` @ ed1424d)
+
+- Design note: `GPU_DESIGN.md`. Measured first (CPU, D=4, GL3, r=p=1000): the
+  Krylov iteration is ~10–15 % of a ρ evaluation; build of the step blocks and the
+  sparse LU dominate. One sweep is sequential in p → a single point cannot fill a
+  GPU; batching parameter points can.
+- `src/batched.jl`: `BatchedLDDE{D,K}(A(t,θ), B(t,θ), τ(t,θ), T(θ))`,
+  `spectral_radii(prob, θs, tab, p, r; backend)`, `boundary_multisection`.
+  KernelAbstractions kernels: build (one work item per point×step; `build=:host`
+  = threaded reference assembly + upload), sweep (workgroup = BG points × R
+  threads/point, R automatic from the device's resident threads), batched
+  Krylov–Schur (CGS2 on device, m×m Schur on host, breakdown detection, retry of
+  unconverged points with a 2× basis). CPU fallback = reference solver threaded
+  over points. CUDA is a weak dependency (`ext/SOSDCUDAExt.jl`).
+- Tests: `test/test_batched.jl` (CPU backend, 25/25) and `gpu/test_gpu.jl`
+  (Colab T4, 30/30): Float64 ρ vs `floquet_analysis` 1.6e-15 … 1.6e-10 on delayed
+  Mathieu, turning SSV (τ(t), p≠r), 2/4/12-DOF milling (D = 4/8/24).
+- Bugs found on the GPU and fixed: non-isbits `DeviceTableau` (now checked on the
+  host), BitVector written from `@threads` (race), Krylov dim 24 too small for
+  clustered complex pairs (D=24 milling, 5 % wrong) → 30/15 + retry.
+- Float32 measured: median 7e-4, worst 0.18 relative error at only 1.3× speed on
+  T4 → not recommended.
+- Colab: `colab/SOSD_GPU_Colab.ipynb` (Drive: Colab Notebooks/SOSD_GPU). Local
+  timings today are indicative only (machine shared with other runs).
+- Open: T4 → A100 benchmark, design-note numbers, README numbers.

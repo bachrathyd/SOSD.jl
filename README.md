@@ -124,8 +124,8 @@ res.rho          # spectral radii, same order as θs (also res.mu, res.converged
 
 - `backend = CUDABackend()` runs the batched kernels on the GPU; `backend = CPU()`
   (default) runs the reference solver threaded over points — the CPU fallback.
-- `T = Float32` halves the memory traffic; ρ then carries ~10⁻⁵ relative error (fine
-  for chart pictures, not for refinement) — see `GPU_DESIGN.md`.
+- `T = Float32` is **not recommended**: on a T4 it was only 1.3× faster and its ρ
+  error reached 10⁻³ (median) with occasional unusable points — see `GPU_DESIGN.md`.
 - Batch size, thread mapping (one thread per point for many small systems, a thread
   block per point for few large ones) and operator assembly (`build = :device` for
   S·D ≤ 32, else threaded CPU assembly + upload) are chosen automatically.

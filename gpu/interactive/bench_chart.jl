@@ -1,11 +1,16 @@
 # Chart benchmark with the interactive server's code path: time per chart and per ρ, and
 # misclassified points (ρ ≷ 1) versus the Float64 chart, for precision × grid × steps.
-#   julia -t auto --project=gpu gpu/interactive/bench_chart.jl <outdir> [examples...]
+#   julia -t auto --project=gpu gpu/interactive/bench_chart.jl <outdir> [--grids=128x64,256x128] [examples...]
 include(joinpath(@__DIR__, "server.jl"))
 using Printf
 
 const OUTDIR = get(ARGS, 1, ".")
-const EXS = length(ARGS) > 1 ? ARGS[2:end] : ["milling", "mathieu"]
+const OPTS = filter(a -> startswith(a, "--"), ARGS[2:end])
+const EXS = (x = filter(a -> !startswith(a, "--"), ARGS[2:end]); isempty(x) ? ["milling", "mathieu"] : x)
+const GRIDS = let g = findfirst(a -> startswith(a, "--grids="), OPTS)
+    g === nothing ? [(128, 64), (256, 128), (512, 256)] :
+        [Tuple(parse.(Int, split(x, "x"))) for x in split(OPTS[g][9:end], ",")]
+end
 mkpath(OUTDIR)
 const CSV = joinpath(OUTDIR, "chart_bench.csv")
 open(CSV, "w") do io
@@ -30,7 +35,7 @@ function run_chart(ex, nx, ny, p, prec, mode, kd)
 end
 num(js, k) = (m = match(Regex("\"$k\":([0-9.eE+-]+|null)"), js); m === nothing || m.captures[1] == "null" ? NaN : parse(Float64, m.captures[1]))
 
-for ex in EXS, (nx, ny) in ((128, 64), (256, 128), (512, 256)), p in (40, 100)
+for ex in EXS, (nx, ny) in GRIDS, p in (40, 100)
     js64, ρ64 = run_chart(ex, nx, ny, p, "F64", "accurate", 30)
     for (prec, mode, kd) in (("F64", "accurate", 30), ("F64", "fast", 16), ("F32", "fast", 16), ("F32", "fast", 10), ("F16", "fast", 16))
         js, ρ = (prec, mode, kd) == ("F64", "accurate", 30) ? (js64, ρ64) : run_chart(ex, nx, ny, p, prec, mode, kd)

@@ -539,6 +539,65 @@ end
 end
 
 """
+Krylov–Schur bookkeeping of one point on the host: Schur form of the m×m Rayleigh
+quotient, the dominant Ritz value moved to the front (its residual is that of the
+leading Schur vector/2×2 block — no extra eigenproblem), and, only if not converged,
+the `keep` largest (conjugate pairs kept together) reordered to the front, the
+rotation `Q[b, :, 1:k]` and the restarted `H[b]`. Returns (k, ρ, μ, relative residual).
+"""
+function _host_ks_step!(H, Q, b, m, keep, tol, ::Type{CT}) where {CT}
+    Hb = H[b]
+    F = schur(Hb[1:m, 1:m])
+    λ = F.values
+    i1 = argmax(abs.(λ)); λ1 = λ[i1]; ρ = abs(λ1)
+    # dominant eigenvalue (and its conjugate) to the front
+    sel = [abs(λ[i] - λ1) < 1e-12 * max(ρ, 1e-300) || abs(λ[i] - conj(λ1)) < 1e-12 * max(ρ, 1e-300) for i in 1:m]
+    ordschur!(F, sel)
+    Z = F.Z; Tm = F.T
+    h = view(Hb, m + 1, 1:m)
+    if imag(λ1) == 0 || m == 1 || Tm[2, 1] == 0
+        r = abs(dot(h, view(Z, :, 1)))
+    else                                            # 2×2 block: eigenvector y of the block
+        a, bb, c, d = Tm[1, 1], Tm[1, 2], Tm[2, 1], Tm[2, 2]
+        y1 = complex(bb); y2 = λ1 - a                # (T₂₂-block − λ₁) y = 0
+        nrm = sqrt(abs2(y1) + abs2(y2))
+        r = abs(dot(h, view(Z, :, 1)) * y1 + dot(h, view(Z, :, 2)) * y2) / nrm
+    end
+    rel = r / max(ρ, eps())
+    rel <= tol && return 0, ρ, ComplexF64(λ1), rel
+    # restart data (cheap compared with the Schur form; needed only if not converged)
+    order = sortperm(abs.(λ); rev=true)
+    sel .= false
+    for idx in order[1:min(keep, m)]; sel[idx] = true; end
+    for idx in 1:m
+        if sel[idx] && imag(λ[idx]) != 0
+            pidx = findfirst(i -> !sel[i] && λ[i] ≈ conj(λ[idx]), 1:m)
+            pidx !== nothing && (sel[pidx] = true)
+        end
+    end
+    k = count(sel)
+    if k > keep + 1                                  # cannot keep that many: one pair fewer
+        sel .= false
+        for idx in order[1:keep-1]; sel[idx] = true; end
+        for idx in 1:m
+            if sel[idx] && imag(λ[idx]) != 0
+                pidx = findfirst(i -> !sel[i] && λ[i] ≈ conj(λ[idx]), 1:m)
+                pidx !== nothing && (sel[pidx] = true)
+            end
+        end
+        k = count(sel)
+    end
+    ordschur!(F, sel)
+    Z = F.Z; Tm = F.T
+    for l in 1:k, q in 1:m; Q[b, q, l] = CT(Z[q, l]); end
+    Hn = zeros(Float64, m + 1, m)
+    Hn[1:k, 1:k] .= view(Tm, 1:k, 1:k)
+    for l in 1:k; Hn[k + 1, l] = dot(h, view(Z, :, l)); end
+    H[b] = Hn
+    return k, ρ, ComplexF64(λ1), rel
+end
+
+"""
     BatchedEigResult
 
 `rho` (spectral radius), `mu` (dominant multiplier), `converged` (residual test passed),
@@ -601,7 +660,9 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     nmv = 0
     wg2(a) = (min(a, 64), 1)
     nrm0 = KA.zeros(backend, CT, nb)
-    bd_tol = T === Float64 ? 100 * eps(T) : 10 * eps(T)
+    # breakdown shortcut (invariant subspace): meaningless near Float16 round-off, where it
+    # stopped points after 2–3 steps on noise (0.4 % misclassified on a T4 chart) — off there
+    bd_tol = T === Float64 ? 100 * eps(T) : T === Float32 ? 10 * eps(T) : 0.0
 
     for it in 1:maxiter
         jstart = minimum(kb[.!done]) + 1
@@ -651,66 +712,14 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
         end
         t2 = tick()
 
-        # host: Schur form, convergence test, restart data
+        # host: Schur form, convergence test, restart data (only unconverged points restart)
         Q = zeros(CT, nb, m, keep + 1)
         knew = zeros(Int, nb)
         Threads.@threads for b in 1:nb
             done[b] && continue
-            Hm = H[b][1:m, 1:m]
-            F = schur(Hm)
-            λ = F.values
-            order = sortperm(abs.(λ); rev=true)
-            λ1 = λ[order[1]]
-            rho[b] = abs(λ1); mu[b] = λ1
-            # keep the `keep` largest (pairs not split)
-            thr = abs(λ[order[keep]])
-            k = count(x -> abs(x) >= thr * (1 - 1e-12), λ)
-            k = min(k, keep + 1)
-            sel = fill(false, m); cnt = 0
-            for idx in order
-                cnt >= k && break
-                sel[idx] = true; cnt += 1
-            end
-            # complete conjugate pairs
-            for idx in 1:m
-                if sel[idx] && imag(λ[idx]) != 0
-                    pidx = findfirst(i -> !sel[i] && λ[i] ≈ conj(λ[idx]), 1:m)
-                    pidx !== nothing && (sel[pidx] = true)
-                end
-            end
-            k = count(sel)
-            if k > keep + 1
-                # cannot keep that many: drop the trailing pair instead
-                k = keep - 1
-                sel .= false; cnt = 0
-                for idx in order; cnt >= k && break; sel[idx] = true; cnt += 1; end
-                for idx in 1:m
-                    if sel[idx] && imag(λ[idx]) != 0
-                        pidx = findfirst(i -> !sel[i] && λ[i] ≈ conj(λ[idx]), 1:m)
-                        pidx !== nothing && (sel[pidx] = true)
-                    end
-                end
-                k = count(sel)
-            end
-            ordschur!(F, sel)
-            knew[b] = k
-            Z = F.Z; Tm = F.T
-            hrow = H[b][m + 1, 1:m]
-            # residual of the dominant Ritz pair from the leading k×k block: its eigenvectors
-            # are those of the full quasi-triangular T padded with zeros, so |h_{m+1}ᵀ Z s|
-            # needs only a k×k eigenproblem (not an m×m one)
-            hz = vec(hrow' * Z[:, 1:k])
-            E = eigen(Tm[1:k, 1:k])
-            i1 = argmax(abs.(E.values))
-            sv = E.vectors[:, i1]
-            res[b] = abs(sum(hz .* sv)) / norm(sv) / max(abs(λ1), eps())
+            knew[b], rho[b], mu[b], res[b] = _host_ks_step!(H, Q, b, m, keep, tol, CT)
             conv[b] = res[b] <= tol
             conv[b] && (done[b] = true)
-            for l in 1:k, q in 1:m; Q[b, q, l] = CT(Z[q, l]); end
-            Hn = zeros(Float64, m + 1, m)
-            Hn[1:k, 1:k] .= Tm[1:k, 1:k]
-            Hn[k + 1, 1:k] .= vec(hrow' * Z[:, 1:k])
-            H[b] = Hn
         end
         tho += time() - t2
         all(done) && break

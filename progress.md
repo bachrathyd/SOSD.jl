@@ -156,3 +156,15 @@ affected by the delay bug fixed above and must be regenerated before use.)
 - Host Krylov–Schur step leaner (residual from leading Schur block), overflow → ρ = Inf.
 - A100: 256×128 milling chart 0.54 s (Float32) / 2.4 s (Float64) vs 65 s on 16 CPU threads.
 - `GPU_USAGE.md` for downstream projects. Next: local web app with MDBM boundary option.
+
+### 2026-10-08 (evening) — WebGPU browser app published, 2–9× faster kernel
+- Live: https://bachrathyd.github.io/SOSD.jl/webgpu/ (branch `gh-pages`, copy of `webgpu/`);
+  GoatCounter site `sosdgpu` (count.js skips localhost).
+- Kernel: `prep` builds the step matrices once (one thread per point × step); chunked storage
+  layout (the point-fastest layout hit a TLB cliff: milling 910 → 98 µs/ρ); several lanes per
+  point for small batches (4-point batch 45 → 10 ms), LPP chosen per batch.
+- MDBM: zeroth-order bracketing while refining, directional neighbour tracing after every
+  iteration until closure, first-order edge interpolation only for the drawn boundary.
+  Milling MDBM-only 48×12, 4 iterations: 7.0 s → 1.2 s on the Vega 8 iGPU.
+- Chart: wheel / box zoom, pan, pinch, double-click reset (ranges written into the model text),
+  draggable splitter, HiDPI canvas, Save PNG. Validation: 0 of 480 misclassified.

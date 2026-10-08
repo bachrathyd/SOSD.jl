@@ -505,7 +505,9 @@ end
 
 `rho` (spectral radius), `mu` (dominant multiplier), `converged` (residual test passed),
 `residual` (relative Ritz residual of the dominant pair), `matvecs` (sweeps per point),
-`flag` (0 = ok, 1 = history window too short for the lag).
+`flag` (0 = ok, 1 = history window too short for the lag), `timing` (wall times in s
+per phase — `build`, `sweep`, `orth`, `host`; device phases are exact only with
+`profile = true`, which synchronizes after every phase).
 """
 struct BatchedEigResult
     rho::Vector{Float64}
@@ -514,7 +516,10 @@ struct BatchedEigResult
     residual::Vector{Float64}
     matvecs::Int
     flag::Vector{Int32}
+    timing::NamedTuple
 end
+
+BatchedEigResult(rho, mu, conv, res, nmv, flag) = BatchedEigResult(rho, mu, conv, res, nmv, flag, NamedTuple())
 
 """
     batched_eigs(op, backend; krylovdim=30, keep=15, tol=1e-13, maxiter=20, sweep=:auto)
@@ -525,8 +530,11 @@ m×m Schur decompositions (threaded). Converged when the Ritz residual of the do
 eigenpair satisfies `|h_{m+1}ᵀ s| ≤ tol · |λ₁|` for every point (or `maxiter` restarts).
 """
 function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=30, keep::Int=15,
-                      tol::Real=1e-13, maxiter::Int=20, sweep=:auto) where {D, S, K, T}
+                      tol::Real=1e-13, maxiter::Int=20, sweep=:auto, profile::Bool=false) where {D, S, K, T}
     nb = op.nb; N = state_size(op); m = min(krylovdim, N - 1)
+    # profile = true synchronizes after every phase and accumulates wall times (s)
+    tsw = 0.0; tor = 0.0; tho = 0.0
+    tick() = (profile && KA.synchronize(backend); time())
     keep = clamp(keep, 1, m - 2)
     cfg = sweep === :auto ? auto_sweep_config(backend, nb, D, S, K, T) : sweep
     V = KA.zeros(backend, T, nb, N, m + 1)
@@ -561,7 +569,9 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             act = Int32.((kb .< j) .& .!done)       # points that expand column j
             any(!=(0), act) || break
             copyto!(mask, act)
+            t0 = tick()
             batched_mul!(Wb, 1, V, j, op, cfg, backend); nmv += 1
+            t1 = tick(); tsw += t1 - t0
             _norm_kernel!(backend, min(nb, 64))(nrm0, Wb, 1, N; ndrange=nb)
             # CGS2 against V[:, :, 1:j]
             _dots_kernel!(backend, wg2(nb))(Hc, V, Wb, 1, N; ndrange=(nb, j))
@@ -588,7 +598,9 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             copyto!(mask, act)
             copyto!(scale, sc)
             _setcol_kernel!(backend, wg2(nb))(V, j + 1, Wb, 1, scale, mask; ndrange=(nb, N))
+            tor += tick() - t1
         end
+        t2 = tick()
 
         # host: Schur form, convergence test, restart data
         Q = zeros(T, nb, m, keep + 1)
@@ -601,13 +613,6 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             order = sortperm(abs.(λ); rev=true)
             λ1 = λ[order[1]]
             rho[b] = abs(λ1); mu[b] = λ1
-            # residual of the dominant Ritz pair: |h_{m+1}ᵀ s| / ‖s‖
-            E = eigen(Hm)
-            i1 = argmax(abs.(E.values))
-            s = E.vectors[:, i1]
-            res[b] = abs(dot(conj(H[b][m + 1, 1:m]), s)) / norm(s) / max(abs(λ1), eps())
-            conv[b] = res[b] <= tol
-            conv[b] && (done[b] = true)
             # keep the `keep` largest (pairs not split)
             thr = abs(λ[order[keep]])
             k = count(x -> abs(x) >= thr * (1 - 1e-12), λ)
@@ -641,13 +646,24 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             ordschur!(F, sel)
             knew[b] = k
             Z = F.Z; Tm = F.T
-            for l in 1:k, q in 1:m; Q[b, q, l] = T(Z[q, l]); end
             hrow = H[b][m + 1, 1:m]
+            # residual of the dominant Ritz pair from the leading k×k block: its eigenvectors
+            # are those of the full quasi-triangular T padded with zeros, so |h_{m+1}ᵀ Z s|
+            # needs only a k×k eigenproblem (not an m×m one)
+            hz = vec(hrow' * Z[:, 1:k])
+            E = eigen(Tm[1:k, 1:k])
+            i1 = argmax(abs.(E.values))
+            sv = E.vectors[:, i1]
+            res[b] = abs(sum(hz .* sv)) / norm(sv) / max(abs(λ1), eps())
+            conv[b] = res[b] <= tol
+            conv[b] && (done[b] = true)
+            for l in 1:k, q in 1:m; Q[b, q, l] = T(Z[q, l]); end
             Hn = zeros(Float64, m + 1, m)
             Hn[1:k, 1:k] .= Tm[1:k, 1:k]
             Hn[k + 1, 1:k] .= vec(hrow' * Z[:, 1:k])
             H[b] = Hn
         end
+        tho += time() - t2
         all(done) && break
         it == maxiter && break
         kq = maximum(knew)
@@ -658,7 +674,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
         KA.synchronize(backend)
         for b in 1:nb; done[b] || (kb[b] = knew[b]); end
     end
-    return BatchedEigResult(rho, mu, conv, res, nmv, Array(op.flag))
+    return BatchedEigResult(rho, mu, conv, res, nmv, Array(op.flag), (sweep=tsw, orth=tor, host=tho))
 end
 
 # ---------------------------------------------------------------------------
@@ -668,7 +684,7 @@ end
 """
     spectral_radii(prob::BatchedLDDE, θs, tableau, p, r; backend=CPU(), T=Float64,
                    batchsize=:auto, krylovdim=30, keep=15, tol=1e-13, maxiter=20, retry=true,
-                   sweep=:auto, build=:auto, cpu_mode=:reference, verbose=false)
+                   sweep=:auto, build=:auto, cpu_mode=:reference, profile=false, verbose=false)
 
 Spectral radius of the one-period monodromy operator for every parameter point in
 `θs`, all discretized with the same `tableau`, `p` steps per period and `r` delay
@@ -689,13 +705,14 @@ of ~10⁻⁵ accuracy on ρ (see GPU_DESIGN.md).
 function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTableau{S}, p::Int, r::Int;
                         backend=CPU(), T::Type=Float64, batchsize=:auto, krylovdim::Int=30, keep::Int=15,
                         tol::Real=1e-13, maxiter::Int=20, retry::Bool=true, sweep=:auto, build::Symbol=:auto,
-                        cpu_mode::Symbol=:reference, verbose::Bool=false) where {D, K, S}
+                        cpu_mode::Symbol=:reference, profile::Bool=false, verbose::Bool=false) where {D, K, S}
     n = length(θs)
     if backend isa KA.CPU && cpu_mode === :reference
         return _spectral_radii_reference(prob, θs, tab, p, r, tol)
     end
     rho = zeros(n); mu = zeros(ComplexF64, n); conv = fill(false, n); res = zeros(n); flag = zeros(Int32, n)
     nmv = 0
+    tb = 0.0; tsw = 0.0; tor = 0.0; tho = 0.0
     # The batch iterates synchronously, so one slowly converging point would hold all the
     # others: first pass with a short restart budget, then the stragglers again with a
     # basis twice as large (clustered dominant multipliers need it).
@@ -710,8 +727,9 @@ function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTab
             t0 = time()
             op = build_batched_operators(prob, θs[idx], tab, p, r; backend=backend, T=T, build=build)
             t1 = time()
-            er = batched_eigs(op, backend; krylovdim=kd, keep=kp, tol=tol, maxiter=mi, sweep=sweep)
+            er = batched_eigs(op, backend; krylovdim=kd, keep=kp, tol=tol, maxiter=mi, sweep=sweep, profile=profile)
             t2 = time()
+            tb += t1 - t0; tsw += er.timing.sweep; tor += er.timing.orth; tho += er.timing.host
             verbose && println("pass $pass, $(length(idx)) points: build $(round(t1 - t0, digits=3)) s, eigs " *
                                "$(round(t2 - t1, digits=3)) s ($(er.matvecs) sweeps, $(count(er.converged)) converged)")
             rho[idx] .= er.rho; mu[idx] .= er.mu; conv[idx] .= er.converged
@@ -725,7 +743,7 @@ function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTab
                               "history window (r·h < lag); their ρ is wrong — increase r" maxlog=1
     isempty(todo) || @warn "$(length(todo)) point(s) did not converge (relative Ritz residual > tol); " *
                            "see `converged` / `residual`" maxlog=1
-    return BatchedEigResult(rho, mu, conv, res, nmv, flag)
+    return BatchedEigResult(rho, mu, conv, res, nmv, flag, (build=tb, sweep=tsw, orth=tor, host=tho))
 end
 
 "CPU fallback: the reference SOSD solver (sparse map + KrylovKit), one point per thread."

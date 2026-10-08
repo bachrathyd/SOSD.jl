@@ -41,6 +41,9 @@ function cpu_reference(bp, θs, tab, p, r)
     return ρ
 end
 
+"Compile every kernel variant used by a batch of these points (same batch size, tiny p)."
+warm(bp, θs; kw...) = spectral_radii(bp, θs, GL(3), 10, 10; backend=CUDABackend(), kw...)
+
 milling_points(n) = [SVector(5000.0 + 20000.0 * mod(0.618034 * i, 1.0), 5e-4 * (0.2 + mod(0.414214 * i, 1.0))) for i in 1:n]
 
 tab = GL(3)
@@ -59,23 +62,44 @@ for p in (QUICK ? (100,) : (100, 300, 1000))
 
 
     HAS_GPU || continue
-    spectral_radii(bp, θc[1:2], tab, p, r; backend=CUDABackend())
     for nb in (QUICK ? (256,) : (64, 512, 4096))
         θg = milling_points(nb)
+        warm(bp, θg)
         t = @elapsed res = spectral_radii(bp, θg, tab, p, r; backend=CUDABackend())
         nconv = count(res.converged)
         ref = ρc[1:min(ncpu, nb)]
         record("milling2dof", "GPU batched", "Float64", 4, p, nb, t,
                @sprintf("conv=%d/%d maxrel=%.1e sweeps=%d", nconv, nb, maximum(abs.(res.rho[1:length(ref)] .- ref) ./ ref), res.matvecs))
     end
-    spectral_radii(bp, θc[1:2], tab, p, r; backend=CUDABackend(), T=Float32, tol=1e-6)
     nb = QUICK ? 256 : 4096
     θg = milling_points(nb)
+    warm(bp, θg; T=Float32, tol=1e-6)
     res64 = spectral_radii(bp, θg, tab, p, r; backend=CUDABackend())
     t = @elapsed res32 = spectral_radii(bp, θg, tab, p, r; backend=CUDABackend(), T=Float32, tol=1e-6)
     record("milling2dof", "GPU batched", "Float32", 4, p, nb, t,
            @sprintf("maxrel_vs_F64=%.1e median=%.1e", maximum(abs.(res32.rho .- res64.rho) ./ res64.rho),
                     sort(abs.(res32.rho .- res64.rho) ./ res64.rho)[nb ÷ 2]))
+end
+
+# ---------------------------------------------------------------------------
+# 1b. Where the GPU time goes, and the thread mapping (2-DOF milling, nb = 2048)
+# ---------------------------------------------------------------------------
+if HAS_GPU
+    nb = QUICK ? 256 : 2048
+    θg = milling_points(nb)
+    for p in (QUICK ? (100,) : (100, 1000))
+        warm(bp, θg; profile=true)
+        t = @elapsed res = spectral_radii(bp, θg, tab, p, p; backend=CUDABackend(), profile=true)
+        tm = res.timing
+        record("breakdown_milling2dof", "GPU batched (profiled)", "Float64", 4, p, nb, t,
+               @sprintf("build=%.3f sweep=%.3f orth=%.3f host=%.3f s", tm.build, tm.sweep, tm.orth, tm.host))
+        for cfg in (SweepConfig(1, 64), SweepConfig(4, 32), SweepConfig(16, 16))
+            warm(bp, θg; sweep=cfg)
+            t = @elapsed res = spectral_radii(bp, θg, tab, p, p; backend=CUDABackend(), sweep=cfg, profile=true)
+            record("mapping_milling2dof", "GPU sweep R=$(cfg.R) BG=$(cfg.BG)", "Float64", 4, p, nb, t,
+                   @sprintf("sweep=%.3f s", res.timing.sweep))
+        end
+    end
 end
 
 # ---------------------------------------------------------------------------
@@ -92,16 +116,19 @@ for p in (QUICK ? (50,) : (100, 300))
     HAS_GPU || continue
     for build in (:host, :device)
         try
-            spectral_radii(bp24, θc[1:2], tab, p, r; backend=CUDABackend(), build=build)
+            spectral_radii(bp24, θc[1:2], tab, 10, 10; backend=CUDABackend(), build=build)
         catch err
             println("D=24 build=$build failed: ", sprint(showerror, err)[1:min(end, 200)]); continue
         end
         for nb in (QUICK ? (16,) : (1, 16, 128))
             θg = milling_points(nb)
-            t = @elapsed res = spectral_radii(bp24, θg, tab, p, r; backend=CUDABackend(), build=build)
+            spectral_radii(bp24, θg, tab, 10, 10; backend=CUDABackend(), build=build)
+            t = @elapsed res = spectral_radii(bp24, θg, tab, p, r; backend=CUDABackend(), build=build, profile=true)
             ref = ρc[1:min(ncpu, nb)]
+            tm = res.timing
             record("milling12dof", "GPU batched build=$build", "Float64", 24, p, nb, t,
-                   @sprintf("maxrel=%.1e sweeps=%d", maximum(abs.(res.rho[1:length(ref)] .- ref) ./ ref), res.matvecs))
+                   @sprintf("maxrel=%.1e sweeps=%d build=%.2f sweep=%.2f orth=%.2f host=%.2f", maximum(abs.(res.rho[1:length(ref)] .- ref) ./ ref),
+                            res.matvecs, tm.build, tm.sweep, tm.orth, tm.host))
         end
     end
 end
@@ -115,7 +142,7 @@ if HAS_GPU
     ns = collect(range(5000.0, 25000.0, length=nn))
     rho_of(xs, ys) = spectral_radii(bp, [SVector(x, y) for (x, y) in zip(xs, ys)], tab, p, r;
                                     backend=CUDABackend()).rho
-    boundary_multisection(rho_of, ns[1:2], 0.0, 5e-3; nsub=3, rounds=1)
+    boundary_multisection(rho_of, ns, 0.0, 5e-3; nsub=15, rounds=1)   # compiles the batch-size variants
     t = @elapsed wlim = boundary_multisection(rho_of, ns, 0.0, 5e-3; nsub=15, rounds=4)
     record("chart_milling2dof", "GPU multisection 15x4", "Float64", 4, p, nn * 15 * 4, t, "boundary points=$nn")
     open(joinpath(OUT, "chart_boundary.csv"), "w") do io
@@ -125,6 +152,7 @@ if HAS_GPU
     nw = QUICK ? 30 : 100
     ws = collect(range(0.0, 5e-3, length=nw + 1))[2:end]
     θgrid = [SVector(n, w) for w in ws for n in ns]
+    warm(bp, θgrid)
     t = @elapsed resg = spectral_radii(bp, θgrid, tab, p, r; backend=CUDABackend())
     record("chart_milling2dof", "GPU brute-force grid", "Float64", 4, p, length(θgrid), t, "grid=$(nn)x$(nw)")
     open(joinpath(OUT, "chart_grid.csv"), "w") do io

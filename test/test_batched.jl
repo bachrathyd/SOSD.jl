@@ -12,6 +12,10 @@ end
 
 @testset "Batched spectral radii (CPU backend)" begin
     tab = GL(3)
+    # everything passed to the kernels must be isbits (else CUDA refuses the launch)
+    @test isbits(SOSD.DeviceTableau(tab))
+    @test isbits(SOSD.DeviceTableau(tab, Float32))
+    @test all(isbits, (MATHIEU, TURNING_SSV, milling_model(1), milling_model(6)))
     cases = [
         ("delayed Mathieu", MATHIEU, [SVector(3.0, 0.2), SVector(1.0, 2.0), SVector(6.0, 1.0)], 40, 40),
         ("turning SSV (τ(t), p≠r)", TURNING_SSV, [SVector(0.3, 0.2), SVector(0.5, 0.1), SVector(1.0, 0.05)], 200, ssv_r(200)),

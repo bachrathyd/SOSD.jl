@@ -96,6 +96,55 @@ vals, _ = eigsolve(m, rand(m.state_size), 1, :LM)
 println("Max Multiplier: ", abs(vals[1]))
 ```
 
+## Batched stability charts on GPU (or CPU threads)
+
+For parameter sweeps (one spectral radius per point, thousands of points) use the
+batched API. All points of one call share the discretization (tableau, `p` steps per
+period, `r` delay steps); each point has its own period `T(θ)`, lags and coefficients.
+The coefficient functions take `(t, θ)` and return StaticArrays, so they compile for
+the GPU — use plain top-level functions or callable structs, no global mutable state.
+
+```julia
+using SOSD, StaticArrays
+using CUDA                       # optional; without it use backend = CPU()
+
+# ẍ + 2ζẋ + (1 + ε cos t) x = −w (x(t) − x(t − τ)),  θ = (τ, w)
+A(t, θ)   = @SMatrix [0.0 1.0; -1 - 0.5cos(t) - θ[2]  -0.1]
+B(t, θ)   = (@SMatrix([0.0 0.0; θ[2] 0.0]),)          # one delay term (K = 1)
+tau(t, θ) = (θ[1],)                                   # lags at time t
+period(θ) = 2π                                        # coefficient period
+prob = BatchedLDDE{2, 1}(A, B, tau, period)           # D = 2 states, K = 1 delays
+
+θs = [SVector(τ, w) for w in range(0, 1, 200) for τ in range(0.5, 2π, 300)]
+p  = 200                                              # steps per period, h = T(θ)/p
+r  = p                                                # delay steps, r·h ≥ max lag
+res = spectral_radii(prob, θs, GL(3), p, r; backend=CUDABackend())
+res.rho          # spectral radii, same order as θs (also res.mu, res.converged)
+```
+
+- `backend = CUDABackend()` runs the batched kernels on the GPU; `backend = CPU()`
+  (default) runs the reference solver threaded over points — the CPU fallback.
+- `T = Float32` halves the memory traffic; ρ then carries ~10⁻⁵ relative error (fine
+  for chart pictures, not for refinement) — see `GPU_DESIGN.md`.
+- Batch size, thread mapping (one thread per point for many small systems, a thread
+  block per point for few large ones) and operator assembly (`build = :device` for
+  S·D ≤ 32, else threaded CPU assembly + upload) are chosen automatically.
+- `res.flag[i] == 1` marks points whose lag exceeds `r·h`: increase `r`.
+
+**Boundary curves.** `boundary_multisection` replaces per-speed bisection: every round
+evaluates `nsub` depths for *all* speeds in one batched call.
+
+```julia
+rho_of(ns, ws) = spectral_radii(prob, SVector.(ns, ws), GL(3), p, r; backend=CUDABackend()).rho
+w_lim = boundary_multisection(rho_of, n_grid, 0.0, w_max; nsub=15, rounds=4)  # 16⁴ resolution
+```
+
+A full example (textbook milling, delayed Mathieu, turning with spindle-speed
+variation) is in `test/batched_models.jl`; `gpu/test_gpu.jl` and `gpu/bench_gpu.jl`
+are the CUDA test and benchmark, and `colab/SOSD_GPU_Colab.ipynb` runs both on a
+Colab GPU. For one point with error bars, convert with `LDDEProblem(prob, θ)` and use
+`floquet_analysis`.
+
 ## Engineering Case Studies
 Verified implementations and stability charts for:
 1. **Delayed Mathieu Equation**

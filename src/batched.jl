@@ -54,8 +54,8 @@ function LDDEProblem(bp::BatchedLDDE{D, K}, θ) where {D, K}
 end
 
 "Device-side Butcher tableau + Lagrange continuous extension on the nodes {0, c, 1}."
-struct DeviceTableau{S, T, S2}
-    a::SMatrix{S, S, T}
+struct DeviceTableau{S, T, S2, L}
+    a::SMatrix{S, S, T, L}
     b::SVector{S, T}
     c::SVector{S, T}
     unodes::SVector{S2, T}     # unique interpolation nodes (padded)
@@ -64,8 +64,7 @@ struct DeviceTableau{S, T, S2}
     mult::SVector{S2, T}       # multiplicity of each unique node
 end
 
-function DeviceTableau(tab::RKTableau{S}, ::Type{T}=Float64) where {S, T}
-    tab.strategy == endpoint && error("batched path: the `endpoint` interpolation strategy is not supported")
+function _device_tableau(tab::RKTableau{S}, ::Type{T}) where {S, T}
     raw = vcat(0.0, collect(tab.c), 1.0)
     u = sort(unique(raw)); nu = length(u)
     slot = [findfirst(==(x), u) for x in raw]
@@ -73,21 +72,21 @@ function DeviceTableau(tab::RKTableau{S}, ::Type{T}=Float64) where {S, T}
     S2 = S + 2
     ud = SVector{S2, T}(ntuple(i -> i <= nu ? T(u[i]) : zero(T), S2))
     md = SVector{S2, T}(ntuple(i -> i <= nu ? T(mult[i]) : one(T), S2))
-    dt = DeviceTableau{S, T, S2}(SMatrix{S, S, T}(tab.a), SVector{S, T}(tab.b), SVector{S, T}(tab.c),
-                                 ud, nu, SVector{S2, Int}(slot), md)
+    return DeviceTableau{S, T, S2, S * S}(SMatrix{S, S, T}(tab.a), SVector{S, T}(tab.b), SVector{S, T}(tab.c),
+                                          ud, nu, SVector{S2, Int}(slot), md)
+end
+
+function DeviceTableau(tab::RKTableau{S}, ::Type{T}=Float64) where {S, T}
+    tab.strategy == endpoint && error("batched path: the `endpoint` interpolation strategy is not supported")
     # The batched kernels implement the Lagrange extension only; refuse anything else
+    d64 = _device_tableau(tab, Float64)
     for θ in (0.0, 0.13, 0.5, 0.77, 1.0)
-        w_ref = tab.ce(θ); w = _ce_weights(DeviceTableau{S, Float64, S2}(dt), θ)
-        maximum(abs.(collect(w_ref) .- collect(w))) < 1e-12 ||
+        maximum(abs.(collect(tab.ce(θ)) .- collect(_ce_weights(d64, θ)))) < 1e-12 ||
             error("batched path: the continuous extension of this tableau is not the Lagrange " *
                   "interpolant on {0, c, 1} (e.g. the RK4 Hermite extension); use the CPU path")
     end
-    return dt
+    return T === Float64 ? d64 : _device_tableau(tab, T)
 end
-
-DeviceTableau{S, T, S2}(d::DeviceTableau{S, <:Any, S2}) where {S, T, S2} =
-    DeviceTableau{S, T, S2}(SMatrix{S, S, T}(d.a), SVector{S, T}(d.b), SVector{S, T}(d.c),
-                            SVector{S2, T}(d.unodes), d.nunique, d.slot, SVector{S2, T}(d.mult))
 
 @inline function _ce_weights(tab::DeviceTableau{S, T, S2}, θ) where {S, T, S2}
     return SVector{S2, T}(ntuple(Val(S2)) do i
@@ -266,6 +265,9 @@ function build_batched_operators(prob::BatchedLDDE{D, K}, θs::AbstractVector, t
     mode = build === :auto ? (S * D <= 32 ? :device : :host) : build
     mode in (:device, :host) || error("build must be :auto, :device or :host")
     dtab = DeviceTableau(tab, T)
+    isbits(prob) || error("BatchedLDDE must be isbits (plain functions / callable structs of plain data) " *
+                          "to run in GPU kernels; got $(typeof(prob))")
+    isbitstype(eltype(θs)) || error("parameter points θ must be isbits (e.g. SVector, NamedTuple of numbers)")
     Hist = KA.zeros(backend, T, nb, (p + r + 1) * BS)
     if mode === :device
         θd = _to_device(backend, collect(θs))
@@ -508,7 +510,7 @@ end
 struct BatchedEigResult
     rho::Vector{Float64}
     mu::Vector{ComplexF64}
-    converged::BitVector
+    converged::Vector{Bool}
     residual::Vector{Float64}
     matvecs::Int
     flag::Vector{Int32}
@@ -546,8 +548,8 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     H = [zeros(Float64, m + 1, m) for _ in 1:nb]
     kb = zeros(Int, nb)                         # kept vectors per point (0 at start)
     rho = zeros(nb); mu = zeros(ComplexF64, nb); res = fill(Inf, nb)
-    conv = falses(nb)
-    done = falses(nb)                           # converged or invariant subspace found: frozen
+    conv = fill(false, nb)                      # Vector{Bool}: written from threads (a BitVector would race)
+    done = fill(false, nb)                      # converged or invariant subspace found: frozen
     nmv = 0
     wg2(a) = (min(a, 64), 1)
     nrm0 = KA.zeros(backend, T, nb)
@@ -610,7 +612,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             thr = abs(λ[order[keep]])
             k = count(x -> abs(x) >= thr * (1 - 1e-12), λ)
             k = min(k, keep + 1)
-            sel = falses(m); cnt = 0
+            sel = fill(false, m); cnt = 0
             for idx in order
                 cnt >= k && break
                 sel[idx] = true; cnt += 1
@@ -692,7 +694,7 @@ function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTab
     end
     bpp = bytes_per_point(D, S, K, p, r, min(krylovdim, (r + 1) * (S + 1) * D - 1), T)
     bs = batchsize === :auto ? max(1, min(n, floor(Int, 0.8 * available_memory(backend) / bpp))) : batchsize
-    rho = zeros(n); mu = zeros(ComplexF64, n); conv = falses(n); res = zeros(n); flag = zeros(Int32, n)
+    rho = zeros(n); mu = zeros(ComplexF64, n); conv = fill(false, n); res = zeros(n); flag = zeros(Int32, n)
     nmv = 0
     for lo in 1:bs:n
         hi = min(n, lo + bs - 1)
@@ -715,7 +717,7 @@ end
 "CPU fallback: the reference SOSD solver (sparse map + KrylovKit), one point per thread."
 function _spectral_radii_reference(prob::BatchedLDDE, θs, tab, p, r, tol)
     n = length(θs)
-    rho = fill(NaN, n); mu = fill(ComplexF64(NaN), n); conv = falses(n); flag = zeros(Int32, n)
+    rho = fill(NaN, n); mu = fill(ComplexF64(NaN), n); conv = fill(false, n); flag = zeros(Int32, n)
     θh = collect(θs)
     Threads.@threads for i in 1:n
         θ = θh[i]

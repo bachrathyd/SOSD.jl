@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOSD WebGPU</title>
+<meta name="description" content="Stability charts of linear time-periodic delay-differential equations on your own GPU with WebGPU: a Float32 port of the batched SOSD solver (SOSD.jl), brute-force charts and MDBM boundaries.">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2230; --muted: #5d6475; --line: #dfe2e8;
+    --accent: #2f6fdb; --accent-ink: #ffffff; --chip: #eef1f6; --warn: #b4441c; --ok: #1e7b45;
+    --plot-bg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121418; --panel: #1b1e24; --ink: #e6e8ee; --muted: #9aa1b2; --line: #2c313b;
+      --accent: #5b93f0; --accent-ink: #0d1117; --chip: #252a33; --warn: #f08a5d; --ok: #5fcf8d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 20px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { margin: 0; font-size: 18px; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  #helpBtn { float: right; margin-left: 12px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  #helpBg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 4vh 16px; }
+  #helpBg[hidden] { display: none; }
+  #helpBox { position: relative; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; max-width: 720px; width: 100%;
+    max-height: 92vh; overflow-y: auto; padding: 18px 22px; font-size: 13.5px; line-height: 1.5; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+  #helpBox h2 { font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--ink); margin: 0 0 6px; }
+  #helpBox h3 { font-size: 13px; margin: 14px 0 4px; color: var(--accent); }
+  #helpBox p, #helpBox ul { margin: 0; } #helpBox ul { padding-left: 18px; }
+  #helpBox a { color: var(--accent); }
+  #helpClose { position: absolute; top: 10px; right: 12px; font-size: 18px; line-height: 1; padding: 4px 10px; }
+  main { --side: 360px; display: grid; grid-template-columns: var(--side) 12px minmax(0, 1fr); gap: 0 4px; padding: 16px 20px; }
+  #split { cursor: col-resize; touch-action: none; border-radius: 4px; position: relative; }
+  #split::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: var(--line); }
+  #split:hover::after, #split.drag::after { background: var(--accent); }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; } #split { display: none; }
+    .figure { margin-top: 12px; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  aside .panel + .panel { margin-top: 12px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  label.row { display: block; margin: 0 0 10px; }
+  label.row > span { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+  select, input[type=number], input[type=text] { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); font: inherit; }
+  input[type=range] { width: 100%; margin: 2px 0; accent-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 8px 0 6px; font-size: 13.5px; font-weight: 600; }
+  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .formula { font-size: 13px; margin: 2px 0 10px; padding: 6px 8px; background: var(--chip); border-radius: 6px; }
+  .note { font-size: 12px; color: var(--muted); margin: -4px 0 10px; padding-left: 8px; border-left: 2px solid var(--line); }
+  textarea#eq { width: 100%; min-height: 150px; resize: vertical; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); font: 12.5px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace; tab-size: 2; }
+  .status { font-size: 12px; margin: 4px 0 4px; min-height: 1.2em; }
+  .status.err { color: var(--warn); }
+  table.par { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.par td { padding: 3px 3px; vertical-align: middle; }
+  table.par td.nm { white-space: nowrap; font-weight: 600; }
+  table.par td.v { width: 64px; font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+  table.par input[type=number] { padding: 2px 4px; font-size: 12px; width: 62px; }
+  table.par .ax { display: flex; gap: 2px; }
+  table.par .ax button { padding: 1px 6px; font-size: 11.5px; }
+  table.par .ax button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .figure { min-width: 0; }
+  @media (min-width: 861px) { aside { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; padding-right: 4px; }
+    .figure { position: sticky; top: 12px; align-self: start; } }
+  .plotwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  #chart { display: block; width: 100%; cursor: crosshair; touch-action: none; user-select: none; }
+  #chart.panning { cursor: grabbing; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
+  .toolbar button { padding: 3px 10px; font-size: 12.5px; }
+  .toolbar .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+  #progress { height: 3px; background: transparent; margin: 0 0 4px; }
+  #progress div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .stat .k { font-size: 11.5px; color: var(--muted); }
+  .stat .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  #hover { margin-top: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  #msg { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--warn); color: var(--warn); display: none; }
+  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap; margin-top: 10px; }
+  #report table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; margin-top: 10px; }
+  #report th, #report td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  #report th:first-child, #report td:first-child { text-align: left; }
+  .pass { color: var(--ok); font-weight: 600; } .fail { color: var(--warn); font-weight: 600; }
+  footer { padding: 6px 20px 18px; color: var(--muted); font-size: 12px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <button id="helpBtn">? Help</button>
+  <h1>SOSD in the browser: stability charts of time-periodic delay equations on your GPU</h1>
+  <div class="sub">Float32 WebGPU port of the batched solver of <a href="https://github.com/bachrathyd/SOSD.jl">SOSD.jl</a>:
+    collocation steps over one period, Arnoldi on the monodromy operator, one GPU thread per parameter point. <span id="device"></span></div>
+</header>
+<main>
+  <aside>
+    <div id="msg"></div>
+    <div class="panel">
+      <h2>Model</h2>
+      <label class="row"><span><b>Example</b></span><select id="ex"></select></label>
+      <div class="formula" id="formula"></div>
+      <div class="note" id="note"></div>
+      <div class="muted">ẋ(t) = A(t) x(t) + B(t) x(t − τ(t)), A, B, τ periodic with period T — edit below
+        (<code>name = min:max @ value</code> declares a slider):</div>
+      <textarea id="eq" spellcheck="false"></textarea>
+      <div class="status" id="eqStatus"></div>
+    </div>
+    <div class="panel">
+      <h2>Parameters</h2>
+      <table class="par" id="par"></table>
+      <div class="muted">X / Y: chart axes (their min–max is the chart range).</div>
+    </div>
+    <div class="panel">
+      <h2>Method</h2>
+      <label class="check"><input type="checkbox" id="bfOn" checked> Brute force: ρ on a grid (colour map)</label>
+      <label class="row"><span>grid</span><select id="bfGrid"></select></label>
+      <label class="check"><input type="checkbox" id="mdOn" checked> MDBM: boundary ρ = 1 only</label>
+      <div class="grid2">
+        <label class="row"><span>initial grid</span><select id="mdGrid"></select></label>
+        <label class="row"><span>iterations <b id="mdItV"></b></span><input type="range" id="mdIt" min="0" max="6" step="1" value="4"></label>
+      </div>
+      <label class="check" style="font-weight:400"><input type="checkbox" id="mdNb" checked> neighbour check</label>
+      <label class="check" style="font-weight:400"><input type="checkbox" id="mdPts"> show MDBM evaluation points</label>
+    </div>
+    <div class="panel">
+      <h2>Discretization</h2>
+      <div class="grid3">
+        <label class="row"><span>stages s</span><select id="S"><option value="1">GL1</option><option value="2">GL2</option><option value="3" selected>GL3</option><option value="4">GL4</option></select></label>
+        <label class="row"><span>steps p</span><input type="number" id="p" min="4" max="1000" step="1"></label>
+        <label class="row"><span>Krylov m</span><input type="number" id="m" min="4" max="24" step="1"></label>
+      </div>
+      <label class="check" style="font-weight:400"><input type="checkbox" id="auto" checked> recompute while moving sliders</label>
+      <div class="buttons"><button class="primary" id="go">Compute</button><button id="reset">Reset example</button>
+        <button id="bench">Benchmark</button></div>
+    </div>
+  </aside>
+  <div id="split" role="separator" aria-orientation="vertical" title="drag to resize · double-click to reset"></div>
+  <section class="figure">
+    <div class="plotwrap">
+      <div class="toolbar"><button id="resetAxes">Reset axes</button><button id="savePng">Save PNG</button>
+        <span class="hint">wheel: zoom · drag: zoom box · middle-drag / shift-drag: pan · pinch on touch · double-click: reset</span></div>
+      <div id="progress"><div></div></div>
+      <canvas id="chart" width="1100" height="640"></canvas>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">ρ evaluations</div><div class="v" id="sN">–</div></div>
+      <div class="stat"><div class="k">GPU time</div><div class="v" id="sT">–</div></div>
+      <div class="stat"><div class="k">per ρ</div><div class="v" id="sU">–</div></div>
+      <div class="stat"><div class="k">unstable (brute force)</div><div class="v" id="sUn">–</div></div>
+      <div class="stat"><div class="k">delay steps r · state size</div><div class="v" id="sR">–</div></div>
+    </div>
+    <div id="hover"></div>
+    <div id="report"></div>
+    <div id="log"></div>
+  </section>
+</main>
+<footer>SOSD.jl — Solution-Operator Semi-Discretization, D. Bachrathy (BME). Computed locally in your browser; nothing is uploaded.
+  Anonymous usage counts (page views and which features are used, no cookies, never the model text) via GoatCounter.
+  <a href="?validate=1">validate against the Julia reference</a></footer>
+<div id="helpBg" hidden><div id="helpBox">
+  <button id="helpClose">×</button>
+  <h2>How it works</h2>
+  <p>Each chart point is a parameter vector of the model ẋ(t) = A(t)x(t) + B(t)x(t − τ(t)). One GPU thread integrates
+    one period with <b>p</b> Gauss–Legendre collocation steps (s stages; the delayed state comes from the continuous extension
+    of the stored steps), and runs <b>m</b> Arnoldi steps on the resulting monodromy operator. The spectral radius ρ is the
+    largest eigenvalue modulus of the m×m Hessenberg matrix: <b>ρ &lt; 1 stable</b> (blue), ρ &gt; 1 unstable (red).</p>
+  <h3>Brute force vs MDBM</h3>
+  <ul><li><b>Brute force</b> evaluates every grid point: the colour map of log₁₀ ρ, the boundary from the grid.</li>
+    <li><b>MDBM</b> (multi-dimensional bisection method) evaluates a small initial grid and then only the cells that
+      contain the boundary, halving them at every iteration — the boundary at the resolution of a
+      (initial grid × 2<sup>iterations</sup>) grid with a fraction of the evaluations. Both can be on together.</li></ul>
+  <h3>Zoom and pan</h3>
+  <p>Mouse wheel zooms about the cursor, a left-button drag zooms into the drawn box, middle-button (or shift + left)
+    drag pans, two fingers pinch and pan on a touch screen, double-click resets the axes. The chart is recomputed for the
+    new range (the old image is shown stretched until the new one arrives), and the ranges in the model text follow.
+    The divider between the panels can be dragged.</p>
+  <h3>The model text</h3>
+  <ul><li><code>ζ = 0:0.05 @ 0.011</code> a parameter with a slider (range, start value); <code>z = 2</code> a constant;
+      <code>ω = 2*pi*n/60</code> a helper (may use t);</li>
+    <li><code>T = …</code> the period (no t), <code>τ = …</code> the delay (may use t), <code>A = [a, b; c, d]</code>,
+      <code>B = […]</code> (rows separated by ;);</li>
+    <li>functions: sin cos tan asin acos atan exp log sqrt abs floor sign step(x) mod(a,b) min max pow atan2, constant pi.</li></ul>
+  <h3>Accuracy</h3>
+  <p>Float32 (WebGPU has no Float64): write the model in non-dimensional form (the examples do), so the entries of A and B
+    are O(1). The validation page (link in the footer) compares the examples with the Float64 CPU solver of SOSD.jl.
+    Too small m or p shows up as a ragged boundary — increase them.</p>
+</div></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

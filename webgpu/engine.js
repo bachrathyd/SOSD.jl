@@ -41,7 +41,7 @@ export function gaussTableau(s) {
   return { s, a, b, c, order: 2 * s };
 }
 
-function tableauWGSL(tab, MMAX, LPP, f16 = false, ORTH = 1) {
+function tableauWGSL(tab, MMAX, LPP, f16 = false, ORTH = 1, WG = 64) {
   const f = (v) => { let t = v.toPrecision(9); if (!/[.eE]/.test(t)) t += '.0'; return t; };
   const arr = (v) => `array<f32, ${v.length}>(${v.map(f).join(', ')})`;
   const nodes = [0, ...tab.c, 1];
@@ -51,7 +51,7 @@ function tableauWGSL(tab, MMAX, LPP, f16 = false, ORTH = 1) {
   const t = (k) => (f16 && (f16 === true || f16.includes(k)) ? 'f16' : 'f32');
   return `alias SW = ${t('W')};\nalias SH = ${t('H')};\nalias SV = ${t('V')};\nconst S: u32 = ${tab.s}u;\nconst MMAX: u32 = ${MMAX}u;\nconst LPP: u32 = ${LPP}u;\n` +
     `const AT = ${arr(tab.a)};\nconst BT = ${arr(tab.b)};\nconst CT = ${arr(tab.c)};\nconst XN = ${arr(nodes)};\n` +
-    `const EW = ${arr(EW)};\nconst ORTH: u32 = ${ORTH}u;\n`;
+    `const EW = ${arr(EW)};\nconst ORTH: u32 = ${ORTH}u;\nconst WG: u32 = ${WG}u;\n`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -77,6 +77,7 @@ export class Engine {
       requiredLimits: {
         maxStorageBufferBindingSize: Math.min(lim.maxStorageBufferBindingSize, 1 << 30),
         maxBufferSize: Math.min(lim.maxBufferSize, 1 << 30),
+        maxComputeWorkgroupStorageSize: lim.maxComputeWorkgroupStorageSize,
       },
     });
     const info = adapter.info || {};
@@ -121,9 +122,9 @@ export class Engine {
     return [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(' ') || 'GPU';
   }
 
-  async pipeline(model, S, m, lpp, f16 = false, orth = 1) {
+  async pipeline(model, S, m, lpp, f16 = false, orth = 1, wg = 64) {
     const code = (f16 ? 'enable f16;\n' : '') +
-      this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp, f16, orth));
+      this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp, f16, orth, wg));
     let p = this.pipelines.get(code);
     if (p) return p;
     const module = this.device.createShaderModule({ code, label: 'sosd' });
@@ -166,11 +167,12 @@ export class Engine {
     const bytesPerPt = 4 * ((p + r + 1) * BS + (m + 1) * N + wFloats + lFloats) + 8 + OUT_BYTES;
     // lanes per point: several for a small batch (latency of one point), one for a large grid
     const lpp = opt.lpp ?? this.lanesPerPoint(n, BS);
-    const G = 64 / lpp;
+    const WG = opt.wg ?? 64;                     // threads per workgroup of the main kernel
+    const G = WG / lpp;
     // fast mode: hist, V and W stored as f16 (half the memory traffic), arithmetic in f32
     const f16 = this.hasF16 && opt.f16 ? opt.f16 : false;   // true, or a subset of 'WHV'
     const eb = (k) => (f16 && (f16 === true || f16.includes(k)) ? 2 : 4);
-    const pl = await this.pipeline(model, S, m, lpp, f16, opt.orth ?? 1);
+    const pl = await this.pipeline(model, S, m, lpp, f16, opt.orth ?? 1, WG);
     const dev = this.device;
     // per-buffer size limit, and the prep dispatch (one thread per point and step) ≤ 65535 groups
     const perPt = Math.max((p + r + 1) * BS, (m + 1) * N, wFloats, lFloats) * 4;
@@ -194,7 +196,7 @@ export class Engine {
       const nb = Math.min(band, n - off);
       if (nb > cap) {
         cap = Math.min(maxBand, Math.max(nb, Math.min(n - off, 2 * nb)));
-        const slots = Math.ceil(cap / 64) * 64;
+        const slots = Math.ceil(cap / WG) * WG;
         hist = this.buffer('hist', eb('H') * (p + r + 1) * BS * slots, S_);
         V = this.buffer('V', eb('V') * (m + 1) * N * slots, S_);
         Wb = this.buffer('W', eb('W') * wFloats * slots, S_);

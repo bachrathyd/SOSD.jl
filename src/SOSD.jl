@@ -15,7 +15,7 @@ export build_explicit_matrices, get_explicit_transition_matrix
 export BS3, embedded_tableau, embedded_weights
 export floquet_analysis, spectral_radius, FloquetSolution, FloquetErrorEstimate
 export BatchedLDDE, spectral_radii, build_batched_operators, batched_eigs, boundary_multisection
-export BatchedEigResult, SweepConfig
+export BatchedEigResult, SweepConfig, rescale
 
 @enum InterpStrategy collocation endpoint denseoutput
 

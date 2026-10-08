@@ -105,3 +105,26 @@ function milling_model(NM::Int; kw...)
     tool = MillingTool(NM; kw...)
     return BatchedLDDE{4NM, 1}(MillingA(tool), MillingB(tool), MillingTau{NM}(tool.z), MillingPeriod{NM}(tool.z))
 end
+
+"Non-dimensional milling model (t̃ = ω₁t, velocities / ω₁): identical ρ, O(1) step blocks — for Float32/Float16."
+function milling_model_nd(NM::Int; kw...)
+    tool = MillingTool(NM; kw...)
+    ω1 = tool.ω[1]
+    return rescale(milling_model(NM; kw...), ω1, vcat(ones(2NM), fill(1 / ω1, 2NM)))
+end
+
+# --- Parametrised variants for interactive charts (all knobs live in θ, so changing a knob
+#     never recompiles a kernel).
+# Delayed damped Mathieu, θ = (δ, ε, b0, a1): ẍ + a1 ẋ + (δ + ε cos t) x = b0 x(t − 2π), T = τ = 2π
+mathieu4_A(t, θ) = @SMatrix [0.0 1.0; -θ[1]-θ[2]*cos(t) -θ[4]]
+mathieu4_B(t, θ) = (@SMatrix([0.0 0.0; θ[3] 0.0]),)
+const MATHIEU4 = BatchedLDDE{2, 1}(mathieu4_A, mathieu4_B, mathieu_tau, mathieu_T)
+
+# Turning with SSV, θ = (Ω, kw, A, ζ): ẍ + ζẋ + x = kw (x(t − τ(t)) − x(t)),
+# τ(t) = 2π/Ω (1 + A sin(2πt/T)), T = NT·2π/Ω (NT = 10)
+ssv4_A(t, θ) = @SMatrix [0.0 1.0; -1-θ[2] -θ[4]]
+ssv4_B(t, θ) = (@SMatrix([0.0 0.0; θ[2] 0.0]),)
+ssv4_T(θ) = 2π / θ[1] * SSV_NT
+ssv4_tau(t, θ) = (2π / θ[1] * (1 + θ[3] * sin(2π * t / ssv4_T(θ))),)
+const TURNING_SSV4 = BatchedLDDE{2, 1}(ssv4_A, ssv4_B, ssv4_tau, ssv4_T)
+ssv4_r(p, A) = ceil(Int, p * (1 + A) / SSV_NT) + 1

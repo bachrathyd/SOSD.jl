@@ -41,6 +41,37 @@ end
 BatchedLDDE{D, K}(A::FA, B::FB, tau::FT, period::FP) where {D, K, FA, FB, FT, FP} =
     BatchedLDDE{D, K, FA, FB, FT, FP}(A, B, tau, period)
 
+# Non-dimensionalised wrapper: t̃ = ω₀ t, x̃ = S x (S = diag(s)). The monodromy of the
+# rescaled system is S Φ S⁻¹ over the same period, so the Floquet multipliers are identical;
+# only the magnitudes of the step blocks change (needed for Float16, helps Float32).
+struct _ScaledA{F, D, T}; f::F; ω0::T; s::SVector{D, T}; end
+struct _ScaledB{F, D, T}; f::F; ω0::T; s::SVector{D, T}; end
+struct _ScaledTau{F, T}; f::F; ω0::T; end
+struct _ScaledPeriod{F, T}; f::F; ω0::T; end
+@inline _sim(M, s, ω0) = SMatrix{length(s), length(s)}(ntuple(Val(length(s) * length(s))) do idx
+    i = (idx - 1) % length(s) + 1; j = (idx - 1) ÷ length(s) + 1
+    s[i] * M[i, j] / (s[j] * ω0)
+end)
+(a::_ScaledA)(t, θ) = _sim(a.f(t / a.ω0, θ), a.s, a.ω0)
+(b::_ScaledB)(t, θ) = map(M -> _sim(M, b.s, b.ω0), b.f(t / b.ω0, θ))
+(τ::_ScaledTau)(t, θ) = map(x -> τ.ω0 * x, τ.f(t / τ.ω0, θ))
+(T::_ScaledPeriod)(θ) = T.ω0 * T.f(θ)
+
+"""
+    rescale(prob::BatchedLDDE, ω0, s)
+
+The same DDE in non-dimensional form: time `t̃ = ω0·t`, state `x̃ = diag(s)·x`. Floquet
+multipliers (and hence ρ) are unchanged; the step blocks become O(1), which Float16 (range
+6·10⁻⁵ … 6.5·10⁴) requires and Float32 benefits from. Typical choice for a mechanical
+model with states [positions; velocities]: `ω0` = a natural angular frequency,
+`s = [1, …, 1, 1/ω0, …, 1/ω0]`.
+"""
+function rescale(prob::BatchedLDDE{D, K}, ω0::Real, s::AbstractVector) where {D, K}
+    w = Float64(ω0); sv = SVector{D, Float64}(s)
+    return BatchedLDDE{D, K}(_ScaledA(prob.A, w, sv), _ScaledB(prob.B, w, sv),
+                             _ScaledTau(prob.tau, w), _ScaledPeriod(prob.period, w))
+end
+
 """
     LDDEProblem(bp::BatchedLDDE, θ)
 
@@ -141,7 +172,7 @@ end
 @kernel function _build_kernel!(Mp, Md, Midx, Wt, flag, @Const(θs), prob, tab, p::Int, r::Int,
                                 ::Val{D}, ::Val{S}, ::Val{K}) where {D, S, K}
     b, n = @index(Global, NTuple)
-    T = eltype(Mp)
+    T = promote_type(eltype(Mp), Float32)   # Float16 storage: build in Float32
     SD = S * D
     @inbounds begin
         θ = θs[b]
@@ -265,7 +296,7 @@ function build_batched_operators(prob::BatchedLDDE{D, K}, θs::AbstractVector, t
     BS = (S + 1) * D
     mode = build === :auto ? :device : build
     mode in (:device, :host) || error("build must be :auto, :device or :host")
-    dtab = DeviceTableau(tab, T)
+    dtab = DeviceTableau(tab, promote_type(T, Float32))
     isbits(prob) || error("BatchedLDDE must be isbits (plain functions / callable structs of plain data) " *
                           "to run in GPU kernels; got $(typeof(prob))")
     isbitstype(eltype(θs)) || error("parameter points θ must be isbits (e.g. SVector, NamedTuple of numbers)")
@@ -343,7 +374,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
                         s = sk % S + 1; k = sk ÷ S + 1
                         m = Midx[b, s, k, n]
                         base0 = (m - 1) * BS; base1 = m * BS
-                        acc = Wt[b, 1, s, k, n] * Hist[b, base0 + d]
+                        acc = promote_type(T, Float32)(Wt[b, 1, s, k, n]) * Hist[b, base0 + d]
                         for i in 1:S
                             acc += Wt[b, i + 1, s, k, n] * Hist[b, base1 + i * D + d]
                         end
@@ -358,7 +389,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
             @synchronize
             if b <= nb && mask[b] != 0
                 for row in lr:R:BS
-                    acc = zero(T)
+                    acc = zero(promote_type(T, Float32))
                     for d in 1:D
                         acc += Mp[b, row, d, n] * ycur[lb, d]
                     end
@@ -445,7 +476,7 @@ end
 
 @kernel function _dots_kernel!(Hc, @Const(V), @Const(W), jw::Int, N::Int, @Const(mask))
     b, l = @index(Global, NTuple)
-    T = eltype(V)
+    T = promote_type(eltype(V), Float32)    # accumulate in ≥ Float32
     acc = zero(T)
     @inbounds if mask[b] != 0
         for i in 1:N
@@ -468,7 +499,7 @@ end
 
 @kernel function _norm_kernel!(nrm, @Const(W), jw::Int, N::Int)
     b = @index(Global)
-    T = eltype(W)
+    T = promote_type(eltype(W), Float32)
     acc = zero(T)
     @inbounds for i in 1:N
         acc += W[b, i, jw]^2
@@ -485,7 +516,7 @@ end
 
 @kernel function _rotate_kernel!(Vt, @Const(V), @Const(Q), m::Int, kq::Int)
     b, i = @index(Global, NTuple)
-    T = eltype(V)
+    T = promote_type(eltype(V), Float32)
     @inbounds for l in 1:kq
         acc = zero(T)
         for q in 1:m
@@ -537,7 +568,7 @@ m×m Schur decompositions (threaded). Converged when the Ritz residual of the do
 eigenpair satisfies `|h_{m+1}ᵀ s| ≤ tol · |λ₁|` for every point (or `maxiter` restarts).
 """
 function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=30, keep::Int=15,
-                      tol::Real=1e-13, maxiter::Int=20, sweep=:auto, profile::Bool=false) where {D, S, K, T}
+                      tol::Real=(T === Float64 ? 1e-13 : 100 * eps(T)), maxiter::Int=20, sweep=:auto, profile::Bool=false) where {D, S, K, T}
     nb = op.nb; N = state_size(op); m = min(krylovdim, N - 1)
     # profile = true synchronizes after every phase and accumulates wall times (s)
     tsw = 0.0; tor = 0.0; tho = 0.0
@@ -547,14 +578,15 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     V = KA.zeros(backend, T, nb, N, m + 1)
     Wb = KA.zeros(backend, T, nb, N, 1)
     Vt = KA.zeros(backend, T, nb, N, keep + 1)
-    Hc = KA.zeros(backend, T, nb, m + 1)
-    Hc2 = KA.zeros(backend, T, nb, m + 1)
-    nrm = KA.zeros(backend, T, nb)
-    scale = KA.zeros(backend, T, nb)
+    CT = promote_type(T, Float32)               # coefficients/norms never in Float16
+    Hc = KA.zeros(backend, CT, nb, m + 1)
+    Hc2 = KA.zeros(backend, CT, nb, m + 1)
+    nrm = KA.zeros(backend, CT, nb)
+    scale = KA.zeros(backend, CT, nb)
     mask = KA.zeros(backend, Int32, nb)
     mask2 = KA.zeros(backend, Int32, nb)
     kbd = KA.zeros(backend, Int32, nb)
-    Qd = KA.zeros(backend, T, nb, m, keep + 1)
+    Qd = KA.zeros(backend, CT, nb, m, keep + 1)
 
     # deterministic start vector (same as the CPU default), normalised
     x0 = Float64[1.0 + 0.1 * sin(7.3 * i) for i in 1:N]; x0 ./= norm(x0)
@@ -568,8 +600,8 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     done = fill(false, nb)                      # converged or invariant subspace found: frozen
     nmv = 0
     wg2(a) = (min(a, 64), 1)
-    nrm0 = KA.zeros(backend, T, nb)
-    bd_tol = 100 * eps(T)
+    nrm0 = KA.zeros(backend, CT, nb)
+    bd_tol = T === Float64 ? 100 * eps(T) : 10 * eps(T)
 
     for it in 1:maxiter
         jstart = minimum(kb[.!done]) + 1
@@ -589,7 +621,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             _norm_kernel!(backend, min(nb, 64))(nrm, Wb, 1, N; ndrange=nb)
             KA.synchronize(backend)
             nr = Array(nrm); nr0 = Array(nrm0)
-            reorth = Int32[(act[b] != 0 && nr[b] < nr0[b] / sqrt(T(2))) ? 1 : 0 for b in 1:nb]
+            reorth = Int32[(act[b] != 0 && nr[b] < nr0[b] / sqrt(CT(2))) ? 1 : 0 for b in 1:nb]
             copyto!(mask2, reorth)
             _dots_kernel!(backend, wg2(nb))(Hc2, V, Wb, 1, N, mask2; ndrange=(nb, j))
             if any(!=(0), reorth)
@@ -598,7 +630,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             end
             KA.synchronize(backend)
             hc = Array(Hc); hc2 = Array(Hc2); nr = Array(nrm)
-            sc = zeros(T, nb)
+            sc = zeros(CT, nb)
             for b in 1:nb
                 act[b] == 0 && continue
                 for l in 1:j; H[b][l, j] = Float64(hc[b, l]) + Float64(hc2[b, l]); end
@@ -609,7 +641,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
                     rho[b] = abs(λ[i1]); mu[b] = λ[i1]; res[b] = 0.0
                     conv[b] = true; done[b] = true; act[b] = 0
                 else
-                    sc[b] = T(1 / β)
+                    sc[b] = CT(1 / β)
                 end
             end
             copyto!(mask, act)
@@ -620,7 +652,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
         t2 = tick()
 
         # host: Schur form, convergence test, restart data
-        Q = zeros(T, nb, m, keep + 1)
+        Q = zeros(CT, nb, m, keep + 1)
         knew = zeros(Int, nb)
         Threads.@threads for b in 1:nb
             done[b] && continue
@@ -674,7 +706,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             res[b] = abs(sum(hz .* sv)) / norm(sv) / max(abs(λ1), eps())
             conv[b] = res[b] <= tol
             conv[b] && (done[b] = true)
-            for l in 1:k, q in 1:m; Q[b, q, l] = T(Z[q, l]); end
+            for l in 1:k, q in 1:m; Q[b, q, l] = CT(Z[q, l]); end
             Hn = zeros(Float64, m + 1, m)
             Hn[1:k, 1:k] .= Tm[1:k, 1:k]
             Hn[k + 1, 1:k] .= vec(hrow' * Z[:, 1:k])
@@ -721,7 +753,7 @@ of ~10⁻⁵ accuracy on ρ (see GPU_DESIGN.md).
 """
 function spectral_radii(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTableau{S}, p::Int, r::Int;
                         backend=CPU(), T::Type=Float64, batchsize=:auto, krylovdim::Int=30, keep::Int=15,
-                        tol::Real=1e-13, maxiter::Int=20, retry::Bool=true, sweep=:auto, build::Symbol=:auto,
+                        tol::Real=(T === Float64 ? 1e-13 : 100 * eps(T)), maxiter::Int=20, retry::Bool=true, sweep=:auto, build::Symbol=:auto,
                         cpu_mode::Symbol=:reference, profile::Bool=false, verbose::Bool=false) where {D, K, S}
     n = length(θs)
     if backend isa KA.CPU && cpu_mode === :reference

@@ -1,15 +1,20 @@
 // SOSD in the browser: spectral radius of the one-period monodromy operator of
 //     ẋ(t) = A(t) x(t) + B(t) x(t − τ(t)),
-// one GPU thread per parameter point (Float32). Port of src/batched.jl:
-//   * one period = p collocation steps (Gauss–Legendre, S stages) of length h = T/p, the
-//     delayed state from the continuous extension (Lagrange on {0, c, 1}) of the stored steps,
-//     history window r steps (state of the operator: (r+1) blocks [y, Y_1..Y_S]);
-//   * the stage system of a step is solved on the fly (Gaussian elimination, partial
-//     pivoting), so no per-step operators are stored — only the sweep history and the basis;
-//   * Arnoldi (m steps, two-pass Gram–Schmidt) on the monodromy, eigenvalues of the m×m
-//     Hessenberg matrix by Francis QR (hqr, as webgpu/hqr.js) -> ρ = max |λ|.
+// Float32, port of src/batched.jl. One period = p collocation steps (Gauss–Legendre, S stages)
+// of length h = T/p; the delayed state comes from the continuous extension (Lagrange on
+// {0, c, 1}) of the stored steps; history window r steps, operator state (r+1) blocks
+// [y, Y_1..Y_S]. Two entry points:
+//   prep — one thread per (point, step): the step map does not depend on the Krylov vector, so
+//          it is built ONCE: the stage system is solved for all right-hand sides (Gaussian
+//          elimination, partial pivoting), giving the BS×BS step matrix
+//              [y_{n+1}; Y_1..Y_S] = W_n [y_n; yd_1..yd_S]      (yd_s = x(t_s − τ(t_s)))
+//          and per stage the delayed-lookup record (block index, flag, Lagrange weights);
+//   main — one thread per point: Arnoldi (m steps, classical Gram–Schmidt with one full
+//          reorthogonalization) on the monodromy, every matvec = p small mat-vecs with the
+//          stored W_n; eigenvalues of the m×m Hessenberg matrix by Francis QR (hqr, as
+//          webgpu/hqr.js) -> ρ = max |λ|.
 // The host replaces the two marker lines below by the model (D, NP, m_period, m_tau, m_AB from
-// expr.js) and the tableau (S, MMAX, AT, BT, CT, interpolation nodes XN).
+// expr.js) and the tableau (S, MMAX = Krylov dimension, AT, BT, CT, interpolation nodes XN).
 
 //@MODEL@
 //@TABLEAU@
@@ -18,6 +23,8 @@ const BS: u32 = (S + 1u) * D;          // block: [y, Y_1 .. Y_S]
 const SD: u32 = S * D;
 const DD: u32 = D * D;
 const NN: u32 = S + 2u;                // interpolation nodes {0, c_1..c_S, 1}
+const LR: u32 = NN + 2u;               // lookup record: block index, flag, NN weights
+const WW: u32 = BS * BS;
 
 struct U {
   npts: u32, p: u32, r: u32, m: u32,
@@ -29,114 +36,158 @@ struct U {
 @group(0) @binding(2) var<storage, read_write> hist: array<f32>;
 @group(0) @binding(3) var<storage, read_write> V: array<f32>;
 @group(0) @binding(4) var<storage, read_write> outv: array<vec4<f32>>;   // ρ, Re μ, Im μ, flags
+@group(0) @binding(5) var<storage, read_write> Wb: array<f32>;            // step matrices
+@group(0) @binding(6) var<storage, read_write> Lb: array<f32>;            // lookup records
 
 var<private> b: u32;        // this point (local index inside the band)
 var<private> npts: u32;
+var<private> cb: u32;       // its chunk of 64 points
+var<private> lane: u32;     // its lane in the chunk
 
-fn Hx(k: u32) -> u32 { return k * npts + b; }                 // hist[k] of this point
-fn Vx(j: u32, i: u32, N: u32) -> u32 { return (j * N + i) * npts + b; }
+// Every per-point array is stored in chunks of 64 points, element-major inside a chunk:
+// neighbouring threads touch neighbouring words AND one thread's data stays on a few pages
+// (a plain point-fastest layout puts consecutive elements npts·4 bytes apart, and the TLB misses
+// then dominate as soon as the working set grows).
+fn Hx(k: u32) -> u32 { return (cb * ((u.p + u.r + 1u) * BS) + k) * 64u + lane; }
+fn Vx(j: u32, i: u32, N: u32) -> u32 { return (cb * ((min(u.m, MMAX) + 1u) * N) + j * N + i) * 64u + lane; }
+fn Wx(n: u32, k: u32) -> u32 { return (cb * (u.p * WW) + n * WW + k) * 64u + lane; }     // n = 0..p-1
+fn Lx(n: u32, s: u32, k: u32) -> u32 { return (cb * (u.p * S * LR) + (n * S + s) * LR + k) * 64u + lane; }
 
-fn lagrange(th: f32) -> array<f32, NN> {
-  var w: array<f32, NN>;
-  for (var i = 0u; i < NN; i++) {
-    var l = 1.0;
-    for (var k = 0u; k < NN; k++) {
-      if (k != i) { l *= (th - XN[k]) / (XN[i] - XN[k]); }
+fn params() -> array<f32, NP> {
+  var P: array<f32, NP>;
+  for (var k = 0u; k < NP; k++) { P[k] = u.P0[k / 4u][k % 4u]; }
+  let xy = pts[u.off + b];
+  P[u.xi] = xy.x; P[u.yi] = xy.y;
+  return P;
+}
+
+@compute @workgroup_size(64)
+fn prep(@builtin(global_invocation_id) gid: vec3<u32>) {
+  npts = u.npts;
+  let g = gid.x;
+  lane = g % 64u;
+  let rest = g / 64u;
+  let n = rest % u.p;                    // step 0..p-1
+  cb = rest / u.p;
+  b = cb * 64u + lane;
+  if (b >= npts) { return; }
+  let P = params();
+  let h = m_period(P) / f32(u.p);
+  let r = u.r;
+  let tn = f32(n) * h;
+  var As: array<f32, S * DD>; var Bs: array<f32, S * DD>;
+  var Am: array<f32, DD>; var Bm: array<f32, DD>;
+  for (var s = 0u; s < S; s++) {
+    let ts = tn + CT[s] * h;
+    m_AB(ts, P, &Am, &Bm);
+    for (var k = 0u; k < DD; k++) { As[s * DD + k] = Am[k]; Bs[s * DD + k] = Bm[k]; }
+    // delayed state at ts − τ(ts): block index (1-based) and position inside the step
+    let rel = (ts - m_tau(ts, P)) / h + f32(r) + 1.0;
+    var fl = 0.0;
+    if (rel < 1.0 - 1e-4) { fl = 1.0; }
+    var mi = i32(floor(rel)); var th = rel - f32(mi);
+    if (mi >= i32(u.p + r + 1u)) { mi = i32(u.p + r); th = 1.0; }
+    if (mi < 1) { mi = 1; th = 0.0; }
+    Lb[Lx(n, s, 0u)] = f32(mi);
+    Lb[Lx(n, s, 1u)] = fl;
+    for (var i = 0u; i < NN; i++) {
+      var l = 1.0;
+      for (var k = 0u; k < NN; k++) { if (k != i) { l *= (th - XN[k]) / (XN[i] - XN[k]); } }
+      Lb[Lx(n, s, 2u + i)] = l;
     }
-    w[i] = l;
   }
-  return w;
+  // stage system  Y_i − h Σ_j a_ij A_j Y_j = y_n + h Σ_j a_ij B_j yd_j  for all BS right-hand
+  // sides at once: R = [1⊗I_D | h (a⊗I) blkdiag(B_j)]
+  var M: array<f32, SD * SD>; var R: array<f32, SD * BS>;
+  for (var i = 0u; i < S; i++) {
+    for (var ri = 0u; ri < D; ri++) {
+      let row = i * D + ri;
+      for (var c = 0u; c < BS; c++) { R[row * BS + c] = 0.0; }
+      R[row * BS + ri] = 1.0;
+      for (var j = 0u; j < S; j++) {
+        let ha = h * AT[i * S + j];
+        for (var c = 0u; c < D; c++) {
+          var v = -ha * As[j * DD + ri * D + c];
+          if (i == j && ri == c) { v += 1.0; }
+          M[row * SD + j * D + c] = v;
+          R[row * BS + D + j * D + c] = ha * Bs[j * DD + ri * D + c];
+        }
+      }
+    }
+  }
+  for (var k = 0u; k < SD; k++) {
+    var pk = k; var mx = abs(M[k * SD + k]);
+    for (var i = k + 1u; i < SD; i++) { let v = abs(M[i * SD + k]); if (v > mx) { mx = v; pk = i; } }
+    if (pk != k) {
+      for (var j = 0u; j < SD; j++) { let t = M[k * SD + j]; M[k * SD + j] = M[pk * SD + j]; M[pk * SD + j] = t; }
+      for (var j = 0u; j < BS; j++) { let t = R[k * BS + j]; R[k * BS + j] = R[pk * BS + j]; R[pk * BS + j] = t; }
+    }
+    let inv = 1.0 / M[k * SD + k];
+    for (var i = k + 1u; i < SD; i++) {
+      let f = M[i * SD + k] * inv;
+      if (f != 0.0) {
+        for (var j = k + 1u; j < SD; j++) { M[i * SD + j] -= f * M[k * SD + j]; }
+        for (var j = 0u; j < BS; j++) { R[i * BS + j] -= f * R[k * BS + j]; }
+      }
+    }
+  }
+  for (var ii = 0u; ii < SD; ii++) {
+    let i = SD - 1u - ii;
+    let inv = 1.0 / M[i * SD + i];
+    for (var c = 0u; c < BS; c++) {
+      var acc = R[i * BS + c];
+      for (var j = i + 1u; j < SD; j++) { acc -= M[i * SD + j] * R[j * BS + c]; }
+      R[i * BS + c] = acc * inv;
+    }
+  }
+  // rows of y_{n+1} = y_n + h Σ_j b_j (A_j Y_j + B_j yd_j); then the stage rows
+  for (var ri = 0u; ri < D; ri++) {
+    for (var c = 0u; c < BS; c++) {
+      var acc = 0.0;
+      if (c == ri) { acc = 1.0; }
+      for (var j = 0u; j < S; j++) {
+        var ay = 0.0;
+        for (var q = 0u; q < D; q++) { ay += As[j * DD + ri * D + q] * R[(j * D + q) * BS + c]; }
+        if (c >= D + j * D && c < D + (j + 1u) * D) { ay += Bs[j * DD + ri * D + (c - D - j * D)]; }
+        acc += h * BT[j] * ay;
+      }
+      Wb[Wx(n, ri * BS + c)] = acc;
+    }
+  }
+  for (var k = 0u; k < SD * BS; k++) { Wb[Wx(n, D * BS + k)] = R[k]; }
 }
 
 // Y[jout] = Φ Y[jin] (monodromy applied to basis column jin, result in column jout)
-fn sweep(jin: u32, jout: u32, P: array<f32, NP>, h: f32) -> u32 {
+fn sweep(jin: u32, jout: u32) -> u32 {
   let p = u.p; let r = u.r; let N = (r + 1u) * BS;
   var flags = 0u;
   for (var e = 0u; e < N; e++) {
     let i = e / BS; let q = e % BS;
     hist[Hx((r - i) * BS + q)] = V[Vx(jin, e, N)];
   }
-  var Am: array<f32, DD>; var Bm: array<f32, DD>;
-  var As: array<f32, S * DD>; var BY: array<f32, SD>;
-  var y0: array<f32, D>; var M: array<f32, SD * SD>; var z: array<f32, SD>;
-  for (var n = 1u; n <= p; n++) {
-    let tn = f32(n - 1u) * h;
-    let bc = (n + r - 1u) * BS;
-    for (var d = 0u; d < D; d++) { y0[d] = hist[Hx(bc + d)]; }
+  var X: array<f32, BS>;
+  for (var n = 0u; n < p; n++) {
+    let bc = (n + r) * BS;
+    for (var d = 0u; d < D; d++) { X[d] = hist[Hx(bc + d)]; }
     for (var s = 0u; s < S; s++) {
-      let ts = tn + CT[s] * h;
-      m_AB(ts, P, &Am, &Bm);
-      for (var k = 0u; k < DD; k++) { As[s * DD + k] = Am[k]; }
-      // delayed state at ts − τ(ts): block index (1-based) and position inside the step
-      let rel = (ts - m_tau(ts, P)) / h + f32(r) + 1.0;
-      if (rel < 1.0 - 1e-4) { flags |= 1u; }
-      var mi = i32(floor(rel)); var th = rel - f32(mi);
-      if (mi >= i32(p + r + 1u)) { mi = i32(p + r); th = 1.0; }
-      if (mi < 1) { mi = 1; th = 0.0; }
-      let w = lagrange(th);
-      let b0 = u32(mi - 1) * BS; let b1 = u32(mi) * BS;
-      var yd: array<f32, D>;
+      let mi = u32(Lb[Lx(n, s, 0u)]);
+      if (Lb[Lx(n, s, 1u)] != 0.0) { flags |= 1u; }
+      var w: array<f32, NN>;
+      for (var i = 0u; i < NN; i++) { w[i] = Lb[Lx(n, s, 2u + i)]; }
+      let b0 = (mi - 1u) * BS; let b1 = mi * BS;
       for (var d = 0u; d < D; d++) {
         var acc = w[0] * hist[Hx(b0 + d)];
         for (var i = 0u; i < S; i++) { acc += w[i + 1u] * hist[Hx(b1 + (i + 1u) * D + d)]; }
         acc += w[S + 1u] * hist[Hx(b1 + d)];
-        yd[d] = acc;
-      }
-      for (var i = 0u; i < D; i++) {
-        var acc = 0.0;
-        for (var d = 0u; d < D; d++) { acc += Bm[i * D + d] * yd[d]; }
-        BY[s * D + i] = acc;
+        X[D + s * D + d] = acc;
       }
     }
-    // stage system  Y_i − h Σ_j a_ij A_j Y_j = y_n + h Σ_j a_ij B_j y_del,j
-    for (var i = 0u; i < S; i++) {
-      for (var ri = 0u; ri < D; ri++) {
-        let row = i * D + ri;
-        var rhs = y0[ri];
-        for (var j = 0u; j < S; j++) {
-          rhs += h * AT[i * S + j] * BY[j * D + ri];
-          for (var c = 0u; c < D; c++) {
-            var v = -h * AT[i * S + j] * As[j * DD + ri * D + c];
-            if (i == j && ri == c) { v += 1.0; }
-            M[row * SD + j * D + c] = v;
-          }
-        }
-        z[row] = rhs;
-      }
+    let bn = (n + r + 1u) * BS;
+    for (var row = 0u; row < BS; row++) {
+      var acc = 0.0;
+      for (var c = 0u; c < BS; c++) { acc += Wb[Wx(n, row * BS + c)] * X[c]; }
+      hist[Hx(bn + row)] = acc;
     }
-    for (var k = 0u; k < SD; k++) {                    // Gaussian elimination, partial pivoting
-      var pk = k; var mx = abs(M[k * SD + k]);
-      for (var i = k + 1u; i < SD; i++) { let v = abs(M[i * SD + k]); if (v > mx) { mx = v; pk = i; } }
-      if (pk != k) {
-        for (var j = 0u; j < SD; j++) { let tmp = M[k * SD + j]; M[k * SD + j] = M[pk * SD + j]; M[pk * SD + j] = tmp; }
-        let tz = z[k]; z[k] = z[pk]; z[pk] = tz;
-      }
-      let inv = 1.0 / M[k * SD + k];
-      for (var i = k + 1u; i < SD; i++) {
-        let f = M[i * SD + k] * inv;
-        if (f != 0.0) {
-          for (var j = k + 1u; j < SD; j++) { M[i * SD + j] -= f * M[k * SD + j]; }
-          z[i] -= f * z[k];
-        }
-      }
-    }
-    for (var ii = 0u; ii < SD; ii++) {
-      let i = SD - 1u - ii;
-      var acc = z[i];
-      for (var j = i + 1u; j < SD; j++) { acc -= M[i * SD + j] * z[j]; }
-      z[i] = acc / M[i * SD + i];
-    }
-    let bn = (n + r) * BS;
-    for (var ri = 0u; ri < D; ri++) {
-      var acc = y0[ri];
-      for (var j = 0u; j < S; j++) {
-        var ay = BY[j * D + ri];
-        for (var c = 0u; c < D; c++) { ay += As[j * DD + ri * D + c] * z[j * D + c]; }
-        acc += h * BT[j] * ay;
-      }
-      hist[Hx(bn + ri)] = acc;
-    }
-    for (var k = 0u; k < SD; k++) { hist[Hx(bn + D + k)] = z[k]; }
   }
   for (var e = 0u; e < N; e++) {
     let i = e / BS; let q = e % BS;
@@ -254,12 +305,7 @@ fn hqr(n: i32) -> vec4<f32> {
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   b = gid.x; npts = u.npts;
   if (b >= npts) { return; }
-  var P: array<f32, NP>;
-  for (var k = 0u; k < NP; k++) { P[k] = u.P0[k / 4u][k % 4u]; }
-  let xy = pts[u.off + b];
-  P[u.xi] = xy.x; P[u.yi] = xy.y;
-  let T = m_period(P);
-  let h = T / f32(u.p);
+  cb = b / 64u; lane = b % 64u;
   let N = (u.r + 1u) * BS;
   let m = min(u.m, MMAX);
   // start vector (deterministic, as SOSD._det_start)
@@ -270,19 +316,29 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   var H: array<f32, (MMAX + 1u) * MMAX>;
   var mm = m; var flags = 0u;
   for (var j = 0u; j < m; j++) {
-    flags |= sweep(j, j + 1u, P, h);
-    var n0 = 0.0;
-    for (var i = 0u; i < N; i++) { let v = V[Vx(j + 1u, i, N)]; n0 += v * v; }
+    flags |= sweep(j, j + 1u);
+    // classical Gram–Schmidt: one pass for all the dots, one for the update; repeated only when
+    // the norm dropped by more than 1/√2 (DGKS criterion), which keeps the basis orthogonal in f32
+    var n0 = 0.0; var beta = 0.0; var nprev = 0.0;
     for (var pss = 0u; pss < 2u; pss++) {
-      for (var l = 0u; l <= j; l++) {
-        var dt = 0.0;
-        for (var i = 0u; i < N; i++) { dt += V[Vx(l, i, N)] * V[Vx(j + 1u, i, N)]; }
-        H[l * MMAX + j] += dt;
-        for (var i = 0u; i < N; i++) { V[Vx(j + 1u, i, N)] -= dt * V[Vx(l, i, N)]; }
+      var hc: array<f32, MMAX>;
+      for (var i = 0u; i < N; i++) {
+        let w = V[Vx(j + 1u, i, N)];
+        if (pss == 0u) { n0 += w * w; }
+        for (var l = 0u; l <= j; l++) { hc[l] += V[Vx(l, i, N)] * w; }
       }
+      if (pss == 0u) { nprev = n0; }
+      beta = 0.0;
+      for (var i = 0u; i < N; i++) {
+        var w = V[Vx(j + 1u, i, N)];
+        for (var l = 0u; l <= j; l++) { w -= hc[l] * V[Vx(l, i, N)]; }
+        V[Vx(j + 1u, i, N)] = w;
+        beta += w * w;
+      }
+      for (var l = 0u; l <= j; l++) { H[l * MMAX + j] += hc[l]; }
+      if (beta > 0.5 * nprev) { break; }
+      nprev = beta;
     }
-    var beta = 0.0;
-    for (var i = 0u; i < N; i++) { let v = V[Vx(j + 1u, i, N)]; beta += v * v; }
     beta = sqrt(beta);
     if (!(beta == beta) || beta > 3.0e38 || !(n0 < 3.0e38)) { flags |= 2u; mm = j + 1u; break; }   // overflow
     H[(j + 1u) * MMAX + j] = beta;

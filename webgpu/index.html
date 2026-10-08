@@ -33,8 +33,12 @@
   #helpBox p, #helpBox ul { margin: 0; } #helpBox ul { padding-left: 18px; }
   #helpBox a { color: var(--accent); }
   #helpClose { position: absolute; top: 10px; right: 12px; font-size: 18px; line-height: 1; padding: 4px 10px; }
-  main { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; padding: 16px 20px; }
-  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; } }
+  main { --side: 360px; display: grid; grid-template-columns: var(--side) 12px minmax(0, 1fr); gap: 0 4px; padding: 16px 20px; }
+  #split { cursor: col-resize; touch-action: none; border-radius: 4px; position: relative; }
+  #split::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: var(--line); }
+  #split:hover::after, #split.drag::after { background: var(--accent); }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px 16px; } #split { display: none; }
+    .figure { margin-top: 12px; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
   aside .panel + .panel { margin-top: 12px; }
   h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
@@ -68,7 +72,11 @@
   @media (min-width: 861px) { aside { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; padding-right: 4px; }
     .figure { position: sticky; top: 12px; align-self: start; } }
   .plotwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
-  #chart { display: block; width: 100%; height: auto; cursor: crosshair; }
+  #chart { display: block; width: 100%; cursor: crosshair; touch-action: none; user-select: none; }
+  #chart.panning { cursor: grabbing; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
+  .toolbar button { padding: 3px 10px; font-size: 12.5px; }
+  .toolbar .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
   #progress { height: 3px; background: transparent; margin: 0 0 4px; }
   #progress div { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
@@ -136,8 +144,11 @@
         <button id="bench">Benchmark</button></div>
     </div>
   </aside>
+  <div id="split" role="separator" aria-orientation="vertical" title="drag to resize · double-click to reset"></div>
   <section class="figure">
     <div class="plotwrap">
+      <div class="toolbar"><button id="resetAxes">Reset axes</button><button id="savePng">Save PNG</button>
+        <span class="hint">wheel: zoom · drag: zoom box · middle-drag / shift-drag: pan · pinch on touch · double-click: reset</span></div>
       <div id="progress"><div></div></div>
       <canvas id="chart" width="1100" height="640"></canvas>
     </div>
@@ -154,6 +165,7 @@
   </section>
 </main>
 <footer>SOSD.jl — Solution-Operator Semi-Discretization, D. Bachrathy (BME). Computed locally in your browser; nothing is uploaded.
+  Anonymous usage counts (page views and which features are used, no cookies, never the model text) via GoatCounter.
   <a href="?validate=1">validate against the Julia reference</a></footer>
 <div id="helpBg" hidden><div id="helpBox">
   <button id="helpClose">×</button>
@@ -167,6 +179,11 @@
     <li><b>MDBM</b> (multi-dimensional bisection method) evaluates a small initial grid and then only the cells that
       contain the boundary, halving them at every iteration — the boundary at the resolution of a
       (initial grid × 2<sup>iterations</sup>) grid with a fraction of the evaluations. Both can be on together.</li></ul>
+  <h3>Zoom and pan</h3>
+  <p>Mouse wheel zooms about the cursor, a left-button drag zooms into the drawn box, middle-button (or shift + left)
+    drag pans, two fingers pinch and pan on a touch screen, double-click resets the axes. The chart is recomputed for the
+    new range (the old image is shown stretched until the new one arrives), and the ranges in the model text follow.
+    The divider between the panels can be dragged.</p>
   <h3>The model text</h3>
   <ul><li><code>ζ = 0:0.05 @ 0.011</code> a parameter with a slider (range, start value); <code>z = 2</code> a constant;
       <code>ω = 2*pi*n/60</code> a helper (may use t);</li>

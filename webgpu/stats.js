@@ -5,7 +5,7 @@
 // is new; the text is never sent), and features once per page session (brute-force, mdbm,
 // validate-run, bench-run), the GPU vendor class and no-webgpu.
 
-export const GOATCOUNTER = '';                 // e.g. 'https://sosdgpu.goatcounter.com/count'
+export const GOATCOUNTER = 'https://sosdgpu.goatcounter.com/count';
 export const SHOW_PUBLIC_COUNTER = false;
 
 const queue = [];

@@ -1,10 +1,13 @@
 // Stability boundary ρ = 1 by the multi-dimensional bisection method (MDBM, Bachrathy & Stépán),
 // 2-D, one function f = log ρ: evaluate f on a small initial grid, keep the cells whose corner
-// values change sign (the boundary passes through them), split each into 4, evaluate only the new
-// corner points, repeat. A neighbour check adds cells next to bracketing cells that also bracket
-// (so a branch entering through a discarded cell is not lost). The boundary inside each final
-// cell is drawn from the edge crossings (linear interpolation of f, as MDBM's first-order
-// interpolation). Every stage's new points are evaluated in ONE batched GPU call.
+// values change sign (zeroth-order bracketing, as MDBM.jl interpolationorder = 0), split each into
+// 4, evaluate only the new corner points, repeat. After every refinement a neighbour check
+// (MDBM.jl checkneighbour!, directional): a face of a kept cell whose two corners change sign is
+// crossed by the boundary, so the cell behind that face must be kept too — it is added and
+// traced further until no new cell appears. This recovers branches that were lost because a
+// coarser cell did not show a sign change. Only at the end is the boundary drawn by first-order
+// (linear) interpolation of f along the cell edges. Every stage's new points are evaluated in
+// ONE batched GPU call.
 
 /**
  * @param evalBatch async (Float32Array xy) -> Float32Array rho
@@ -55,6 +58,37 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
   cells = cells.filter(brackets);
   onStage?.(stages[stages.length - 1], cells.length);
 
+  // neighbour tracing at the current cell size (cells of equal size s)
+  const FACES = [[0, 3, -1, 0], [1, 2, 1, 0], [0, 1, 0, -1], [3, 2, 0, 1]];   // corner pair, direction
+  async function traceNeighbours(label) {
+    if (!cells.length) return;
+    const s = cells[0].s;
+    const have = new Set(cells.map((c) => key(c.i, c.j)));
+    let front = cells, added = 0, nEval = 0, rounds = 0;
+    while (front.length && !cancel() && cells.length < 400000) {
+      const cand = [];
+      for (const c of front) {
+        const v = corners(c).map(([i, j]) => f(i, j) >= 0);
+        for (const [a, b, di, dj] of FACES) {
+          if (v[a] === v[b]) continue;
+          const i = c.i + di * s, j = c.j + dj * s;
+          if (i < 0 || j < 0 || i + s > NXf || j + s > NYf) continue;
+          const k = key(i, j);
+          if (!have.has(k)) { have.add(k); cand.push({ i, j, s }); }
+        }
+      }
+      if (!cand.length) break;
+      nEval += await evalMissing(cand.flatMap(corners));
+      front = cand.filter(brackets);
+      added += front.length; rounds++;
+      cells = cells.concat(front);
+    }
+    if (nEval || added) {
+      stages.push({ stage: label, n: nEval, added, rounds });
+      onStage?.(stages[stages.length - 1], cells.length);
+    }
+  }
+
   for (let it = 1; it <= iters; it++) {
     if (cancel()) break;
     const s = cells.length ? cells[0].s / 2 : 1;
@@ -64,28 +98,7 @@ export async function mdbmBoundary(evalBatch, box, nx0, ny0, iters, opt = {}) {
     cells = kids.filter(brackets);
     stages.push({ stage: `iteration ${it}`, n });
     onStage?.(stages[stages.length - 1], cells.length);
-  }
-
-  if (neighbour && cells.length && !cancel()) {
-    // neighbour check at the final cell size: add bracketing neighbours until none is new
-    const s = cells[0].s;
-    const have = new Set(cells.map((c) => key(c.i, c.j)));
-    let front = cells, added = 0, nEval = 0;
-    for (let round = 0; round < 8 && front.length; round++) {
-      const cand = [];
-      for (const c of front) for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-        const i = c.i + di * s, j = c.j + dj * s;
-        if (i < 0 || j < 0 || i + s > NXf || j + s > NYf) continue;
-        const k = key(i, j);
-        if (!have.has(k)) { have.add(k); cand.push({ i, j, s }); }
-      }
-      nEval += await evalMissing(cand.flatMap(corners));
-      front = cand.filter(brackets);
-      added += front.length;
-      cells = cells.concat(front);
-    }
-    stages.push({ stage: 'neighbour check', n: nEval, added });
-    onStage?.(stages[stages.length - 1], cells.length);
+    if (neighbour) await traceNeighbours(`neighbour check ${it}`);
   }
 
   // boundary segments: edge crossings of f inside each final cell

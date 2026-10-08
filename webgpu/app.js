@@ -53,7 +53,12 @@ async function main() {
   $('eq').oninput = () => { clearTimeout(eqTimer); eqTimer = setTimeout(() => setModelText($('eq').value, true), 400); };
   $('helpBtn').onclick = () => { $('helpBg').hidden = false; countOnce('help-open'); };
   $('helpClose').onclick = $('helpBg').onclick = (ev) => { if (ev.target === $('helpBg') || ev.target === $('helpClose')) $('helpBg').hidden = true; };
-  $('chart').onmousemove = hover;
+  sizeCanvas();
+  bindPointer(); bindSplit();
+  $('resetAxes').onclick = resetAxes;
+  $('savePng').onclick = savePng;
+  let rz = null;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { sizeCanvas(); draw(); }, 60); });
   if (Q.has('validate')) { await validate(); return; }
   loadExample(EXAMPLES[0].key);
   if (Q.has('bench')) bench();
@@ -90,6 +95,7 @@ function setModelText(text, edited) {
     $('eqStatus').className = 'status';
     $('eqStatus').textContent = `${mdl.D} states, ${mdl.params.length} parameters, ${mdl.helpers.length} helpers`;
     if (edited) countModel(text);
+    rememberHome();
     buildParams();
     schedule(true);
   } catch (e) {
@@ -202,9 +208,11 @@ function stats(res) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// drawing
+// drawing: the view box is the axis parameters' current range; a result computed for another box
+// (during zoom / pan, until the recompute arrives) is drawn mapped into the view
 // ---------------------------------------------------------------------------------------------
 const PAD = { l: 72, r: 96, t: 14, b: 56 };
+let zoomRect = null;                              // [x0, y0, x1, y1] css px while dragging a zoom box
 function cmap(v) {
   const t = Math.min(1, Math.max(0, (v / CR + 1) / 2)) * (STOPS.length - 1);
   const i = Math.min(STOPS.length - 2, Math.floor(t)), w = t - i;
@@ -216,35 +224,58 @@ function nice(a, b, n) {
   const out = []; for (let v = Math.ceil(a / s) * s; v <= b + 1e-9 * s; v += s) out.push(+v.toPrecision(10));
   return out;
 }
+function viewBox() {
+  if (!model) return result ? result.box : { x0: 0, x1: 1, y0: 0, y1: 1 };
+  const px = model.params[axes[0]], py = model.params[axes[1]];
+  return { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
+}
+/** css size of the chart and of its plot area */
+function geom() {
+  const cv = $('chart');
+  const w = cv.clientWidth || 800, h = Math.round(cv.clientHeight || 480);
+  return { w, h, W: w - PAD.l - PAD.r, H: h - PAD.t - PAD.b };
+}
+function sizeCanvas() {
+  const cv = $('chart'), dpr = window.devicePixelRatio || 1;
+  const w = cv.parentElement.clientWidth - 16;
+  const h = Math.max(280, Math.min(Math.round(w * 0.6), window.innerHeight - 150));
+  cv.style.height = h + 'px';
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+}
 
 function draw() {
-  const cv = $('chart'), cx = cv.getContext('2d');
-  const W = cv.width - PAD.l - PAD.r, H = cv.height - PAD.t - PAD.b;
+  const cv = $('chart'), cx = cv.getContext('2d'), dpr = cv.width / (cv.clientWidth || cv.width);
+  const { w, h, W, H } = geom();
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const css = getComputedStyle(document.documentElement);
   const ink = css.getPropertyValue('--ink').trim() || '#222', muted = css.getPropertyValue('--muted').trim() || '#666';
-  cx.clearRect(0, 0, cv.width, cv.height);
+  cx.clearRect(0, 0, w, h);
   cx.fillStyle = '#f7f7f7'; cx.fillRect(PAD.l, PAD.t, W, H);
   if (!result) return;
-  const { box } = result;
-  const X = (x) => PAD.l + (x - box.x0) / (box.x1 - box.x0) * W;
-  const Y = (y) => PAD.t + H - (y - box.y0) / (box.y1 - box.y0) * H;
+  const view = viewBox();
+  const X = (x) => PAD.l + (x - view.x0) / (view.x1 - view.x0) * W;
+  const Y = (y) => PAD.t + H - (y - view.y0) / (view.y1 - view.y0) * H;
+  cx.save(); cx.beginPath(); cx.rect(PAD.l, PAD.t, W, H); cx.clip();
   if (result.bf) {
-    const { nx, ny, rho } = result.bf;
-    const img = new ImageData(nx, ny);
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const c = cmap(Math.log10(Math.max(rho[j * nx + i], 1e-30))), o = 4 * (i + nx * (ny - 1 - j));
-      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+    const { box } = result, { nx, ny, rho } = result.bf;
+    if (!result.bf.img) {
+      const img = new ImageData(nx, ny);
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const c = cmap(Math.log10(Math.max(rho[j * nx + i], 1e-30))), o = 4 * (i + nx * (ny - 1 - j));
+        img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+      }
+      result.bf.img = new OffscreenCanvas(nx, ny); result.bf.img.getContext('2d').putImageData(img, 0, 0);
     }
-    const off = new OffscreenCanvas(nx, ny); off.getContext('2d').putImageData(img, 0, 0);
     cx.imageSmoothingEnabled = true;
     // grid nodes at the box edges: the image spans half a cell beyond them
-    const dx = W / (nx - 1), dy = H / (ny - 1);
-    cx.save(); cx.beginPath(); cx.rect(PAD.l, PAD.t, W, H); cx.clip();
-    cx.drawImage(off, PAD.l - dx / 2, PAD.t - dy / 2, W + dx, H + dy);
+    const hx = (box.x1 - box.x0) / (nx - 1) / 2, hy = (box.y1 - box.y0) / (ny - 1) / 2;
+    const ax = X(box.x0 - hx), ay = Y(box.y1 + hy);
+    cx.drawImage(result.bf.img, ax, ay, X(box.x1 + hx) - ax, Y(box.y0 - hy) - ay);
     // boundary from the grid (marching squares on log ρ)
     cx.strokeStyle = '#000'; cx.lineWidth = 1.2; cx.beginPath();
     const f = (i, j) => Math.log(Math.max(rho[j * nx + i], 1e-30));
-    const px = (i) => PAD.l + i * dx, py = (j) => PAD.t + H - j * dy;
+    const px = (i) => X(box.x0 + i * 2 * hx), py = (j) => Y(box.y0 + j * 2 * hy);
     for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
       const v = [f(i, j), f(i + 1, j), f(i + 1, j + 1), f(i, j + 1)], P = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], pts = [];
       for (let e = 0; e < 4; e++) { const a = v[e], b = v[(e + 1) % 4];
@@ -253,10 +284,9 @@ function draw() {
       if (pts.length >= 2) { cx.moveTo(...pts[0]); cx.lineTo(...pts[1]); }
       if (pts.length === 4) { cx.moveTo(...pts[2]); cx.lineTo(...pts[3]); }
     }
-    cx.stroke(); cx.restore();
+    cx.stroke();
   }
   if (result.md) {
-    cx.save(); cx.beginPath(); cx.rect(PAD.l, PAD.t, W, H); cx.clip();
     if ($('mdPts').checked) {
       const { points, rho } = result.md;
       for (let k = 0; k < rho.length; k++) {
@@ -267,20 +297,27 @@ function draw() {
     cx.strokeStyle = result.bf ? '#ffd400' : '#000'; cx.lineWidth = result.bf ? 2.2 : 2;
     cx.lineCap = 'round'; cx.beginPath();
     for (const s of result.md.segments) { cx.moveTo(X(s[0]), Y(s[1])); cx.lineTo(X(s[2]), Y(s[3])); }
-    cx.stroke(); cx.restore();
+    cx.stroke();
+  }
+  cx.restore();
+  if (zoomRect) {
+    const [a, b, c, d] = zoomRect;
+    cx.fillStyle = 'rgba(47, 111, 219, 0.12)'; cx.strokeStyle = '#2f6fdb'; cx.lineWidth = 1.2;
+    cx.fillRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b));
+    cx.strokeRect(Math.min(a, c), Math.min(b, d), Math.abs(c - a), Math.abs(d - b));
   }
   // axes, ticks, labels
   cx.strokeStyle = muted; cx.lineWidth = 1; cx.strokeRect(PAD.l, PAD.t, W, H);
   cx.fillStyle = ink; cx.font = '13px system-ui, sans-serif'; cx.textAlign = 'center';
-  for (const v of nice(box.x0, box.x1, 8)) { const x = X(v); cx.fillRect(x, PAD.t + H, 1, 5); cx.fillText(+v.toPrecision(6), x, PAD.t + H + 19); }
+  for (const v of nice(view.x0, view.x1, Math.max(3, Math.round(W / 100)))) { const x = X(v); cx.fillRect(x, PAD.t + H, 1, 5); cx.fillText(+v.toPrecision(6), x, PAD.t + H + 19); }
   cx.fillText(axisLabel(result.xname), PAD.l + W / 2, PAD.t + H + 44);
   cx.textAlign = 'right';
-  for (const v of nice(box.y0, box.y1, 6)) { const y = Y(v); cx.fillRect(PAD.l - 5, y, 5, 1); cx.fillText(+v.toPrecision(6), PAD.l - 8, y + 4); }
+  for (const v of nice(view.y0, view.y1, Math.max(3, Math.round(H / 70)))) { const y = Y(v); cx.fillRect(PAD.l - 5, y, 5, 1); cx.fillText(+v.toPrecision(6), PAD.l - 8, y + 4); }
   cx.save(); cx.translate(20, PAD.t + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
   cx.fillText(axisLabel(result.yname), 0, 0); cx.restore();
   // colour bar
   const bx = PAD.l + W + 18, bw = 16;
-  for (let k = 0; k < H; k++) { const c = cmap(CR * (1 - 2 * k / H)); cx.fillStyle = `rgb(${c})`; cx.fillRect(bx, PAD.t + k, bw, 1); }
+  for (let k = 0; k < H; k++) { const c = cmap(CR * (1 - 2 * k / H)); cx.fillStyle = `rgb(${c})`; cx.fillRect(bx, PAD.t + k, bw, 1.5); }
   cx.strokeRect(bx, PAD.t, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
   for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4, PAD.t + (1 - v / CR) / 2 * H + 4);
   cx.save(); cx.translate(bx + bw + 46, PAD.t + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
@@ -294,21 +331,193 @@ function axisLabel(name) {
   return c ? `${name}: ${c}` : name;
 }
 
+/** pointer event -> css px on the canvas, position in the plot area, data coordinates */
+function locate(ev) {
+  const rc = $('chart').getBoundingClientRect(), { W, H } = geom(), v = viewBox();
+  const cx = ev.clientX - rc.left, cy = ev.clientY - rc.top, px = cx - PAD.l, py = cy - PAD.t;
+  return { cx, cy, px, py, W, H, inside: px >= 0 && py >= 0 && px <= W && py <= H,
+           x: v.x0 + px / W * (v.x1 - v.x0), y: v.y1 - py / H * (v.y1 - v.y0) };
+}
+
 function hover(ev) {
   if (!result) return;
-  const cv = $('chart'), rc = cv.getBoundingClientRect();
-  const W = cv.width - PAD.l - PAD.r, H = cv.height - PAD.t - PAD.b;
-  const px = (ev.clientX - rc.left) * cv.width / rc.width - PAD.l, py = (ev.clientY - rc.top) * cv.height / rc.height - PAD.t;
-  if (px < 0 || py < 0 || px > W || py > H) { $('hover').textContent = ''; return; }
-  const { box } = result;
-  const x = box.x0 + px / W * (box.x1 - box.x0), y = box.y1 - py / H * (box.y1 - box.y0);
-  let s = `${result.xname} = ${x.toPrecision(5)}, ${result.yname} = ${y.toPrecision(5)}`;
+  const q = locate(ev);
+  if (!q.inside) { $('hover').textContent = ''; return; }
+  let s = `${result.xname} = ${q.x.toPrecision(5)}, ${result.yname} = ${q.y.toPrecision(5)}`;
   if (result.bf) {
-    const { nx, ny, rho } = result.bf;
-    const i = Math.round(px / W * (nx - 1)), j = Math.round((H - py) / H * (ny - 1));
-    s += `   ρ ≈ ${rho[j * nx + i].toPrecision(5)} (nearest grid point)`;
+    const { nx, ny, rho } = result.bf, { box } = result;
+    const i = Math.round((q.x - box.x0) / (box.x1 - box.x0) * (nx - 1)), j = Math.round((q.y - box.y0) / (box.y1 - box.y0) * (ny - 1));
+    if (i >= 0 && j >= 0 && i < nx && j < ny) s += `   ρ ≈ ${rho[j * nx + i].toPrecision(5)} (nearest grid point)`;
   }
   $('hover').textContent = s;
+}
+
+// ---------------------------------------------------------------------------------------------
+// zoom / pan (as the InterpolatedNyquist page): wheel about the cursor, left-drag zoom box,
+// middle- or shift-drag pan, two-finger pinch + pan, double-click reset. The view is the axis
+// parameters' range: it is written into the model text and the chart is recomputed.
+// ---------------------------------------------------------------------------------------------
+let home = new Map();                             // parameter name -> [lo, hi] as last typed / loaded
+let recomputeTimer = null;
+function rememberHome() { home = new Map(model.params.map((q) => [q.name, [q.lo, q.hi]])); }
+
+function setView(xr, yr) {
+  if (!model) return;
+  const ok = (r) => isFinite(r[0]) && isFinite(r[1]) && r[1] - r[0] > 1e-9 * Math.max(1, Math.abs(r[0]), Math.abs(r[1]));
+  if (!ok(xr) || !ok(yr)) return;
+  const px = model.params[axes[0]], py = model.params[axes[1]];
+  [px.lo, px.hi] = xr; [py.lo, py.hi] = yr;
+  draw();
+  countOnce('zoom-pan');
+  clearTimeout(recomputeTimer);
+  recomputeTimer = setTimeout(() => { commitView(); schedule(true); }, 250);
+}
+
+/** rounded ranges into the model text and the parameter table */
+function commitView() {
+  for (const k of axes) {
+    const q = model.params[k], d = Math.pow(10, Math.floor(Math.log10(q.hi - q.lo)) - 4);
+    q.lo = Math.round(q.lo / d) * d; q.hi = Math.round(q.hi / d) * d;
+    const fmt = (v) => String(+v.toPrecision(8));
+    const esc = q.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^(\\s*${esc}\\s*=\\s*)([^@#\\n]*?)(\\s*(?:[@#]|$))`, 'mu');
+    modelText = modelText.replace(re, (_, a, b, c) => `${a}${fmt(q.lo)}:${fmt(q.hi)}${c}`);
+  }
+  $('eq').value = modelText;
+  buildParams();
+}
+
+function resetAxes() {
+  if (!model) return;
+  const h = (k) => (home.get(model.params[k].name) || [model.params[k].lo, model.params[k].hi]).slice();
+  setView(h(axes[0]), h(axes[1]));
+}
+
+function bindPointer() {
+  const cv = $('chart');
+  const touches = new Map();
+  let drag = null, pinch = null;
+  cv.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType === 'touch') {
+      touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      cv.setPointerCapture(ev.pointerId);
+      if (touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        pinch = { view: viewBox(), m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+      }
+      return;
+    }
+    const q = locate(ev);
+    if (!q.inside) return;
+    if (ev.button === 1 || (ev.button === 0 && ev.shiftKey)) {
+      drag = { mode: 'pan', q, view: viewBox() }; cv.classList.add('panning');
+    } else if (ev.button === 0) {
+      drag = { mode: 'box', q };
+    } else return;
+    ev.preventDefault();
+    cv.setPointerCapture(ev.pointerId);
+  });
+  cv.addEventListener('pointermove', (ev) => {
+    if (ev.pointerType === 'touch') {
+      if (!touches.has(ev.pointerId)) return;
+      touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinch && touches.size === 2) {
+        const [a, b] = [...touches.values()], { W, H } = geom(), v0 = pinch.view, rc = cv.getBoundingClientRect();
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, s = pinch.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1);
+        // the data point under the old finger midpoint stays under the new one; the span scales by s
+        const fx0 = (pinch.m.x - rc.left - PAD.l) / W, fy0 = (pinch.m.y - rc.top - PAD.t) / H;
+        const fx1 = (m.x - rc.left - PAD.l) / W, fy1 = (m.y - rc.top - PAD.t) / H;
+        const sx = (v0.x1 - v0.x0) * s, sy = (v0.y1 - v0.y0) * s;
+        const dx = v0.x0 + fx0 * (v0.x1 - v0.x0), dy = v0.y1 - fy0 * (v0.y1 - v0.y0);
+        const x0 = dx - fx1 * sx, y1 = dy + fy1 * sy;
+        setView([x0, x0 + sx], [y1 - sy, y1]);
+      }
+      return;
+    }
+    hover(ev);
+    if (!drag) return;
+    const q = locate(ev);
+    if (drag.mode === 'pan') {
+      const v = drag.view, ddx = (q.px - drag.q.px) / q.W * (v.x1 - v.x0), ddy = (q.py - drag.q.py) / q.H * (v.y1 - v.y0);
+      setView([v.x0 - ddx, v.x1 - ddx], [v.y0 + ddy, v.y1 + ddy]);
+    } else {
+      const cl = (z, lo, hi) => Math.min(hi, Math.max(lo, z));
+      zoomRect = [drag.q.cx, drag.q.cy, cl(q.cx, PAD.l, PAD.l + q.W), cl(q.cy, PAD.t, PAD.t + q.H)];
+      draw();
+    }
+  });
+  const end = (ev) => {
+    if (ev.pointerType === 'touch') {
+      touches.delete(ev.pointerId);
+      if (touches.size < 2) pinch = null;
+      return;
+    }
+    if (!drag) return;
+    cv.classList.remove('panning');
+    if (drag.mode === 'box' && zoomRect) {
+      const [a, b, c, d] = zoomRect;
+      zoomRect = null;
+      if (Math.abs(c - a) > 6 && Math.abs(d - b) > 6) {
+        const { W, H } = geom(), v = viewBox();
+        const xd = (px) => v.x0 + (px - PAD.l) / W * (v.x1 - v.x0), yd = (py) => v.y1 - (py - PAD.t) / H * (v.y1 - v.y0);
+        setView([xd(Math.min(a, c)), xd(Math.max(a, c))], [yd(Math.max(b, d)), yd(Math.min(b, d))]);
+      } else draw();
+    }
+    drag = null;
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  cv.addEventListener('wheel', (ev) => {
+    const q = locate(ev);
+    if (!q.inside || !result) return;
+    ev.preventDefault();
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 33 : ev.deltaMode === 2 ? ev.deltaY * 400 : ev.deltaY;
+    const f = Math.exp(Math.max(-1, Math.min(1, dy * 0.0015)));
+    const v = viewBox();
+    setView([q.x + (v.x0 - q.x) * f, q.x + (v.x1 - q.x) * f], [q.y + (v.y0 - q.y) * f, q.y + (v.y1 - q.y) * f]);
+  }, { passive: false });
+  cv.addEventListener('dblclick', (ev) => { ev.preventDefault(); resetAxes(); });
+  cv.addEventListener('pointerleave', () => { $('hover').textContent = ''; });
+}
+
+/** draggable divider between the side panel and the chart (its width is kept in localStorage) */
+function bindSplit() {
+  const sp = $('split'), mainEl = document.querySelector('main'), KEY = 'sosdgpu.split.v1';
+  const apply = (w) => {
+    w = Math.max(260, Math.min(w, 0.7 * window.innerWidth));
+    mainEl.style.setProperty('--side', w + 'px');
+    sizeCanvas(); draw();
+  };
+  try { const w = +localStorage.getItem(KEY); if (w) apply(w); } catch (e) { /* no storage */ }
+  let x0 = null, w0 = 0;
+  sp.addEventListener('pointerdown', (ev) => {
+    x0 = ev.clientX; w0 = document.querySelector('aside').getBoundingClientRect().width;
+    sp.setPointerCapture(ev.pointerId); sp.classList.add('drag'); ev.preventDefault();
+  });
+  sp.addEventListener('pointermove', (ev) => { if (x0 !== null) apply(w0 + ev.clientX - x0); });
+  const up = () => {
+    if (x0 === null) return;
+    x0 = null; sp.classList.remove('drag');
+    try { localStorage.setItem(KEY, String(parseFloat(mainEl.style.getPropertyValue('--side')))); } catch (e) { /* ignore */ }
+  };
+  sp.addEventListener('pointerup', up); sp.addEventListener('pointercancel', up);
+  sp.addEventListener('dblclick', () => {
+    mainEl.style.removeProperty('--side');
+    try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+    sizeCanvas(); draw();
+  });
+}
+
+function savePng() {
+  countOnce('save-png');
+  $('chart').toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sosd_${ex ? ex.key : 'chart'}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, 'image/png');
 }
 
 // ---------------------------------------------------------------------------------------------

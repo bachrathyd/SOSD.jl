@@ -55,7 +55,8 @@ async function main() {
   $('exGo').onclick = exportImage;
   $('bench').onclick = () => bench();
   $('mdIt').oninput = () => { $('mdItV').textContent = $('mdIt').value; schedule(); };
-  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
+  if (!engine.hasF16) { $('f16').disabled = true; $('f16').parentElement.title = 'this GPU / browser has no shader-f16'; }
+  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm', 'f16']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
   $('bfStart').onchange = () => { master = 'res'; updateEtas(); };
   $('fps').onchange = () => { master = 'fps'; updateEtas(); };
   $('mdPts').onchange = draw;
@@ -158,7 +159,8 @@ function schedule(force = false, restart = false) {
 }
 
 function opts() {
-  return { S: +$('S').value, p: Math.max(4, +$('p').value | 0), m: Math.min(24, Math.max(3, +$('m').value | 0)) };
+  return { S: +$('S').value, p: Math.max(4, +$('p').value | 0), m: Math.min(24, Math.max(3, +$('m').value | 0)),
+           f16: $('f16').checked ? 'V' : false };
 }
 
 function timeLimit() { const v = parseFloat($('tLimit').value); return v > 0 ? 1000 * v : Infinity; }
@@ -338,7 +340,7 @@ function stats(res) {
 // expected times (from the last brute-force throughput of the same model and discretization)
 // ---------------------------------------------------------------------------------------------
 let lastRate = null;
-function rateKey() { const o = opts(); return `${modelText.length}:${modelText.slice(0, 200)}|${o.S}|${o.p}|${o.m}|${axes}`; }
+function rateKey() { const o = opts(); return `${modelText.length}:${modelText.slice(0, 200)}|${o.S}|${o.p}|${o.m}|${o.f16}|${axes}`; }
 function fmtTime(ms) {
   if (ms < 1000) return `${Math.max(10, Math.round(ms / 10) * 10)} ms`;
   if (ms < 120e3) return `${(ms / 1000).toPrecision(2)} s`;
@@ -561,6 +563,7 @@ async function exportImage() {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       log(`${e.name} image: ${(nx * ny).toLocaleString()} ρ in ${(out.ms / 1000).toFixed(1)} s`);
+      engine.release();                         // the export buffers can be large
     }
   } catch (err) {
     showMsg('<b>Export failed:</b> ' + err.message);
@@ -790,20 +793,23 @@ async function validate() {
     const names = mdl.params.map((q) => q.name);
     const xi = names.indexOf(e.axes[0]), yi = names.indexOf(e.axes[1]);
     const xy = Float32Array.from(r.pts.flat());
-    const out = await engine.evaluate(mdl, mdl.params.map((q) => q.value), xi, yi, xy, { S: r.S, p: r.p, m: 24 });
-    let worst = 0, med = [], mis = 0;
-    r.rho.forEach((v, k) => {
-      const d = Math.abs(out.rho[k] - v) / v; med.push(d); worst = Math.max(worst, d);
-      if ((out.rho[k] >= 1) !== (v >= 1)) mis++;
-    });
-    med.sort((a, b) => a - b);
-    rows.push({ key: e.key, n: r.rho.length, med: med[med.length >> 1], worst, mis, ms: out.ms, p: r.p, r: out.r });
+    // Krylov m = 24, and the example's own m (its default), each also with the Float16 basis
+    for (const [m, f16] of [[24, false], [e.m, false], [e.m, 'V']]) {
+      const out = await engine.evaluate(mdl, mdl.params.map((q) => q.value), xi, yi, xy, { S: r.S, p: r.p, m, f16 });
+      let worst = 0, med = [], mis = 0;
+      r.rho.forEach((v, k) => {
+        const d = Math.abs(out.rho[k] - v) / v; med.push(d); worst = Math.max(worst, d);
+        if ((out.rho[k] >= 1) !== (v >= 1)) mis++;
+      });
+      med.sort((a, b) => a - b);
+      rows.push({ key: e.key + (f16 ? ' (f16 basis)' : ''), n: r.rho.length, med: med[med.length >> 1], worst, mis, ms: out.ms, p: r.p, r: out.r, m });
+    }
   }
-  $('report').innerHTML = '<table><tr><th>example</th><th>points</th><th>p</th><th>r</th><th>median |Δρ|/ρ</th><th>max |Δρ|/ρ</th>' +
+  $('report').innerHTML = '<table><tr><th>example</th><th>points</th><th>p</th><th>r</th><th>m</th><th>median |Δρ|/ρ</th><th>max |Δρ|/ρ</th>' +
     '<th>misclassified</th><th>GPU ms</th></tr>' + rows.map((w) =>
-      `<tr><td>${w.key}</td><td>${w.n}</td><td>${w.p}</td><td>${w.r}</td><td>${w.med.toExponential(1)}</td><td>${w.worst.toExponential(1)}</td>` +
+      `<tr><td>${w.key}</td><td>${w.n}</td><td>${w.p}</td><td>${w.r}</td><td>${w.m}</td><td>${w.med.toExponential(1)}</td><td>${w.worst.toExponential(1)}</td>` +
       `<td class="${w.mis ? 'fail' : 'pass'}">${w.mis}</td><td>${w.ms.toFixed(0)}</td></tr>`).join('') + '</table>' +
-    '<p class="muted">Reference: Float64 CPU solver of SOSD.jl (validate/reference.jl), same discretization; here Float32, Krylov m = 24.</p>';
+    '<p class="muted">Reference: Float64 CPU solver of SOSD.jl (validate/reference.jl), same discretization (s, p); here Float32, Krylov m = 24 and the default m of the example.</p>';
   console.log('VALIDATE', JSON.stringify(rows));
 }
 

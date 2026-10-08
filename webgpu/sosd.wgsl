@@ -6,9 +6,11 @@
 // [y, Y_1..Y_S]. Two entry points:
 //   prep — one thread per (point, step): the step map does not depend on the Krylov vector, so
 //          it is built ONCE: the stage system is solved for all right-hand sides (Gaussian
-//          elimination, partial pivoting), giving the BS×BS step matrix
-//              [y_{n+1}; Y_1..Y_S] = W_n [y_n; yd_1..yd_S]      (yd_s = x(t_s − τ(t_s)))
+//          elimination, partial pivoting), giving the SD×BS step matrix of the stage values
+//              [Y_1..Y_S] = W_n [y_n; yd_1..yd_S]      (yd_s = x(t_s − τ(t_s)))
 //          and per stage the delayed-lookup record (block index, flag, Lagrange weights);
+//          the end value is the collocation polynomial at 1: y_{n+1} = EW·[y_n; Y_1..Y_S]
+//          (exactly the Runge–Kutta update of a collocation method, without its D rows of W);
 //   main — LPP threads per point (G = 64/LPP points per workgroup): Arnoldi (m steps,
 //          classical Gram–Schmidt with DGKS reorthogonalization) on the monodromy, every
 //          matvec = p small mat-vecs with the stored W_n, rows shared by the lanes; eigenvalues
@@ -26,7 +28,7 @@ const SD: u32 = S * D;
 const DD: u32 = D * D;
 const NN: u32 = S + 2u;                // interpolation nodes {0, c_1..c_S, 1}
 const LR: u32 = NN + 2u;               // lookup record: block index, flag, NN weights
-const WW: u32 = BS * BS;
+const WW: u32 = SD * BS;              // step matrix: stage rows only
 const G: u32 = 64u / LPP;             // points per workgroup = chunk size of the storage layout
 
 struct U {
@@ -36,10 +38,10 @@ struct U {
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var<storage, read> pts: array<vec2<f32>>;
-@group(0) @binding(2) var<storage, read_write> hist: array<f32>;
-@group(0) @binding(3) var<storage, read_write> V: array<f32>;
+@group(0) @binding(2) var<storage, read_write> hist: array<SH>;            // ST: f32, or f16 (fast mode)
+@group(0) @binding(3) var<storage, read_write> V: array<SV>;
 @group(0) @binding(4) var<storage, read_write> outv: array<vec4<f32>>;   // ρ, Re μ, Im μ, flags
-@group(0) @binding(5) var<storage, read_write> Wb: array<f32>;            // step matrices
+@group(0) @binding(5) var<storage, read_write> Wb: array<SW>;             // step matrices − identity part
 @group(0) @binding(6) var<storage, read_write> Lb: array<f32>;            // lookup records
 
 var<private> b: u32;        // this point (local index inside the band)
@@ -56,6 +58,12 @@ fn Hx(k: u32) -> u32 { return (cb * ((u.p + u.r + 1u) * BS) + k) * G + lane; }
 fn Vx(j: u32, i: u32, N: u32) -> u32 { return (cb * ((min(u.m, MMAX) + 1u) * N) + j * N + i) * G + lane; }
 fn Wx(n: u32, k: u32) -> u32 { return (cb * (u.p * WW) + n * WW + k) * G + lane; }      // n = 0..p-1
 fn Lx(n: u32, s: u32, k: u32) -> u32 { return (cb * (u.p * S * LR) + (n * S + s) * LR + k) * G + lane; }
+
+// storage accessors: values are stored as ST (f16 in the fast mode), computed in f32
+fn hR(k: u32) -> f32 { return f32(hist[Hx(k)]); }
+fn hS(k: u32, v: f32) { hist[Hx(k)] = SH(v); }
+fn vR(j: u32, i: u32, N: u32) -> f32 { return f32(V[Vx(j, i, N)]); }
+fn vS(j: u32, i: u32, N: u32, v: f32) { V[Vx(j, i, N)] = SV(v); }
 
 fn params() -> array<f32, NP> {
   var P: array<f32, NP>;
@@ -144,21 +152,11 @@ fn prep(@builtin(global_invocation_id) gid: vec3<u32>) {
       R[i * BS + c] = acc * inv;
     }
   }
-  // rows of y_{n+1} = y_n + h Σ_j b_j (A_j Y_j + B_j yd_j); then the stage rows
-  for (var ri = 0u; ri < D; ri++) {
-    for (var c = 0u; c < BS; c++) {
-      var acc = 0.0;
-      if (c == ri) { acc = 1.0; }
-      for (var j = 0u; j < S; j++) {
-        var ay = 0.0;
-        for (var q = 0u; q < D; q++) { ay += As[j * DD + ri * D + q] * R[(j * D + q) * BS + c]; }
-        if (c >= D + j * D && c < D + (j + 1u) * D) { ay += Bs[j * DD + ri * D + (c - D - j * D)]; }
-        acc += h * BT[j] * ay;
-      }
-      Wb[Wx(n, c * BS + ri)] = acc;
-    }
+  // column-major, minus the identity part Y_i ≈ y_n (the O(h) remainder keeps its accuracy in f16)
+  for (var k = 0u; k < SD * BS; k++) {
+    let row = k / BS; let c = k % BS;
+    Wb[Wx(n, c * SD + row)] = SW(R[k] - select(0.0, 1.0, c == row % D));
   }
-  for (var k = 0u; k < SD * BS; k++) { Wb[Wx(n, (k % BS) * BS + D + k / BS)] = R[k]; }
 }
 
 // Workgroup = G points × LPP lanes per point. The lanes of a point share every loop over the
@@ -173,57 +171,65 @@ var<private> gp: u32;       // point inside the workgroup
 
 /** sum over the LPP lanes of this point of red[lane][0..cnt) -> out (identical in every lane) */
 fn reduce(cnt: u32, out: ptr<function, array<f32, MMAX + 1u>>) {
-  workgroupBarrier();
+  if (LPP > 1u) { workgroupBarrier(); }
   for (var l = 0u; l < cnt; l++) {
     var acc = 0.0;
     for (var q = 0u; q < LPP; q++) { acc += red[(gp * LPP + q) * (MMAX + 1u) + l]; }
     (*out)[l] = acc;
   }
-  workgroupBarrier();
+  if (LPP > 1u) { workgroupBarrier(); }
 }
 
+/** barrier between the lanes of a point (none with one lane per point: program order suffices) */
+fn bar() { if (LPP > 1u) { storageBarrier(); workgroupBarrier(); } }
+
 // Y[jout] = Φ Y[jin] (monodromy applied to basis column jin, result in column jout)
-fn sweep(jin: u32, jout: u32) -> u32 {
+fn sweep(jin: u32, jout: u32) {
   let p = u.p; let r = u.r; let N = (r + 1u) * BS;
-  var flags = 0u;
   for (var e = ln; e < N; e += LPP) {
     let i = e / BS; let q = e % BS;
-    hist[Hx((r - i) * BS + q)] = V[Vx(jin, e, N)];
+    hS((r - i) * BS + q, vR(jin, e, N));
   }
-  storageBarrier();
+  bar();
   for (var n = 0u; n < p; n++) {
     let bc = (n + r) * BS;
-    for (var k = ln; k < BS; k += LPP) {
-      var x = 0.0;
-      if (k < D) {
-        x = hist[Hx(bc + k)];
-      } else {
-        let s = (k - D) / D; let d = (k - D) % D;
-        let mi = u32(Lb[Lx(n, s, 0u)]);
-        if (Lb[Lx(n, s, 1u)] != 0.0) { flags |= 1u; }
-        let b0 = (mi - 1u) * BS; let b1 = mi * BS;
-        x = Lb[Lx(n, s, 2u)] * hist[Hx(b0 + d)];
-        for (var i = 0u; i < S; i++) { x += Lb[Lx(n, s, 3u + i)] * hist[Hx(b1 + (i + 1u) * D + d)]; }
-        x += Lb[Lx(n, s, 2u + S + 1u)] * hist[Hx(b1 + d)];
+    for (var k = ln; k < D; k += LPP) { Xs[gp * BS + k] = hR(bc + k); }
+    for (var st = 0u; st < S; st++) {
+      // the delayed state of stage st: one lookup record, D interpolations
+      let mi = u32(Lb[Lx(n, st, 0u)]);
+      var w: array<f32, NN>;
+      for (var i = 0u; i < NN; i++) { w[i] = Lb[Lx(n, st, 2u + i)]; }
+      let b0 = (mi - 1u) * BS; let b1 = mi * BS;
+      for (var d = 0u; d < D; d++) {
+        let k = D + st * D + d;
+        if (k % LPP == ln) {
+          var x = w[0] * hR(b0 + d);
+          for (var i = 0u; i < S; i++) { x += w[i + 1u] * hR(b1 + (i + 1u) * D + d); }
+          Xs[gp * BS + k] = x + w[S + 1u] * hR(b1 + d);
+        }
       }
-      Xs[gp * BS + k] = x;
     }
-    workgroupBarrier();
+    if (LPP > 1u) { workgroupBarrier(); }
     let bn = (n + r + 1u) * BS;
-    for (var row = ln; row < BS; row += LPP) {
-      var acc = 0.0;
-      for (var c = 0u; c < BS; c++) { acc += Wb[Wx(n, c * BS + row)] * Xs[gp * BS + c]; }
-      hist[Hx(bn + row)] = acc;
+    for (var row = ln; row < SD; row += LPP) {
+      var acc = Xs[gp * BS + row % D];                 // identity part: Y_i ≈ y_n
+      for (var c = 0u; c < BS; c++) { acc += f32(Wb[Wx(n, c * SD + row)]) * Xs[gp * BS + c]; }
+      hS(bn + D + row, acc);
     }
-    storageBarrier();
-    workgroupBarrier();
+    bar();
+    // end value: the collocation polynomial at θ = 1
+    for (var d = ln; d < D; d += LPP) {
+      var y = EW[0] * Xs[gp * BS + d];
+      for (var i = 0u; i < S; i++) { y += EW[i + 1u] * hR(bn + D + i * D + d); }
+      hS(bn + d, y);
+    }
+    bar();
   }
   for (var e = ln; e < N; e += LPP) {
     let i = e / BS; let q = e % BS;
-    V[Vx(jout, e, N)] = hist[Hx((p + r - i) * BS + q)];
+    vS(jout, e, N, hR((p + r - i) * BS + q));
   }
-  storageBarrier();
-  return flags;
+  bar();
 }
 
 // eigenvalues of the n×n upper Hessenberg matrix in a (row-major, stride MMAX): max |λ| and λ
@@ -347,47 +353,71 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) 
   red[lid * (MMAX + 1u)] = nrm;
   reduce(1u, &sv);
   nrm = 1.0 / sqrt(sv[0]);
-  for (var i = ln; i < N; i += LPP) { V[Vx(0u, i, N)] = (1.0 + 0.1 * sin(7.3 * f32(i + 1u))) * nrm; }
-  storageBarrier();
+  for (var i = ln; i < N; i += LPP) { vS(0u, i, N, (1.0 + 0.1 * sin(7.3 * f32(i + 1u))) * nrm); }
+  bar();
   var H: array<f32, (MMAX + 1u) * MMAX>;
   var mm = m; var flags = 0u; var alive = true;
+  // delay outside the stored window at some stage (flag 1)
+  if (ln == 0u) {
+    for (var n = 0u; n < u.p; n++) { for (var st = 0u; st < S; st++) { if (Lb[Lx(n, st, 1u)] != 0.0) { flags |= 1u; } } }
+  }
   for (var j = 0u; j < m; j++) {
-    flags |= sweep(j, j + 1u);
-    // classical Gram–Schmidt: one pass for all the dots, one for the update; repeated only when
-    // the norm dropped by more than 1/√2 (DGKS criterion), which keeps the basis orthogonal in f32
-    var n0 = 0.0; var beta = 0.0; var nprev = 0.0; var again = true;
-    for (var pss = 0u; pss < 2u; pss++) {
+    sweep(j, j + 1u);
+    // classical Gram–Schmidt with one reorthogonalization, fused (ORTH = 1): pass A the dots
+    // h = Vᵀw; pass B the update w −= V h together with the second dots h' = Vᵀw (from the same
+    // loads of V); pass C the correction w −= V h' only if h' is not negligible. ORTH = 0: pass A
+    // and B only (no reorthogonalization).
+    var hc: array<f32, MMAX + 1u>;
+    {
       var hp: array<f32, MMAX + 1u>;
       var w2 = 0.0;
-      if (again) {
-        for (var i = ln; i < N; i += LPP) {
-          let w = V[Vx(j + 1u, i, N)];
-          w2 += w * w;
-          for (var l = 0u; l <= j; l++) { hp[l] += V[Vx(l, i, N)] * w; }
-        }
+      for (var i = ln; i < N; i += LPP) {
+        let w = vR(j + 1u, i, N);
+        w2 += w * w;
+        for (var l = 0u; l < MMAX; l++) { if (l <= j) { hp[l] += vR(l, i, N) * w; } }
       }
-      for (var l = 0u; l <= j; l++) { red[lid * (MMAX + 1u) + l] = hp[l]; }
+      for (var l = 0u; l < MMAX; l++) { if (l <= j) { red[lid * (MMAX + 1u) + l] = hp[l]; } }
       red[lid * (MMAX + 1u) + MMAX] = w2;
-      var hc: array<f32, MMAX + 1u>;
-      reduce(MMAX + 1u, &hc);
+    }
+    reduce(MMAX + 1u, &hc);
+    let n0 = hc[MMAX];
+    var h2: array<f32, MMAX + 1u>;
+    {
+      var hp: array<f32, MMAX + 1u>;
       var b2 = 0.0;
-      if (again) {
-        if (pss == 0u) { n0 = hc[MMAX]; nprev = n0; }
+      for (var i = ln; i < N; i += LPP) {
+        var vl: array<f32, MMAX>;
+        var w = vR(j + 1u, i, N);
+        for (var l = 0u; l < MMAX; l++) { if (l <= j) { vl[l] = vR(l, i, N); w -= hc[l] * vl[l]; } }
+        vS(j + 1u, i, N, w);
+        b2 += w * w;
+        if (ORTH == 1u) { for (var l = 0u; l < MMAX; l++) { if (l <= j) { hp[l] += vl[l] * w; } } }
+      }
+      for (var l = 0u; l < MMAX; l++) { if (l <= j) { red[lid * (MMAX + 1u) + l] = hp[l]; } }
+      red[lid * (MMAX + 1u) + MMAX] = b2;
+    }
+    reduce(MMAX + 1u, &h2);
+    var beta = h2[MMAX];
+    for (var l = 0u; l < MMAX; l++) { if (l <= j) { H[l * MMAX + j] = hc[l]; } }
+    if (ORTH == 1u) {
+      var hh = 0.0;
+      for (var l = 0u; l < MMAX; l++) { if (l <= j) { hh += h2[l] * h2[l]; } }
+      let fix = hh > 1e-12 * beta;           // the same in every lane of the point
+      var b3 = 0.0;
+      if (fix) {
         for (var i = ln; i < N; i += LPP) {
-          var w = V[Vx(j + 1u, i, N)];
-          for (var l = 0u; l <= j; l++) { w -= hc[l] * V[Vx(l, i, N)]; }
-          V[Vx(j + 1u, i, N)] = w;
-          b2 += w * w;
+          var w = vR(j + 1u, i, N);
+          for (var l = 0u; l < MMAX; l++) { if (l <= j) { w -= h2[l] * vR(l, i, N); } }
+          vS(j + 1u, i, N, w);
+          b3 += w * w;
         }
       }
-      red[lid * (MMAX + 1u)] = b2;
-      var bs: array<f32, MMAX + 1u>;
-      reduce(1u, &bs);
-      if (again) {
-        for (var l = 0u; l <= j; l++) { H[l * MMAX + j] += hc[l]; }
-        beta = bs[0];
-        if (beta > 0.5 * nprev) { again = false; }
-        nprev = beta;
+      red[lid * (MMAX + 1u)] = b3;
+      var bb: array<f32, MMAX + 1u>;
+      reduce(1u, &bb);
+      if (fix) {
+        beta = bb[0];
+        for (var l = 0u; l < MMAX; l++) { if (l <= j) { H[l * MMAX + j] += h2[l]; } }
       }
     }
     beta = sqrt(beta);
@@ -400,8 +430,8 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) 
     }
     // a finished point keeps sweeping (barriers) on a harmless normalized vector
     let ib = select(1.0 / max(sqrt(n0), 1e-30), 1.0 / beta, alive);
-    for (var i = ln; i < N; i += LPP) { V[Vx(j + 1u, i, N)] *= ib; }
-    storageBarrier();
+    for (var i = ln; i < N; i += LPP) { vS(j + 1u, i, N, vR(j + 1u, i, N) * ib); }
+    bar();
   }
   if (ln != 0u || !valid) { return; }
   if ((flags & 2u) != 0u) { outv[b] = vec4<f32>(3.0e38, 0.0, 0.0, f32(flags)); return; }

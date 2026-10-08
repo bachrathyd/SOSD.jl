@@ -2,11 +2,14 @@
 
 Branch `gpu` (from `error-estimation` @ ed1424d). Goal: stability charts of linear
 time-periodic DDEs (one spectral radius ρ per parameter point) on an NVIDIA GPU, with a
-CPU fallback that runs the very same kernels on threads.
+CPU fallback. The GPU kernels also run on CPU threads (`cpu_mode = :kernels`, for
+validation without a GPU); the default CPU fallback is the reference solver threaded
+over points, because the KernelAbstractions CPU backend measured ~50× slower.
 
 ## 1. Where the time goes (measured, CPU, before any GPU work)
 
 2-DOF milling (D = 4), GL(3), T = τ, r = p, single thread, existing CPU path
+(local workstation shared with other jobs that day — the ratios are what matter)
 (`build_system_matrices` → `SparseMonodromyMap` (sparse LU) → KrylovKit `eigsolve`):
 
 | r = p | N = (r+1)(S+1)D | build | sparse assemble + LU | eigsolve (30 matvecs) | total / ρ |
@@ -78,15 +81,18 @@ thread level : the R threads of one point share the rows of each
 delay gives exactly that: h = T(θ)/p varies per point, p and r do not. Time-varying
 delays are fine (indices are per point and per step).
 
-## 4. Float32 vs Float64
+## 4. Float32 vs Float64 (measured — Float32 not recommended)
 
-Consumer/inference GPUs (T4, L4) run FP64 at 1/32–1/64 of the FP32 rate; A100/H100
-run FP64 at 1/2. The sweep is memory-bandwidth bound, so Float32 is at most ~2× faster
-through bandwidth, more on T4/L4 for the compute-bound build. Float32 round-off in a
-p-step sweep is ~√p·6·10⁻⁸ ≈ 2·10⁻⁶ relative for p = 1000, i.e. ρ near 1 is resolved to
-~10⁻⁵ — adequate for chart *pictures*, not for boundary refinement or for the 10⁻⁸
-agreement test. Default: Float64; `T = Float32` is an option and its error versus the
-Float64 result is reported in the benchmark.
+Consumer/inference GPUs (T4, L4) run FP64 at a fraction of the FP32 rate (T4 GEMM
+measured on Colab: 2.89 TFLOPS FP32, 0.25 TFLOPS FP64); A100/H100 run FP64 at 1/2.
+The a-priori estimate (round-off ~√p·6·10⁻⁸ per sweep) suggested ~10⁻⁵ on ρ. The
+measurement is worse: relative ρ error vs Float64 on the T4 was 4.6·10⁻⁷ (Mathieu),
+1.1·10⁻⁵ (SSV), 1.2·10⁻⁴ (2-DOF milling), 1.1·10⁻³ (4-DOF milling); over 4096 milling
+points the median was 7·10⁻⁴ with single points off by O(1) (the Krylov–Schur
+residual test is meaningless near the Float32 round-off floor of these strongly
+non-normal operators). Speed gain: only 1.3× on the T4 (the batch is not FP64-bound).
+Decision: Float64 everywhere; `T = Float32` stays available but is documented as
+not recommended.
 
 ## 5. Stability-chart drivers
 
@@ -106,4 +112,27 @@ Float64 result is reported in the benchmark.
   (checked at construction, fails loud).
 * No mass matrix / DAE, no additive term (ρ only), no error estimation in the batched
   path (v1).
+
+## 7. Verification (Colab, Tesla T4, Float64)
+
+`gpu/test_gpu.jl`, 30/30 pass — max relative ρ difference to `floquet_analysis`
+(sparse map + KrylovKit, tol 1e-13), both operator builds:
+
+| model | D | build on GPU | build on CPU + upload |
+|---|---|---|---|
+| delayed Mathieu | 2 | 2.1·10⁻¹⁵ | 2.5·10⁻¹⁵ |
+| turning, SSV (τ(t), p ≠ r) | 2 | 9.5·10⁻¹⁵ | 1.6·10⁻¹⁵ |
+| 2-DOF milling | 4 | 4.5·10⁻¹¹ | 1.1·10⁻¹⁰ |
+| 4-DOF milling | 8 | 7.1·10⁻¹¹ | 7.6·10⁻¹¹ |
+| 12-DOF milling | 24 | 1.6·10⁻¹⁰ | 8.7·10⁻¹¹ |
+
+The 10⁻¹¹–10⁻¹⁰ level for milling is the conditioning of the dominant multiplier
+(non-normal monodromy, nearly coincident x/y modes): KrylovKit itself moves by
+~10⁻¹⁰ between Krylov dimensions 30/60/120 on the same operator.
+
+Bugs the GPU run exposed (all fixed, regression-tested on the CPU backend): a
+non-isbits tableau struct (CUDA refuses the launch; now checked on the host), a
+`BitVector` written from `@threads` (data race), and a too-small Krylov basis for
+clustered complex pairs (D = 24: 5 % wrong ρ from an unconverged Ritz value → basis
+30/15, straggler retry with 60/30, and a warning if still unconverged).
 * CPU path is untouched; the batched path is additive (`src/batched.jl`).

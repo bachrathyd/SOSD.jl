@@ -126,9 +126,10 @@ res.rho          # spectral radii, same order as θs (also res.mu, res.converged
   (default) runs the reference solver threaded over points — the CPU fallback.
 - `T = Float32` is **not recommended**: on a T4 it was only 1.3× faster and its ρ
   error reached 10⁻³ (median) with occasional unusable points — see `GPU_DESIGN.md`.
-- Batch size, thread mapping (one thread per point for many small systems, a thread
-  block per point for few large ones) and operator assembly (`build = :device` for
-  S·D ≤ 32, else threaded CPU assembly + upload) are chosen automatically.
+- Batch size (from free device memory) and thread mapping (threads per point grow when
+  there are few points to fill the device) are chosen automatically. The step operators
+  are assembled on the device; `build = :host` assembles them on CPU threads instead
+  and uploads them.
 - `res.flag[i] == 1` marks points whose lag exceeds `r·h`: increase `r`.
 
 **Boundary curves.** `boundary_multisection` replaces per-speed bisection: every round

@@ -121,7 +121,7 @@ for p in (QUICK ? (50,) : (100, 300))
             println("D=24 build=$build failed: ", sprint(showerror, err)[1:min(end, 200)]); continue
         end
         for nb in (QUICK ? (16,) : (1, 16, 128))
-            θg = milling_points(nb)
+            local θg = milling_points(nb)
             spectral_radii(bp24, θg, tab, 10, 10; backend=CUDABackend(), build=build)
             t = @elapsed res = spectral_radii(bp24, θg, tab, p, r; backend=CUDABackend(), build=build, profile=true)
             ref = ρc[1:min(ncpu, nb)]

@@ -256,13 +256,14 @@ Assemble the per-step transition blocks of all points `θs` and place them on `b
   stage matrix (SD = S·D) is factorized in thread-local memory.
 - `build = :host` — threaded CPU assembly with the reference `build_system_matrices`
   (one point per thread), then a single upload. For large S·D.
-- `build = :auto` — `:device` if S·D ≤ 32, else `:host`.
+- `build = :auto` — `:device` (measured on a T4 for D = 24, S·D = 72: device build
+  2.2 s vs threaded host build 30 s for 128 points at p = 300 on the 2-core VM).
 """
 function build_batched_operators(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTableau{S},
                                  p::Int, r::Int; backend=CPU(), T::Type=Float64, build::Symbol=:auto) where {D, K, S}
     nb = length(θs)
     BS = (S + 1) * D
-    mode = build === :auto ? (S * D <= 32 ? :device : :host) : build
+    mode = build === :auto ? :device : build
     mode in (:device, :host) || error("build must be :auto, :device or :host")
     dtab = DeviceTableau(tab, T)
     isbits(prob) || error("BatchedLDDE must be isbits (plain functions / callable structs of plain data) " *
@@ -316,7 +317,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
 # ---------------------------------------------------------------------------
 
 @kernel function _sweep_kernel!(Y, jy::Int, @Const(X), jx::Int, Hist::AbstractArray{T}, @Const(Mp), @Const(Md), @Const(Midx), @Const(Wt),
-                                p::Int, r::Int, nb::Int, ::Val{D}, ::Val{S}, ::Val{K}, ::Val{BG}) where {T, D, S, K, BG}
+                                @Const(mask), p::Int, r::Int, nb::Int, ::Val{D}, ::Val{S}, ::Val{K}, ::Val{BG}) where {T, D, S, K, BG}
     b, lr = @index(Global, NTuple)
     lb, _ = @index(Local, NTuple)
     R = @uniform @groupsize()[2]
@@ -326,7 +327,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
     ycur = @localmem T (BG, D)
     @inbounds begin
         # history ← reversed input blocks: Hist block (r − i) = X block i
-        if b <= nb
+        if b <= nb && mask[b] != 0
             for e in lr:R:((r + 1) * BS)
                 i = (e - 1) ÷ BS; q = e - i * BS
                 Hist[b, (r - i) * BS + q] = X[b, e, jx]
@@ -334,7 +335,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
         end
         @synchronize
         for n in 1:p
-            if b <= nb
+            if b <= nb && mask[b] != 0
                 for e in lr:R:(NDEL + D)
                     if e <= NDEL
                         # e ↦ (d, s, k): delayed state of lag k at stage s, component d
@@ -355,7 +356,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
                 end
             end
             @synchronize
-            if b <= nb
+            if b <= nb && mask[b] != 0
                 for row in lr:R:BS
                     acc = zero(T)
                     for d in 1:D
@@ -372,7 +373,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
             end
             @synchronize
         end
-        if b <= nb
+        if b <= nb && mask[b] != 0
             for e in lr:R:((r + 1) * BS)
                 i = (e - 1) ÷ BS; q = e - i * BS
                 Y[b, e, jy] = Hist[b, (p + r - i) * BS + q]
@@ -412,8 +413,10 @@ function auto_sweep_config(backend, nb, D, S, K, T)
     if backend isa KA.CPU
         return SweepConfig(1, 1)
     end
-    want = cld(resident_threads(backend), max(nb, 1))
-    R = clamp(nextpow(2, want), 1, nextpow(2, BS))
+    # T4 measurement (D = 4, 2048 points): R = 4 ≈ R = 16 ≪ R = 1 (4× slower sweep at
+    # p = 1000); R ≈ BS/4 threads per point, fewer if the batch alone fills the device.
+    want = max(1, cld(resident_threads(backend), 4 * max(nb, 1)))
+    R = clamp(prevpow(2, want), 1, max(1, prevpow(2, max(1, BS ÷ 4))))
     R = min(R, 256)
     # shared memory: BG·(S·K·D + D) values; keep it ≤ 24 KiB and the group ≤ 256 threads
     BG = max(1, min(256 ÷ R, (24 * 1024) ÷ ((S * K * D + D) * sizeof(T))))
@@ -424,11 +427,13 @@ end
 """
     batched_mul!(Y, jy, X, jx, op::BatchedOperators, cfg::SweepConfig, backend)
 
-`Y[:, :, jy] = Φ_b X[:, :, jx]` for every point `b` of the batch (one forward sweep each).
+`Y[:, :, jy] = Φ_b X[:, :, jx]` for every point `b` of the batch with `mask[b] ≠ 0` (one
+forward sweep each; masked-out points are skipped).
 """
-function batched_mul!(Y, jy, X, jx, op::BatchedOperators{D, S, K}, cfg::SweepConfig, backend) where {D, S, K}
+function batched_mul!(Y, jy, X, jx, op::BatchedOperators{D, S, K}, cfg::SweepConfig, backend;
+                      mask=KA.ones(backend, Int32, op.nb)) where {D, S, K}
     nbpad = cld(op.nb, cfg.BG) * cfg.BG
-    _sweep_kernel!(backend, (cfg.BG, cfg.R))(Y, jy, X, jx, op.Hist, op.Mp, op.Md, op.Midx, op.Wt,
+    _sweep_kernel!(backend, (cfg.BG, cfg.R))(Y, jy, X, jx, op.Hist, op.Mp, op.Md, op.Midx, op.Wt, mask,
                                              op.p, op.r, op.nb, Val(D), Val(S), Val(K), Val(cfg.BG);
                                              ndrange=(nbpad, cfg.R))
     return Y
@@ -438,19 +443,21 @@ end
 # Batched Krylov–Schur (dominant eigenvalue per point)
 # ---------------------------------------------------------------------------
 
-@kernel function _dots_kernel!(Hc, @Const(V), @Const(W), jw::Int, N::Int)
+@kernel function _dots_kernel!(Hc, @Const(V), @Const(W), jw::Int, N::Int, @Const(mask))
     b, l = @index(Global, NTuple)
     T = eltype(V)
     acc = zero(T)
-    @inbounds for i in 1:N
-        acc += V[b, i, l] * W[b, i, jw]
+    @inbounds if mask[b] != 0
+        for i in 1:N
+            acc += V[b, i, l] * W[b, i, jw]
+        end
     end
     @inbounds Hc[b, l] = acc
 end
 
-@kernel function _subtract_kernel!(W, jw::Int, @Const(V), @Const(Hc), j::Int)
+@kernel function _subtract_kernel!(W, jw::Int, @Const(V), @Const(Hc), j::Int, @Const(mask))
     b, i = @index(Global, NTuple)
-    @inbounds begin
+    @inbounds if mask[b] != 0
         acc = W[b, i, jw]
         for l in 1:j
             acc -= V[b, i, l] * Hc[b, l]
@@ -545,6 +552,7 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
     nrm = KA.zeros(backend, T, nb)
     scale = KA.zeros(backend, T, nb)
     mask = KA.zeros(backend, Int32, nb)
+    mask2 = KA.zeros(backend, Int32, nb)
     kbd = KA.zeros(backend, Int32, nb)
     Qd = KA.zeros(backend, T, nb, m, keep + 1)
 
@@ -570,17 +578,26 @@ function batched_eigs(op::BatchedOperators{D, S, K, T}, backend; krylovdim::Int=
             any(!=(0), act) || break
             copyto!(mask, act)
             t0 = tick()
-            batched_mul!(Wb, 1, V, j, op, cfg, backend); nmv += 1
+            batched_mul!(Wb, 1, V, j, op, cfg, backend; mask=mask); nmv += 1
             t1 = tick(); tsw += t1 - t0
             _norm_kernel!(backend, min(nb, 64))(nrm0, Wb, 1, N; ndrange=nb)
-            # CGS2 against V[:, :, 1:j]
-            _dots_kernel!(backend, wg2(nb))(Hc, V, Wb, 1, N; ndrange=(nb, j))
-            _subtract_kernel!(backend, wg2(nb))(Wb, 1, V, Hc, j; ndrange=(nb, N))
-            _dots_kernel!(backend, wg2(nb))(Hc2, V, Wb, 1, N; ndrange=(nb, j))
-            _subtract_kernel!(backend, wg2(nb))(Wb, 1, V, Hc2, j; ndrange=(nb, N))
+            # Classical Gram–Schmidt against V[:, :, 1:j]; a second pass (DGKS criterion)
+            # only for the points whose norm dropped below ‖Φv‖/√2 — the orthogonalisation
+            # is the largest memory-traffic item, and frozen points are skipped entirely.
+            _dots_kernel!(backend, wg2(nb))(Hc, V, Wb, 1, N, mask; ndrange=(nb, j))
+            _subtract_kernel!(backend, wg2(nb))(Wb, 1, V, Hc, j, mask; ndrange=(nb, N))
             _norm_kernel!(backend, min(nb, 64))(nrm, Wb, 1, N; ndrange=nb)
             KA.synchronize(backend)
-            hc = Array(Hc); hc2 = Array(Hc2); nr = Array(nrm); nr0 = Array(nrm0)
+            nr = Array(nrm); nr0 = Array(nrm0)
+            reorth = Int32[(act[b] != 0 && nr[b] < nr0[b] / sqrt(T(2))) ? 1 : 0 for b in 1:nb]
+            copyto!(mask2, reorth)
+            _dots_kernel!(backend, wg2(nb))(Hc2, V, Wb, 1, N, mask2; ndrange=(nb, j))
+            if any(!=(0), reorth)
+                _subtract_kernel!(backend, wg2(nb))(Wb, 1, V, Hc2, j, mask2; ndrange=(nb, N))
+                _norm_kernel!(backend, min(nb, 64))(nrm, Wb, 1, N; ndrange=nb)
+            end
+            KA.synchronize(backend)
+            hc = Array(Hc); hc2 = Array(Hc2); nr = Array(nrm)
             sc = zeros(T, nb)
             for b in 1:nb
                 act[b] == 0 && continue

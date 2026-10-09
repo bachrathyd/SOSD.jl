@@ -184,3 +184,13 @@ affected by the delay bug fixed above and must be regenerated before use.)
 - Float16: basis only as an option (~5–25 %, ρ to 1e-3); history / W in f16 rejected (accumulates).
 - Column-wise LU in prep: correct in Float64 JS, but miscompiled on this driver for D = 4, S ≥ 2
   (D3D12 / dynamic private-array indexing) → reverted; do not reintroduce without a GPU check.
+
+### 2026-10-09 (day) — forced response, Julia port, Colab web UIs
+- WebGPU page (gh-pages): forcing f(t) in the model, periodic orbit (GMRES on the fixed point of
+  the one-period map, one Krylov space with ρ), stable region green by peak-to-peak (log scale).
+- Julia (src/batched.jl, batched_forced.jl): end value from the collocation polynomial in the
+  sweep (endrows = :collocation), `with_forcing` / `periodic_orbits`; tests 32/32 + 13/13.
+- Colab web UIs (not on gh-pages): SOSD — gpu/webui/server.jl + webgpu/engine-remote.js +
+  colab/SOSD_WebUI_Colab.ipynb (branch gpu); InterpolatedNyquist — branch webui-colab
+  (gpu/webui/server.jl with NyquistGPU, webgpu/engine-remote.js, julia() codegen in expr.js,
+  gpu/colab/NyquistGPU_WebUI_Colab.ipynb). Both tested locally with the CPU backend only.

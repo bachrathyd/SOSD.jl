@@ -71,20 +71,21 @@ B = [0, 0, 0, 0;
   {
     key: 'turning_ssv',
     title: 'Turning with spindle-speed variation (time-periodic delay)',
-    formula: 'ẍ + ζẋ + x = k<sub>w</sub> (x(t − τ(t)) − x(t)), &nbsp;τ(t) = 2π/Ω (1 + R sin(2πt/T))',
+    formula: 'ẍ + ζẋ + x = k<sub>w</sub> (x(t − τ(t)) − x(t)), &nbsp;τ(t) = 2π/Ω (1 + RVA sin(RVF·Ω t)), &nbsp;T = 2π/(RVF·Ω)',
     text: `# turning with sinusoidal spindle-speed variation (non-dimensional)
-#   ẍ + ζẋ + x = k_w (x(t − τ(t)) − x(t)),  τ(t) = 2π/Ω (1 + R sin(2πt/T)),  T = 10·2π/Ω
+#   ẍ + ζẋ + x = k_w (x(t − τ(t)) − x(t)),  τ(t) = 2π/Ω (1 + RVA sin(RVF·Ω t))
+#   RVA: relative variation amplitude, RVF: relative variation frequency (period T = 2π/(RVF·Ω))
 Ω = 0.2:2 @ 1                 # mean spindle speed
 k_w = 0:0.6 @ 0.2             # cutting-force coefficient
-R = 0:0.3 @ 0.1               # relative speed-variation amplitude
+RVA = 0:0.3 @ 0.1             # relative speed-variation amplitude
+RVF = 0.05:0.5 @ 0.1          # relative speed-variation frequency
 ζ = 0.01:0.3 @ 0.1            # damping
-NT = 10
-Tp = NT*2*pi/Ω
-T = Tp
-τ = 2*pi/Ω*(1 + R*sin(2*pi*t/Tp))
+T = 2*pi/(RVF*Ω)
+τ = 2*pi/Ω*(1 + RVA*sin(RVF*Ω*t))
 A = [0, 1; -1 - k_w, -ζ]
 B = [0, 0; k_w, 0]`,
     axes: ['Ω', 'k_w'], p: 200, S: 3, m: 6,
     brute: [256, 128], mdbm: ['bf', 0, 1],
+    note: 'One period T holds 1/RVF delays, so one delay gets p·RVF steps (20 at the defaults): for a small RVF raise p.',
   },
 ];

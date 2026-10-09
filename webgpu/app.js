@@ -3,6 +3,7 @@
 // Julia reference (validate/ref.json), ?bench=1 runs the benchmark once.
 
 import { Engine, WebGPUUnavailable } from './engine.js';
+import { RemoteEngine } from './engine-remote.js';
 import { parseModel, ParseError } from './expr.js';
 import { EXAMPLES } from './examples.js';
 import { mdbmBoundary } from './mdbm.js';
@@ -39,7 +40,15 @@ async function main() {
   $('mdGrid').add(new Option('from the brute-force grid', -1));
   MD_GRIDS.forEach(([a, b], i) => $('mdGrid').add(new Option(`${a} × ${b}`, i)));
   try {
-    engine = await Engine.create(log);
+    // served by the Colab notebook (gpu/webui/server.jl): compute there; else WebGPU here
+    const server = await RemoteEngine.detect();
+    engine = server ? await RemoteEngine.create(log, server) : await Engine.create(log);
+    if (server) {
+      $('tLimit').value = 60; document.title = 'SOSD on ' + server.device;
+      document.querySelector('header .sub').innerHTML = `Computed by SOSD.jl's batched solver on <b>${server.device}</b>: ` +
+        'Float32 while dragging and for the coarse levels, Float64 with a converged Krylov–Schur iteration (and GMRES for the ' +
+        'periodic orbit) for the final level, MDBM and the export. <span id="device"></span>';
+    }
     $('device').textContent = 'GPU: ' + engine.deviceName;
     countOnce('gpu/' + (engine.info.vendor || 'unknown'));
   } catch (e) {
@@ -238,8 +247,9 @@ async function compute() {
   const stale = () => pending && bfOn;
   const forced = $('forcedOn').checked && !!mdl.f;
   let lastAmp = null;
-  const evalBatch = async (pts, extraCancel = () => false, withOrbit = false) => {
-    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, onProgress: progress, forced: withOrbit,
+  // final: the accurate pass (server: Float64, converged Krylov–Schur); coarse levels are not
+  const evalBatch = async (pts, extraCancel = () => false, withOrbit = false, final = true) => {
+    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, onProgress: progress, forced: withOrbit, final,
       cancel: () => cancel() || extraCancel() });
     if (!out.done) throw new Cancelled();
     res.n += out.rho.length; res.ms += out.ms; res.r = out.r; res.N = (out.r + 1) * (o.S + 1) * mdl.D;
@@ -271,13 +281,14 @@ async function compute() {
         // new nodes of this level: on the stride-s lattice, not on the stride-2s one (except the first)
         const idx = [];
         for (let j = 0; j < ny; j += s) for (let i = 0; i < nx; i += s) {
-          if (s < from && i % (2 * s) === 0 && j % (2 * s) === 0) continue;
+          // (on a server the final level recomputes every node: all of it in Float64)
+          if (s < from && i % (2 * s) === 0 && j % (2 * s) === 0 && !(engine.remote && s === 1)) continue;
           idx.push(j * nx + i);
         }
         const xy = new Float32Array(2 * idx.length), dx = (box.x1 - box.x0) / (nx - 1), dy = (box.y1 - box.y0) / (ny - 1);
         idx.forEach((k, q) => { xy[2 * q] = box.x0 + (k % nx) * dx; xy[2 * q + 1] = box.y0 + Math.floor(k / nx) * dy; });
         const ms0 = res.ms;
-        const r = await evalBatch(xy, s < from ? stale : () => false, forced);
+        const r = await evalBatch(xy, s < from ? stale : () => false, forced, s === 1);
         idx.forEach((k, q) => { rho[k] = r[q]; });
         if (amp) idx.forEach((k, q) => { amp[k] = lastAmp[q]; });
         // throughput without the latency of the call (small levels would overestimate it)
@@ -628,7 +639,7 @@ async function exportImage() {
   const [xi, yi] = axes, px = model.params[xi], py = model.params[yi];
   const box = { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
   try {
-    const out = await engine.evaluate(model, values.slice(), xi, yi, { nx, ny, box }, { ...opts(), forced: $('forcedOn').checked && !!model.f,
+    const out = await engine.evaluate(model, values.slice(), xi, yi, { nx, ny, box }, { ...opts(), final: true, forced: $('forcedOn').checked && !!model.f,
       cancel: () => job.cancelled,
       onProgress: (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; btn.textContent = `Cancel (${(100 * f).toFixed(0)} %)`; } });
     if (out.done) {

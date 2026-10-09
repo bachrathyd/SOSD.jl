@@ -491,7 +491,7 @@ export function modelJulia(model) {
   const lets = (needT) => model.helpers
     .filter((h) => needT || !usesT(h, model))
     .map((h) => `    ${hname(h.name)} = ${jl(h.e, name)}`).join('\n');
-  const mat = (M) => '@SMatrix [' + M.map((r) => r.map((e) => jl(e, name)).join(' ')).join('; ') + ']';
+  const mat = (M) => '@SMatrix([' + M.map((r) => r.map((e) => jl(e, name)).join(' ')).join('; ') + '])';
   let s = `using StaticArrays\nconst D = ${D}\nconst NP = ${NP}\n`;
   s += `@inline _step(x) = x >= zero(x) ? one(x) : zero(x)\n`;
   s += `@inline function period(θ)\n    t = 0.0\n${lets(false)}\n    return ${jl(model.T, name)}\nend\n`;

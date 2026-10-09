@@ -1,0 +1,15 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+SOSD = "a8518967-a96f-44f7-81cf-f0e26ec34142"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[sources]
+SOSD = {path = "../.."}
+
+[compat]
+CUDA = "5"
+HTTP = "1, 2"
+julia = "1.11"

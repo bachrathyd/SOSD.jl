@@ -56,23 +56,31 @@ function evaluate(req)
     final = Bool(get(req, :final, false)); forced = Bool(get(req, :forced, false)) && mdl.forced_ok
     tab = GL(S)
     T = final ? Float64 : Float32
-    kw = final ? (krylovdim=20, keep=10, tol=1e-10, maxiter=20, retry=true) :
-                 (krylovdim=10, keep=5, tol=1e-5, maxiter=4, retry=false)
+    m = clamp(Int(get(req, :m, 8)), 3, 24)
     t0 = time()
-    res = Base.invokelatest(spectral_radii, mdl.prob, θs, tab, p, r; backend=BACKEND, T=T,
-                            cpu_mode=:kernels, kw...)
     amp = zeros(Float32, n)
-    stable = findall(<(1), res.rho)                  # the orbit is shown (and exists) only there
-    if forced && !isempty(stable)
-        orb = Base.invokelatest(periodic_orbits, mdl.prob, mdl.forcing, θs[stable], tab, p, r; backend=BACKEND, T=T,
-                                krylovdim=final ? 30 : 12, tol=final ? 1e-10 : 1e-5, maxrestart=final ? 20 : 3)
-        amp[stable] .= Float32.(orb.amp[:, 1])
+    if Bool(get(req, :accurate, false)) && final
+        # converged Krylov–Schur (tol 1e-10) and GMRES for the orbit
+        res = Base.invokelatest(spectral_radii, mdl.prob, θs, tab, p, r; backend=BACKEND, T=T, cpu_mode=:kernels,
+                                krylovdim=20, keep=10, tol=1e-10, maxiter=20, retry=true)
+        rho = res.rho; flag = res.flag
+        stable = findall(<(1), rho)
+        if forced && !isempty(stable)
+            orb = Base.invokelatest(periodic_orbits, mdl.prob, mdl.forcing, θs[stable], tab, p, r; backend=BACKEND, T=T,
+                                    krylovdim=30, tol=1e-10, maxrestart=20)
+            amp[stable] .= Float32.(orb.amp[:, 1])
+        end
+    else
+        # fast path: one m-step Arnoldi pass per point on the device (as the WebGPU page)
+        fr = Base.invokelatest(fast_spectral_radii, mdl.prob, θs, tab, p, r; m=m, backend=BACKEND, T=T,
+                               forcing=forced ? mdl.forcing : nothing)
+        rho = fr.rho; flag = fr.flag; amp .= Float32.(fr.amp)
     end
     ms = 1000 * (time() - t0)
     out = Vector{Float32}(undef, 3n)
-    out[1:n] .= Float32.(ifelse.(isfinite.(res.rho), res.rho, 3f38))
+    out[1:n] .= Float32.(ifelse.(isfinite.(rho), rho, 3f38))
     out[n+1:2n] .= amp
-    out[2n+1:3n] .= Float32.(res.flag)
+    out[2n+1:3n] .= Float32.(flag)
     return out, ms
 end
 

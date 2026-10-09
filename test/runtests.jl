@@ -29,4 +29,5 @@ using SOSD
     println("Running Batched (GPU-capable) Solver Tests on the CPU backend...")
     include("test_batched.jl")
     include("test_batched_forced.jl")
+    include("test_batched_fast.jl")
 end

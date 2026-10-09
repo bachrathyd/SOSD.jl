@@ -45,6 +45,12 @@ async function main() {
     engine = server ? await RemoteEngine.create(log, server) : await Engine.create(log);
     if (server) {
       $('tLimit').value = 60; document.title = 'SOSD on ' + server.device;
+      // server option: the final level by the converged Krylov–Schur iteration (slower, exact ρ)
+      const lab = document.createElement('label');
+      lab.className = 'check'; lab.style.fontWeight = '400';
+      lab.innerHTML = '<input type="checkbox" id="accurate"> final level converged (Krylov–Schur, tol 1e-10; slower)';
+      $('f16').parentElement.replaceWith(lab);
+      $('accurate').onchange = () => schedule(true, true);
       document.querySelector('header .sub').innerHTML = `Computed by SOSD.jl's batched solver on <b>${server.device}</b>: ` +
         'Float32 while dragging and for the coarse levels, Float64 with a converged Krylov–Schur iteration (and GMRES for the ' +
         'periodic orbit) for the final level, MDBM and the export. <span id="device"></span>';
@@ -64,8 +70,8 @@ async function main() {
   $('exGo').onclick = exportImage;
   $('bench').onclick = () => bench();
   $('mdIt').oninput = () => { $('mdItV').textContent = $('mdIt').value; schedule(); };
-  if (!engine.hasF16) { $('f16').disabled = true; $('f16').parentElement.title = 'this GPU / browser has no shader-f16'; }
-  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm', 'f16', 'forcedOn']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
+  if (!engine.hasF16 && $('f16')) { $('f16').disabled = true; $('f16').parentElement.title = 'this GPU / browser has no shader-f16'; }
+  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm', 'f16', 'forcedOn']) if ($(id)) $(id).onchange = () => { updateEtas(); schedule(true, true); };
   $('bfStart').onchange = () => { master = 'res'; updateEtas(); };
   $('fps').onchange = () => { master = 'fps'; updateEtas(); };
   $('mdPts').onchange = draw;
@@ -172,7 +178,7 @@ function schedule(force = false, restart = false) {
 
 function opts() {
   return { S: +$('S').value, p: Math.max(4, +$('p').value | 0), m: Math.min(24, Math.max(3, +$('m').value | 0)),
-           f16: $('f16').checked ? 'V' : false };
+           f16: $('f16') && $('f16').checked ? 'V' : false, accurate: !!($('accurate') && $('accurate').checked) };
 }
 
 function timeLimit() { const v = parseFloat($('tLimit').value); return v > 0 ? 1000 * v : Infinity; }

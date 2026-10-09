@@ -73,7 +73,8 @@ export class RemoteEngine {
       const cnt = Math.min(chunk, n - off);
       const xy = new Float32Array(2 * cnt);
       for (let q = 0; q < cnt; q++) { const [x, y] = at(off + q); xy[2 * q] = x; xy[2 * q + 1] = y; }
-      const body = JSON.stringify({ code, values: Array.from(values), xi, yi, xy: b64(xy), S, p, r, final, forced });
+      const body = JSON.stringify({ code, values: Array.from(values), xi, yi, xy: b64(xy), S, p, r, final, forced,
+        m: opt.m ?? 8, accurate: !!opt.accurate });
       const tc = performance.now();
       const resp = await fetch('api/eval', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
       if (!resp.ok) throw new Error('server: ' + (await resp.text()).slice(0, 400));

@@ -216,8 +216,8 @@
     the option <i>periodic orbit</i> also computes the T-periodic solution at every stable brute-force point: the fixed
     point x* = Φ x* + g of the one-period map (g: one period from a zero history under the forcing), solved by GMRES
     in the same Krylov machinery, then one more period along it. The stable region is coloured by the peak-to-peak
-    amplitude of the first state (green, scale 0 … the 98th percentile), the unstable one by log₁₀ ρ as before. It
-    roughly doubles the cost of a brute-force point; MDBM is not affected.</p>
+    amplitude of the first state (green, logarithmic scale from the 2nd to the 98th percentile), the unstable one by log₁₀ ρ as before. It
+    adds about 10–20 % to a brute-force point (one Krylov space serves both ρ and the orbit); MDBM is not affected.</p>
   <h3>Zoom and pan</h3>
   <p>Mouse wheel zooms about the cursor, a left-button drag zooms into the drawn box, middle-button (or shift + left)
     drag pans, two fingers pinch and pan on a touch screen, double-click resets the axes. The chart is recomputed for the

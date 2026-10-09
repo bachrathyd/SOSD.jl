@@ -395,16 +395,24 @@ function greenLut() {
   }
   return greenCache;
 }
-/** colour scale of the amplitude: 0 .. the 98th percentile over the stable points */
+/** logarithmic colour scale of the amplitude over the stable points: [2nd, 98th percentile]
+ *  (near the boundary the amplitude grows without bound; a linear scale would wash out the rest) */
 function ampScale(bf) {
-  if (bf.ampMax !== undefined) return bf.ampMax;
+  if (bf.ampLo !== undefined) return [bf.ampLo, bf.ampHi];
   const v = [];
-  for (let k = 0; k < bf.rho.length; k++) if (bf.rho[k] < 1 && isFinite(bf.amp[k]) && bf.amp[k] < 1e30) v.push(bf.amp[k]);
+  for (let k = 0; k < bf.rho.length; k++) if (bf.rho[k] < 1 && bf.amp[k] > 0 && bf.amp[k] < 1e30) v.push(bf.amp[k]);
   v.sort((a, b) => a - b);
-  bf.ampMax = v.length ? Math.max(v[Math.min(v.length - 1, Math.floor(0.98 * v.length))], 1e-30) : 1;
-  return bf.ampMax;
+  let lo = 1, hi = 10;
+  if (v.length) {
+    hi = v[Math.min(v.length - 1, Math.floor(0.98 * v.length))];
+    lo = Math.max(v[Math.floor(0.02 * v.length)], hi * 1e-4);
+    if (!(hi > lo * 1.5)) { lo = hi / 3; }
+  }
+  bf.ampLo = lo; bf.ampHi = hi;
+  return [lo, hi];
 }
-const niceMax = (x) => { const m = Math.pow(10, Math.floor(Math.log10(x))); return [1, 2, 2.5, 5, 10].map((q) => q * m).find((q) => q >= x * 0.999); };
+const ampT = (a, lo, hi) => (Math.log(Math.max(a, 1e-30)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+const fmtA = (x) => +x.toPrecision(2);
 let zoomRect = null;                              // [x0, y0, x1, y1] css px while dragging a zoom box
 function cmap(v) {
   const t = Math.min(1, Math.max(0, (v / CR + 1) / 2)) * (STOPS.length - 1);
@@ -487,11 +495,11 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
     const { nx, ny, rho } = res.bf, box = res.bf.box || res.box;
     if (!res.bf.img) {
       const img = new ImageData(nx, ny), px32 = new Uint32Array(img.data.buffer), lut = colourLut();
-      const amp = res.bf.amp, gl = greenLut(), am = amp ? niceMax(ampScale(res.bf)) : 1;
+      const amp = res.bf.amp, gl = greenLut(), [alo, ahi] = amp ? ampScale(res.bf) : [1, 10];
       for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
         const k = j * nx + i;
         if (amp && rho[k] < 1) {
-          const t = Math.min(LUT_N - 1, Math.max(0, Math.round(amp[k] / am * (LUT_N - 1))));
+          const t = Math.min(LUT_N - 1, Math.max(0, Math.round(ampT(amp[k], alo, ahi) * (LUT_N - 1))));
           px32[i + nx * (ny - 1 - j)] = gl[isFinite(t) ? t : LUT_N - 1];
           continue;
         }
@@ -563,7 +571,7 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
   cx.imageSmoothingEnabled = true;
   if (orbit) {
     // upper half: log10 ρ in [0, CR] (unstable), lower half: amplitude 0 .. a_max (stable)
-    const am = niceMax(ampScale(res.bf));
+    const [alo, ahi] = ampScale(res.bf);
     cx.drawImage(colourBar(), 0, 0, 1, 128, bx, T, bw, H / 2);
     const g = new ImageData(1, 256), gp32 = new Uint32Array(g.data.buffer), gl = greenLut();
     for (let k = 0; k < 256; k++) gp32[k] = gl[Math.round((1 - k / 255) * (LUT_N - 1))];
@@ -572,10 +580,12 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
     cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
     for (const v of [CR, CR / 2]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H / 2 + 4 * sc);
     cx.fillText('ρ = 1', bx + bw + 4 * sc, T + H / 2 + 4 * sc);
-    for (const q of [0.5, 0]) cx.fillText(+(q * am).toPrecision(3), bx + bw + 4 * sc, T + H - q * H / 2 + 4 * sc);
-    cx.fillText(+am.toPrecision(3) + '+', bx + bw + 4 * sc, T + H / 2 + 18 * sc);
+    // log scale, lower half: alo (bottom) .. ahi (middle)
+    cx.fillText(fmtA(alo) + '−', bx + bw + 4 * sc, T + H + 4 * sc);
+    cx.fillText(fmtA(Math.sqrt(alo * ahi)), bx + bw + 4 * sc, T + H * 0.75 + 4 * sc);
+    cx.fillText(fmtA(ahi) + '+', bx + bw + 4 * sc, T + H / 2 + 18 * sc);
     cx.save(); cx.translate(bx + bw + 52 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
-    cx.fillText(`peak-to-peak ${stateName(0)}   |   log₁₀ ρ`, 0, 0); cx.restore();
+    cx.fillText(`peak-to-peak ${stateName(0)} (log)   |   log₁₀ ρ`, 0, 0); cx.restore();
   } else {
     cx.drawImage(colourBar(), bx, T, bw, H);
     cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';

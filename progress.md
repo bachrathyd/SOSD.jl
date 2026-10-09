@@ -194,3 +194,12 @@ affected by the delay bug fixed above and must be regenerated before use.)
   colab/SOSD_WebUI_Colab.ipynb (branch gpu); InterpolatedNyquist — branch webui-colab
   (gpu/webui/server.jl with NyquistGPU, webgpu/engine-remote.js, julia() codegen in expr.js,
   gpu/colab/NyquistGPU_WebUI_Colab.ipynb). Both tested locally with the CPU backend only.
+
+## 2026-10-09 — streamed Colab app (gpu/stream)
+- New, separate from the web UI: `gpu/stream/worker.jl` (persistent Julia worker: progressive nested-lattice
+  levels with `fast_spectral_radii`, chart kept on the worker, coloured there) + `gpu/stream/app.py`
+  (Colab kernel: JPEG frame stream over one long-lived response, page with the WebGPU page's model text /
+  examples via webgpu/expr.js, examples.js; wheel zoom, drag pan, fps-driven start level, time limit, stop,
+  PNG export with axes) + `colab/SOSD_Stream_Colab.ipynb`.
+- Tested locally with the CPU worker (Mathieu 1080×540 final in ~10 s; milling forced ~150 µs/ρ on CPU).
+  Not yet run on a Colab GPU.

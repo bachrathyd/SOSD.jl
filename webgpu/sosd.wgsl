@@ -495,15 +495,25 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) 
   let valid = b < npts;                  // a padding point computes garbage, its result is not written
   let N = (u.r + 1u) * BS;
   let m = min(u.m, MMAX);
-  // start vector (deterministic, as SOSD._det_start)
-  for (var i = ln; i < N; i += LPP) { vS(0u, i, N, 1.0 + 0.1 * sin(7.3 * f32(i + 1u))); }
-  bar();
-  _ = normalize0();
   var flags = 0u;
   // delay outside the stored window at some stage (flag 1)
   if (ln == 0u) {
     for (var n = 0u; n < u.p; n++) { for (var st = 0u; st < S; st++) { if (Lb[Lx(n, st, 1u)] != 0.0) { flags |= 1u; } } }
   }
+  // Krylov start: forced (SHARE): the response g to the forcing over one period from a zero
+  // history, so that one Krylov space of Φ serves both the spectral radius and GMRES for the
+  // periodic orbit; otherwise (or g = 0) the deterministic vector of SOSD._det_start
+  var beta = 0.0;
+  if (FORCED) {
+    for (var i = ln; i < N; i += LPP) { vS(0u, i, N, 0.0); }
+    bar();
+    sweep(0u, 0u, true, false);
+    beta = normalize0();
+  }
+  let useg = FORCED && beta > 1e-20;
+  for (var i = ln; i < N; i += LPP) { if (!useg) { vS(0u, i, N, 1.0 + 0.1 * sin(7.3 * f32(i + 1u))); } }
+  bar();
+  _ = normalize0();                      // (barriers: in uniform control flow for every point)
   let ar = arnoldi(m);
   let mm = ar.x; flags |= ar.y;
   var ev = vec4<f32>(3.0e38, 0.0, 0.0, 0.0);
@@ -515,17 +525,11 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_index) 
   }
   var amp = 0.0;
   if (FORCED) {
-    // the response to the forcing over one period from a zero history: g
-    for (var i = ln; i < N; i += LPP) { vS(0u, i, N, 0.0); }
-    bar();
-    sweep(0u, 0u, true, false);
-    let beta = normalize0();
-    // periodic orbit: (I − Φ) x = g by GMRES in the Krylov space of Φ from g
-    let ag = arnoldi(m);
-    let y = gmres_y(ag.x, beta);
+    // periodic orbit: (I − Φ) x = g by GMRES in the Krylov space of Φ from g (built above)
+    let y = gmres_y(mm, beta);
     for (var i = ln; i < N; i += LPP) {
       var x = 0.0;
-      for (var j = 0u; j < MMAX; j++) { if (j < ag.x) { x += y[j] * vR(j, i, N); } }
+      for (var j = 0u; j < MMAX; j++) { if (j < mm && useg) { x += y[j] * vR(j, i, N); } }
       vS(m, i, N, x);
     }
     bar();

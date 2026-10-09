@@ -115,8 +115,8 @@
       <label class="row"><span><b>Example</b></span><select id="ex"></select></label>
       <div class="formula" id="formula"></div>
       <div class="note" id="note"></div>
-      <div class="muted">ẋ(t) = A(t) x(t) + B(t) x(t − τ(t)), A, B, τ periodic with period T — edit below
-        (<code>name = min:max @ value</code> declares a slider):</div>
+      <div class="muted">ẋ(t) = A(t) x(t) + B(t) x(t − τ(t)) + f(t), A, B, τ, f periodic with period T — edit below
+        (<code>name = min:max @ value</code> declares a slider; the forcing <code>f = [ … ]</code> is optional):</div>
       <textarea id="eq" spellcheck="false"></textarea>
       <div class="status" id="eqStatus"></div>
     </div>
@@ -133,6 +133,7 @@
         <label class="row"><span>frames / s while dragging</span><input type="number" id="fps" min="1" max="60" step="1" value="15"></label>
       </div>
       <div class="muted" id="bfInfo" style="margin:-4px 0 8px"></div>
+      <label class="check" title="ẋ = A x + B x(t−τ) + f(t): the T-periodic orbit (fixed point of the one-period map, by GMRES) at every stable brute-force point; colour: its peak-to-peak amplitude of the first state"><input type="checkbox" id="forcedOn"> Periodic orbit of the forced system: peak-to-peak amplitude in the stable region (green)</label>
       <label class="check"><input type="checkbox" id="mdOn" checked> MDBM: boundary ρ = 1 only</label>
       <div class="grid2">
         <label class="row"><span>initial grid</span><select id="mdGrid"></select></label>
@@ -210,6 +211,13 @@
     The time limit stops a chart and keeps its last complete level.</p>
   <p>MDBM can start from the brute-force grid (initial grid: <i>from the brute-force grid</i>): its sign-changing cells
     are refined further. With an MDBM boundary the (coarser) grid boundary is not drawn.</p>
+  <h3>Forced response</h3>
+  <p>With a forcing <code>f = [f₁; f₂; …]</code> in the model (e.g. the cutting force with the nominal chip thickness),
+    the option <i>periodic orbit</i> also computes the T-periodic solution at every stable brute-force point: the fixed
+    point x* = Φ x* + g of the one-period map (g: one period from a zero history under the forcing), solved by GMRES
+    in the same Krylov machinery, then one more period along it. The stable region is coloured by the peak-to-peak
+    amplitude of the first state (green, scale 0 … the 98th percentile), the unstable one by log₁₀ ρ as before. It
+    roughly doubles the cost of a brute-force point; MDBM is not affected.</p>
   <h3>Zoom and pan</h3>
   <p>Mouse wheel zooms about the cursor, a left-button drag zooms into the drawn box, middle-button (or shift + left)
     drag pans, two fingers pinch and pan on a touch screen, double-click resets the axes. The chart is recomputed for the

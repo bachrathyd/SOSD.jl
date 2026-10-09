@@ -56,7 +56,7 @@ async function main() {
   $('bench').onclick = () => bench();
   $('mdIt').oninput = () => { $('mdItV').textContent = $('mdIt').value; schedule(); };
   if (!engine.hasF16) { $('f16').disabled = true; $('f16').parentElement.title = 'this GPU / browser has no shader-f16'; }
-  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm', 'f16']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
+  for (const id of ['bfOn', 'mdOn', 'mdGrid', 'mdNb', 'S', 'p', 'm', 'f16', 'forcedOn']) $(id).onchange = () => { updateEtas(); schedule(true, true); };
   $('bfStart').onchange = () => { master = 'res'; updateEtas(); };
   $('fps').onchange = () => { master = 'fps'; updateEtas(); };
   $('mdPts').onchange = draw;
@@ -83,6 +83,7 @@ function loadExample(key) {
   $('eq').value = ex.text;
   $('p').value = ex.p; $('m').value = ex.m; $('S').value = ex.S;
   $('bfOn').checked = ex.bf !== false; $('mdOn').checked = ex.md !== false;
+  $('forcedOn').checked = !!ex.forced;
   $('mdGrid').value = ex.mdbm[0] === 'bf' ? -1 : MD_GRIDS.findIndex(([a, b]) => a === ex.mdbm[0] && b === ex.mdbm[1]);
   $('mdIt').value = ex.mdbm[2]; $('mdItV').textContent = ex.mdbm[2];
   setModelText(ex.text, false);
@@ -107,6 +108,8 @@ function setModelText(text, edited) {
     $('eqStatus').textContent = `${mdl.D} states, ${mdl.params.length} parameters, ${mdl.helpers.length} helpers`;
     if (edited) countModel(text);
     rememberHome();
+    $('forcedOn').disabled = !mdl.f;
+    $('forcedOn').parentElement.title = mdl.f ? '' : 'the model has no forcing  f = [ ... ]';
     buildParams();
     updateEtas();
     schedule(true, true);
@@ -198,12 +201,15 @@ function strideForFps(nx, ny, us, fps) {
 }
 
 /** the computed sub-lattice of stride s as a grid result (its own box: the nodes i·s ≤ nx−1) */
-function levelGrid(nx, ny, rho, s, box) {
+function levelGrid(nx, ny, rho, s, box, amp = null) {
   const cw = Math.floor((nx - 1) / s) + 1, ch = Math.floor((ny - 1) / s) + 1;
-  const sub = new Float32Array(cw * ch);
-  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) sub[j * cw + i] = rho[j * s * nx + i * s];
+  const sub = new Float32Array(cw * ch), sa = amp ? new Float32Array(cw * ch) : null;
+  for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+    sub[j * cw + i] = rho[j * s * nx + i * s];
+    if (sa) sa[j * cw + i] = amp[j * s * nx + i * s];
+  }
   const dx = (box.x1 - box.x0) / (nx - 1), dy = (box.y1 - box.y0) / (ny - 1);
-  return { nx: cw, ny: ch, rho: sub, stride: s,
+  return { nx: cw, ny: ch, rho: sub, amp: sa, stride: s,
            box: { x0: box.x0, x1: box.x0 + (cw - 1) * s * dx, y0: box.y0, y1: box.y0 + (ch - 1) * s * dy } };
 }
 
@@ -230,11 +236,14 @@ async function compute() {
   const progress = (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; };
   // newer values waiting: refinement of these ones is stale (MDBM too, when a map is shown)
   const stale = () => pending && bfOn;
-  const evalBatch = async (pts, extraCancel = () => false) => {
-    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, onProgress: progress,
+  const forced = $('forcedOn').checked && !!mdl.f;
+  let lastAmp = null;
+  const evalBatch = async (pts, extraCancel = () => false, withOrbit = false) => {
+    const out = await engine.evaluate(mdl, vals, xi, yi, pts, { ...o, onProgress: progress, forced: withOrbit,
       cancel: () => cancel() || extraCancel() });
     if (!out.done) throw new Cancelled();
     res.n += out.rho.length; res.ms += out.ms; res.r = out.r; res.N = (out.r + 1) * (o.S + 1) * mdl.D;
+    lastAmp = out.amp;
     return out.rho;
   };
   const evalCpu = async (xy) => {
@@ -249,12 +258,13 @@ async function compute() {
     if (bfOn) {
       countOnce('brute-force');
       const [nx, ny] = finalGrid();
-      const key = JSON.stringify([modelText, vals, box, o, nx, ny, axes]);
+      const key = JSON.stringify([modelText, vals, box, o, nx, ny, axes, forced]);
       const s0 = +$('bfStart').value;
-      const rho = new Float32Array(nx * ny);
+      const rho = new Float32Array(nx * ny), amp = forced ? new Float32Array(nx * ny) : null;
       let s = s0, from = s0;
       if (!drag && dragCache && dragCache.key === key && dragCache.s >= s0) {
         rho.set(dragCache.rho); from = s = dragCache.s;    // the last drag frame is level one
+        if (amp) amp.set(dragCache.amp);
         s /= 2;
       }
       for (; s >= 1; s /= 2) {
@@ -267,18 +277,19 @@ async function compute() {
         const xy = new Float32Array(2 * idx.length), dx = (box.x1 - box.x0) / (nx - 1), dy = (box.y1 - box.y0) / (ny - 1);
         idx.forEach((k, q) => { xy[2 * q] = box.x0 + (k % nx) * dx; xy[2 * q + 1] = box.y0 + Math.floor(k / nx) * dy; });
         const ms0 = res.ms;
-        const r = await evalBatch(xy, s < from ? stale : () => false);
+        const r = await evalBatch(xy, s < from ? stale : () => false, forced);
         idx.forEach((k, q) => { rho[k] = r[q]; });
+        if (amp) idx.forEach((k, q) => { amp[k] = lastAmp[q]; });
         // throughput without the latency of the call (small levels would overestimate it)
         if (idx.length >= 16384) { lastRate = { key: rateKey(), us: 1000 * Math.max(0.2 * (res.ms - ms0), res.ms - ms0 - CALL_MS) / idx.length }; updateEtas(); }
-        res.bf = s === 1 ? { nx, ny, rho, box } : levelGrid(nx, ny, rho, s, box);
+        res.bf = s === 1 ? { nx, ny, rho, amp, box } : levelGrid(nx, ny, rho, s, box, amp);
         // the map at once; the previous boundary stays on it until the new one is ready
         result = { ...res, md: mdOn && !drag && result ? result.md : null };
         draw(); stats(res);
-        if (drag) { dragCache = { key, s, rho: rho.slice() }; break; }
+        if (drag) { dragCache = { key, s, rho: rho.slice(), amp: amp && amp.slice() }; break; }
       }
       if (!res.bf) {                                    // everything came from the drag frame
-        res.bf = from === 1 ? { nx, ny, rho, box } : levelGrid(nx, ny, rho, from, box);
+        res.bf = from === 1 ? { nx, ny, rho, amp, box } : levelGrid(nx, ny, rho, from, box, amp);
         result = { ...res, md: mdOn && result ? result.md : null };
         draw(); stats(res);
       }
@@ -369,7 +380,31 @@ function updateEtas() {
 // drawing: the view box is the axis parameters' current range; a result computed for another box
 // (during zoom / pan, until the recompute arrives) is drawn mapped into the view
 // ---------------------------------------------------------------------------------------------
-const PAD = { l: 72, r: 96, t: 14, b: 56 };
+const PAD = { l: 72, r: 96, t: 34, b: 56 };
+// stable region with the periodic orbit: peak-to-peak amplitude, white -> dark green (ColorBrewer Greens)
+const GREENS = [[247, 252, 245], [229, 245, 224], [199, 233, 192], [161, 217, 155], [116, 196, 118],
+                [65, 171, 93], [35, 139, 69], [0, 109, 44], [0, 68, 27]];
+let greenCache = null;
+function greenLut() {
+  if (greenCache) return greenCache;
+  greenCache = new Uint32Array(LUT_N);
+  for (let k = 0; k < LUT_N; k++) {
+    const t = k / (LUT_N - 1) * (GREENS.length - 1), i = Math.min(GREENS.length - 2, Math.floor(t)), w = t - i;
+    const c = GREENS[i].map((v, q) => Math.round(v + w * (GREENS[i + 1][q] - v)));
+    greenCache[k] = (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
+  }
+  return greenCache;
+}
+/** colour scale of the amplitude: 0 .. the 98th percentile over the stable points */
+function ampScale(bf) {
+  if (bf.ampMax !== undefined) return bf.ampMax;
+  const v = [];
+  for (let k = 0; k < bf.rho.length; k++) if (bf.rho[k] < 1 && isFinite(bf.amp[k]) && bf.amp[k] < 1e30) v.push(bf.amp[k]);
+  v.sort((a, b) => a - b);
+  bf.ampMax = v.length ? Math.max(v[Math.min(v.length - 1, Math.floor(0.98 * v.length))], 1e-30) : 1;
+  return bf.ampMax;
+}
+const niceMax = (x) => { const m = Math.pow(10, Math.floor(Math.log10(x))); return [1, 2, 2.5, 5, 10].map((q) => q * m).find((q) => q >= x * 0.999); };
 let zoomRect = null;                              // [x0, y0, x1, y1] css px while dragging a zoom box
 function cmap(v) {
   const t = Math.min(1, Math.max(0, (v / CR + 1) / 2)) * (STOPS.length - 1);
@@ -452,8 +487,15 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
     const { nx, ny, rho } = res.bf, box = res.bf.box || res.box;
     if (!res.bf.img) {
       const img = new ImageData(nx, ny), px32 = new Uint32Array(img.data.buffer), lut = colourLut();
+      const amp = res.bf.amp, gl = greenLut(), am = amp ? niceMax(ampScale(res.bf)) : 1;
       for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-        const v = Math.log10(Math.max(rho[j * nx + i], 1e-30));
+        const k = j * nx + i;
+        if (amp && rho[k] < 1) {
+          const t = Math.min(LUT_N - 1, Math.max(0, Math.round(amp[k] / am * (LUT_N - 1))));
+          px32[i + nx * (ny - 1 - j)] = gl[isFinite(t) ? t : LUT_N - 1];
+          continue;
+        }
+        const v = Math.log10(Math.max(rho[k], 1e-30));
         const t = Math.min(LUT_N - 1, Math.max(0, Math.round((v / CR + 1) / 2 * (LUT_N - 1))));
         px32[i + nx * (ny - 1 - j)] = lut[t];
       }
@@ -509,14 +551,44 @@ function render(cx, w, h, sc, res, view, showPts = false, ink = null, muted = nu
   }
   cx.save(); cx.translate(20 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
   cx.fillText(axisLabel(res.yname), 0, 0); cx.restore();
+  // title: what the colours show
+  const orbit = res.bf && res.bf.amp;
+  cx.textAlign = 'left'; cx.font = `600 ${13 * sc}px system-ui, sans-serif`;
+  cx.fillText(orbit
+    ? `stable (green): peak-to-peak of ${stateName(0)} on the periodic orbit  ·  unstable (red): log₁₀ ρ`
+    : 'colour: log₁₀ ρ, spectral radius of the monodromy operator (ρ < 1 stable, blue)', L, T - 12 * sc);
+  cx.font = `${13 * sc}px system-ui, sans-serif`;
   // colour bar
   const bx = L + W + 18 * sc, bw = 16 * sc;
   cx.imageSmoothingEnabled = true;
-  cx.drawImage(colourBar(), bx, T, bw, H);
-  cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
-  for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H + 4 * sc);
-  cx.save(); cx.translate(bx + bw + 46 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
-  cx.fillText('log₁₀ ρ   (ρ < 1 stable, blue)', 0, 0); cx.restore();
+  if (orbit) {
+    // upper half: log10 ρ in [0, CR] (unstable), lower half: amplitude 0 .. a_max (stable)
+    const am = niceMax(ampScale(res.bf));
+    cx.drawImage(colourBar(), 0, 0, 1, 128, bx, T, bw, H / 2);
+    const g = new ImageData(1, 256), gp32 = new Uint32Array(g.data.buffer), gl = greenLut();
+    for (let k = 0; k < 256; k++) gp32[k] = gl[Math.round((1 - k / 255) * (LUT_N - 1))];
+    const gc = new OffscreenCanvas(1, 256); gc.getContext('2d').putImageData(g, 0, 0);
+    cx.drawImage(gc, bx, T + H / 2, bw, H / 2);
+    cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
+    for (const v of [CR, CR / 2]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H / 2 + 4 * sc);
+    cx.fillText('ρ = 1', bx + bw + 4 * sc, T + H / 2 + 4 * sc);
+    for (const q of [0.5, 0]) cx.fillText(+(q * am).toPrecision(3), bx + bw + 4 * sc, T + H - q * H / 2 + 4 * sc);
+    cx.fillText(+am.toPrecision(3) + '+', bx + bw + 4 * sc, T + H / 2 + 18 * sc);
+    cx.save(); cx.translate(bx + bw + 52 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
+    cx.fillText(`peak-to-peak ${stateName(0)}   |   log₁₀ ρ`, 0, 0); cx.restore();
+  } else {
+    cx.drawImage(colourBar(), bx, T, bw, H);
+    cx.strokeRect(bx, T, bw, H); cx.fillStyle = ink; cx.textAlign = 'left';
+    for (const v of [-CR, -CR / 2, 0, CR / 2, CR]) cx.fillText(v.toFixed(2), bx + bw + 4 * sc, T + (1 - v / CR) / 2 * H + 4 * sc);
+    cx.save(); cx.translate(bx + bw + 46 * sc, T + H / 2); cx.rotate(-Math.PI / 2); cx.textAlign = 'center';
+    cx.fillText('log₁₀ ρ   (ρ < 1 stable, blue)', 0, 0); cx.restore();
+  }
+}
+
+/** a name for state component k: from the example's declaration, else x₁, x₂, ... */
+function stateName(k) {
+  const nm = ex && ex.states ? ex.states[k] : null;
+  return nm || 'x' + '₁₂₃₄₅₆'[k];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -546,12 +618,12 @@ async function exportImage() {
   const [xi, yi] = axes, px = model.params[xi], py = model.params[yi];
   const box = { x0: px.lo, x1: px.hi, y0: py.lo, y1: py.hi };
   try {
-    const out = await engine.evaluate(model, values.slice(), xi, yi, { nx, ny, box }, { ...opts(),
+    const out = await engine.evaluate(model, values.slice(), xi, yi, { nx, ny, box }, { ...opts(), forced: $('forcedOn').checked && !!model.f,
       cancel: () => job.cancelled,
       onProgress: (f) => { $('progress').firstChild.style.width = (100 * f).toFixed(1) + '%'; btn.textContent = `Cancel (${(100 * f).toFixed(0)} %)`; } });
     if (out.done) {
       const same = result && result.box && ['x0', 'x1', 'y0', 'y1'].every((k) => result.box[k] === box[k]);
-      const res = { box, xname: px.name, yname: py.name, bf: { nx, ny, rho: out.rho }, md: same ? result.md : null };
+      const res = { box, xname: px.name, yname: py.name, bf: { nx, ny, rho: out.rho, amp: out.amp }, md: same ? result.md : null };
       const cv = new OffscreenCanvas(e.w, e.h), cx = cv.getContext('2d');
       render(cx, e.w, e.h, sc, res, box, false, '#1d2230', '#5d6475');
       cx.globalCompositeOperation = 'destination-over';
@@ -598,7 +670,12 @@ function hover(ev) {
   if (result.bf) {
     const { nx, ny, rho } = result.bf, box = result.bf.box || result.box;
     const i = Math.round((q.x - box.x0) / (box.x1 - box.x0) * (nx - 1)), j = Math.round((q.y - box.y0) / (box.y1 - box.y0) * (ny - 1));
-    if (i >= 0 && j >= 0 && i < nx && j < ny) s += `   ρ ≈ ${rho[j * nx + i].toPrecision(5)} (nearest grid point)`;
+    if (i >= 0 && j >= 0 && i < nx && j < ny) {
+      s += `   ρ ≈ ${rho[j * nx + i].toPrecision(5)}`;
+      const a = result.bf.amp;
+      if (a && rho[j * nx + i] < 1) s += `, peak-to-peak ${stateName(0)} ≈ ${a[j * nx + i].toPrecision(4)}`;
+      s += ' (nearest grid point)';
+    }
   }
   $('hover').textContent = s;
 }

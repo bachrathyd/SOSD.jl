@@ -122,9 +122,9 @@ export class Engine {
     return [i.vendor, i.architecture, i.device, i.description].filter(Boolean).join(' ') || 'GPU';
   }
 
-  async pipeline(model, S, m, lpp, f16 = false, orth = 1, wg = 64) {
+  async pipeline(model, S, m, lpp, f16 = false, orth = 1, wg = 64, forced = false) {
     const code = (f16 ? 'enable f16;\n' : '') +
-      this.src.replace('//@MODEL@', modelWGSL(model)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp, f16, orth, wg));
+      this.src.replace('//@MODEL@', modelWGSL(model, forced)).replace('//@TABLEAU@', tableauWGSL(gaussTableau(S), m, lpp, f16, orth, wg));
     let p = this.pipelines.get(code);
     if (p) return p;
     const module = this.device.createShaderModule({ code, label: 'sosd' });
@@ -172,7 +172,9 @@ export class Engine {
     // fast mode: hist, V and W stored as f16 (half the memory traffic), arithmetic in f32
     const f16 = this.hasF16 && opt.f16 ? opt.f16 : false;   // true, or a subset of 'WHV'
     const eb = (k) => (f16 && (f16 === true || f16.includes(k)) ? 2 : 4);
-    const pl = await this.pipeline(model, S, m, lpp, f16, opt.orth ?? 1, WG);
+    // forced: also the periodic orbit (fixed point of the affine one-period map) -> amp
+    const forced = !!(opt.forced && model.f);
+    const pl = await this.pipeline(model, S, m, lpp, f16, opt.orth ?? 1, WG, forced);
     const dev = this.device;
     // per-buffer size limit, and the prep dispatch (one thread per point and step) ≤ 65535 groups
     const perPt = Math.max((p + r + 1) * BS, (m + 1) * N, wFloats, lFloats) * 4;
@@ -185,10 +187,11 @@ export class Engine {
     const work = p * BS * BS * m + m * m * N;
     const band0 = Math.max(64, Math.min(4096, Math.floor(3e8 / work)));
     let band = Math.min(maxBand, n, pl.rate ? Math.max(64, Math.floor(pl.rate * this.bandTarget / work)) : band0);
-    let hist = null, V = null, Wb = null, Lb = null, ptsBuf = null, outBuf = null, read = null, cap = 0;
+    let hist = null, V = null, Wb = null, Lb = null, Fb = null, ptsBuf = null, outBuf = null, read = null, cap = 0;
     let gpuPrep = 0, gpuMain = 0;
     const S_ = GPUBufferUsage.STORAGE;
     const rho = new Float32Array(n), flags = new Uint8Array(n), mu = n <= 2e6 ? new Float32Array(2 * n) : null;
+    const amp = forced ? new Float32Array(n) : null;      // peak-to-peak of x₁ on the periodic orbit
     const t0 = performance.now();
     let off = 0;
     while (off < n) {
@@ -201,6 +204,7 @@ export class Engine {
         V = this.buffer('V', eb('V') * (m + 1) * N * slots, S_);
         Wb = this.buffer('W', eb('W') * wFloats * slots, S_);
         Lb = this.buffer('L', 4 * lFloats * slots, S_);
+        Fb = this.buffer('F', 4 * Math.max(1, forced ? p * S * D : 1) * slots, S_);
         ptsBuf = this.buffer('pts', 8 * slots, S_ | GPUBufferUsage.COPY_DST);
         outBuf = this.buffer('out', OUT_BYTES * slots, S_ | GPUBufferUsage.COPY_SRC);
         read = this.buffer('read', OUT_BYTES * slots, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
@@ -212,17 +216,17 @@ export class Engine {
       u32.set([nb, p, r, m, xi, yi, 0, 0]);
       values.forEach((v, k) => { f[8 + k] = v; });
       dev.queue.writeBuffer(this.ubuf, 0, ub);
-      const all = { 0: this.ubuf, 1: ptsBuf, 2: hist, 3: V, 4: outBuf, 5: Wb, 6: Lb };
+      const all = { 0: this.ubuf, 1: ptsBuf, 2: hist, 3: V, 4: outBuf, 5: Wb, 6: Lb, 7: Fb };
       const group = (pipe, ids) => dev.createBindGroup({ layout: pipe.getBindGroupLayout(0),
         entries: ids.map((k) => ({ binding: k, resource: { buffer: all[k] } })) });
       const enc = dev.createCommandEncoder();
       const ts = (k) => (this.hasTS ? { timestampWrites: { querySet: this.qset, beginningOfPassWriteIndex: k, endOfPassWriteIndex: k + 1 } } : {});
       let pass = enc.beginComputePass(ts(0));
-      pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, [0, 1, 5, 6]));
+      pass.setPipeline(pl.prep); pass.setBindGroup(0, group(pl.prep, forced ? [0, 1, 5, 6, 7] : [0, 1, 5, 6]));
       pass.dispatchWorkgroups(Math.ceil(Math.ceil(nb / G) * G * p / 64));
       pass.end();
       pass = enc.beginComputePass(ts(2));
-      pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, [0, 2, 3, 4, 5, 6]));
+      pass.setPipeline(pl.main); pass.setBindGroup(0, group(pl.main, forced ? [0, 2, 3, 4, 5, 6, 7] : [0, 2, 3, 4, 5, 6]));
       pass.dispatchWorkgroups(Math.ceil(nb / G));
       pass.end();
       enc.copyBufferToBuffer(outBuf, 0, read, 0, OUT_BYTES * nb);
@@ -240,6 +244,7 @@ export class Engine {
       const out = new Float32Array(read.getMappedRange(0, OUT_BYTES * nb));
       for (let i = 0; i < nb; i++) {
         rho[off + i] = out[4 * i]; flags[off + i] = out[4 * i + 3];
+        if (amp) amp[off + i] = out[4 * i + 2];
         if (mu) { mu[2 * (off + i)] = out[4 * i + 1]; mu[2 * (off + i) + 1] = out[4 * i + 2]; }
       }
       read.unmap();
@@ -250,7 +255,7 @@ export class Engine {
       onProgress?.(off / n);
     }
     const ms = performance.now() - t0;
-    return { rho, mu, flags, r, ms, bytesPerPt, lpp, done: off >= n, gpuPrep, gpuMain };
+    return { rho, mu, flags, amp, r, ms, bytesPerPt, lpp, done: off >= n, gpuPrep, gpuMain };
   }
 
   /** lanes per point: enough threads in flight (≈ 16384) for a batch of n points, at most one

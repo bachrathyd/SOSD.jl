@@ -445,3 +445,60 @@ export function modelJS(model) {
   s += '};\nreturn { T, tau, AB };\n';
   return s;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Julia generation (the Colab server: the batched SOSD solver of SOSD.jl on the Colab GPU)
+// ---------------------------------------------------------------------------------------------
+function jl(e, name) {
+  switch (e.k) {
+    case 'num': return Number.isInteger(e.v) ? `${e.v}.0` : String(e.v);
+    case 'id': return name(e.v);
+    case 'neg': return `(-${jl(e.a, name)})`;
+    case '+': case '-': case '*': case '/': return `(${jl(e.a, name)} ${e.k} ${jl(e.b, name)})`;
+    case '^':      // an integer exponent stays an Int (x^2.0 of a negative x would throw)
+      if (e.b.k === 'num' && Number.isInteger(e.b.v)) return `(${jl(e.a, name)} ^ ${e.b.v})`;
+      return `(${jl(e.a, name)} ^ ${jl(e.b, name)})`;
+    case 'f1': {
+      const a = jl(e.a, name);
+      if (e.f === 'step') return `_step(${a})`;
+      return `${e.f}(${a})`;
+    }
+    case 'f2': {
+      const a = jl(e.a, name), b = jl(e.b, name);
+      if (e.f === 'pow') return `(${a} ^ ${b})`;
+      if (e.f === 'atan2') return `atan(${a}, ${b})`;
+      return `${e.f}(${a}, ${b})`;
+    }
+  }
+  throw new Error('bad node');
+}
+
+/**
+ * Julia source of a module body for SOSD.jl's batched solver: `A(t, θ)`, `B(t, θ)` (a 1-tuple of
+ * SMatrix: one delay), `tau(t, θ)` (1-tuple), `period(θ)`, `forcing(t, θ)` (SVector), `const D`,
+ * `const NP`; θ is the parameter vector in model.params order (an SVector).
+ */
+export function modelJulia(model) {
+  const D = model.D, NP = Math.max(1, model.params.length);
+  const pidx = new Map(model.params.map((q, i) => [q.name, i]));
+  const hname = (n) => 'h_' + [...n].map((c) => (/[A-Za-z0-9]/.test(c) ? c : 'u' + c.codePointAt(0))).join('');
+  const name = (n) => {
+    if (n === 't') return 't';
+    if (pidx.has(n)) return `θ[${pidx.get(n) + 1}]`;
+    if (model.consts.has(n)) return `(${model.consts.get(n)})`;
+    return hname(n);
+  };
+  const lets = (needT) => model.helpers
+    .filter((h) => needT || !usesT(h, model))
+    .map((h) => `    ${hname(h.name)} = ${jl(h.e, name)}`).join('\n');
+  const mat = (M) => '@SMatrix [' + M.map((r) => r.map((e) => jl(e, name)).join(' ')).join('; ') + ']';
+  let s = `using StaticArrays\nconst D = ${D}\nconst NP = ${NP}\n`;
+  s += `@inline _step(x) = x >= zero(x) ? one(x) : zero(x)\n`;
+  s += `@inline function period(θ)\n    t = 0.0\n${lets(false)}\n    return ${jl(model.T, name)}\nend\n`;
+  s += `@inline function tau(t, θ)\n${lets(true)}\n    return (${jl(model.tau, name)},)\nend\n`;
+  s += `@inline function A(t, θ)\n${lets(true)}\n    return ${mat(model.A)}\nend\n`;
+  s += `@inline function B(t, θ)\n${lets(true)}\n    return (${mat(model.B)},)\nend\n`;
+  s += `@inline function forcing(t, θ)\n${lets(true)}\n    return SVector(${model.f ? model.f.map((e) => jl(e, name)).join(', ') : Array(D).fill('0.0').join(', ')})\nend\n`;
+  s += `const HAS_FORCING = ${model.f ? 'true' : 'false'}\n`;
+  return s;
+}

@@ -119,6 +119,28 @@ function DeviceTableau(tab::RKTableau{S}, ::Type{T}=Float64) where {S, T}
     return T === Float64 ? d64 : _device_tableau(tab, T)
 end
 
+"""
+    _collocation_endweights(tab) -> (true, w) | (false, nothing)
+
+For a collocation tableau (distinct nodes 0 < c₁ < … ≤ 1 and a_ij = ∫₀^{c_i} ℓ_j, ℓ_j the
+Lagrange basis on c) the step end value is the collocation polynomial at 1, an exact identity:
+y_{n+1} = w₀ y_n + Σ_i w_i Y_i with the Lagrange weights w of θ = 1 on the nodes {0, c}. The
+sweep then needs only the S·D stage rows of the step blocks (the RK update rows are dropped).
+"""
+function _collocation_endweights(tab::RKTableau{S}) where {S}
+    c = Float64.(collect(tab.c))
+    (all(>(1e-12), c) && allunique(c)) || return false, nothing
+    V = [ci^(k - 1) for ci in c, k in 1:S]           # ℓ_j = Σ_k C[k, j] x^(k−1)
+    C = inv(V)
+    for i in 1:S, j in 1:S
+        aij = sum(C[k, j] * c[i]^k / k for k in 1:S)
+        abs(aij - tab.a[i, j]) < 1e-10 * max(1.0, abs(aij)) || return false, nothing
+    end
+    nodes = vcat(0.0, c)
+    w = [prod((1 - nodes[k]) / (nodes[i] - nodes[k]) for k in eachindex(nodes) if k != i) for i in eachindex(nodes)]
+    return true, w
+end
+
 @inline function _ce_weights(tab::DeviceTableau{S, T, S2}, θ) where {S, T, S2}
     return SVector{S2, T}(ntuple(Val(S2)) do i
         u = tab.slot[i]; xu = tab.unodes[u]; L = one(T)
@@ -143,7 +165,7 @@ fastest): `Mp[b, row, col, n]`, `Md[b, row, col, s, k, n]`, delay block index
 work buffer `Hist[b, :]` and per-point status flags (0 = ok, 1 = delayed lookup outside
 the history window, i.e. r·h < max lag).
 """
-struct BatchedOperators{D, S, K, T, A2, A4, A6, I4, A5, IV}
+struct BatchedOperators{D, S, K, T, A2, A4, A6, I4, A5, IV, A3}
     Mp::A4
     Md::A6
     Midx::I4
@@ -153,6 +175,10 @@ struct BatchedOperators{D, S, K, T, A2, A4, A6, I4, A5, IV}
     p::Int
     r::Int
     nb::Int
+    colloc::Bool                # collocation tableau: y_{n+1} from the stage values (ew)
+    ew::Vector{Float64}         # end-value weights on {0, c} (length S + 1)
+    Fv::A3                      # forced response of each step to the forcing f(t): Fv[b, row, n]
+    forced::Bool
 end
 
 bsize(::BatchedOperators{D, S}) where {D, S} = (S + 1) * D
@@ -289,9 +315,14 @@ Assemble the per-step transition blocks of all points `θs` and place them on `b
   (one point per thread), then a single upload. For large S·D.
 - `build = :auto` — `:device` (measured on a T4 for D = 24, S·D = 72: device build
   2.2 s vs threaded host build 30 s for 128 points at p = 300 on the 2-core VM).
+
+`endrows = :collocation` (default): for a collocation tableau the sweep computes the step end
+value from the stage values (exact; skips the D update rows of every step block, about
+1/(S+1) of the sweep work); `:matrix` always uses the stored update rows.
 """
 function build_batched_operators(prob::BatchedLDDE{D, K}, θs::AbstractVector, tab::RKTableau{S},
-                                 p::Int, r::Int; backend=CPU(), T::Type=Float64, build::Symbol=:auto) where {D, K, S}
+                                 p::Int, r::Int; backend=CPU(), T::Type=Float64, build::Symbol=:auto,
+                                 endrows::Symbol=:collocation) where {D, K, S}
     nb = length(θs)
     BS = (S + 1) * D
     mode = build === :auto ? :device : build
@@ -337,8 +368,11 @@ function build_batched_operators(prob::BatchedLDDE{D, K}, θs::AbstractVector, t
         Mp = _to_device(backend, Mp_h); Md = _to_device(backend, Md_h)
         Midx = _to_device(backend, Midx_h); Wt = _to_device(backend, Wt_h); flag = _to_device(backend, flag_h)
     end
-    return BatchedOperators{D, S, K, T, typeof(Hist), typeof(Mp), typeof(Md), typeof(Midx), typeof(Wt), typeof(flag)}(
-        Mp, Md, Midx, Wt, Hist, flag, p, r, nb)
+    colloc, ew = _collocation_endweights(tab)
+    ew === nothing && (ew = zeros(S + 1))
+    Fv = KA.zeros(backend, T, 1, 1, 1)
+    return BatchedOperators{D, S, K, T, typeof(Hist), typeof(Mp), typeof(Md), typeof(Midx), typeof(Wt), typeof(flag), typeof(Fv)}(
+        Mp, Md, Midx, Wt, Hist, flag, p, r, nb, colloc && endrows === :collocation, ew, Fv, false)
 end
 
 _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), size(x)); copyto!(y, x); y)
@@ -348,7 +382,8 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
 # ---------------------------------------------------------------------------
 
 @kernel function _sweep_kernel!(Y, jy::Int, @Const(X), jx::Int, Hist::AbstractArray{T}, @Const(Mp), @Const(Md), @Const(Midx), @Const(Wt),
-                                @Const(mask), p::Int, r::Int, nb::Int, ::Val{D}, ::Val{S}, ::Val{K}, ::Val{BG}) where {T, D, S, K, BG}
+                                @Const(mask), p::Int, r::Int, nb::Int, ::Val{D}, ::Val{S}, ::Val{K}, ::Val{BG},
+                                ew, @Const(Fv), ::Val{COLL}, ::Val{FORCED}) where {T, D, S, K, BG, COLL, FORCED}
     b, lr = @index(Global, NTuple)
     lb, _ = @index(Local, NTuple)
     R = @uniform @groupsize()[2]
@@ -389,6 +424,7 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
             @synchronize
             if b <= nb && mask[b] != 0
                 for row in lr:R:BS
+                    COLL && row <= D && continue        # end value below, from the stage values
                     acc = zero(promote_type(T, Float32))
                     for d in 1:D
                         acc += Mp[b, row, d, n] * ycur[lb, d]
@@ -399,7 +435,21 @@ _to_device(backend, x::AbstractArray) = (y = KA.allocate(backend, eltype(x), siz
                             acc += Md[b, row, d, s, k, n] * ydel[lb, off + d]
                         end
                     end
+                    if FORCED
+                        acc += Fv[b, row, n]
+                    end
                     Hist[b, (n + r) * BS + row] = acc
+                end
+            end
+            @synchronize
+            # collocation: y_{n+1} = ew₀ y_n + Σ_i ew_i Y_i (the polynomial at 1; includes the forcing)
+            if COLL && b <= nb && mask[b] != 0
+                for d in lr:R:D
+                    acc = promote_type(T, Float32)(ew[1]) * ycur[lb, d]
+                    for i in 1:S
+                        acc += ew[i + 1] * Hist[b, (n + r) * BS + i * D + d]
+                    end
+                    Hist[b, (n + r) * BS + d] = acc
                 end
             end
             @synchronize
@@ -459,13 +509,18 @@ end
     batched_mul!(Y, jy, X, jx, op::BatchedOperators, cfg::SweepConfig, backend)
 
 `Y[:, :, jy] = Φ_b X[:, :, jx]` for every point `b` of the batch with `mask[b] ≠ 0` (one
-forward sweep each; masked-out points are skipped).
+forward sweep each; masked-out points are skipped). `forced = true`: the affine one-period map
+`Φ_b X + g_b` of the forced system (operators from [`with_forcing`](@ref)).
 """
-function batched_mul!(Y, jy, X, jx, op::BatchedOperators{D, S, K}, cfg::SweepConfig, backend;
-                      mask=KA.ones(backend, Int32, op.nb)) where {D, S, K}
+function batched_mul!(Y, jy, X, jx, op::BatchedOperators{D, S, K, T}, cfg::SweepConfig, backend;
+                      mask=KA.ones(backend, Int32, op.nb), forced::Bool=false) where {D, S, K, T}
     nbpad = cld(op.nb, cfg.BG) * cfg.BG
+    CT = promote_type(T, Float32)
+    ew = SVector{S + 1, CT}(ntuple(i -> CT(op.ew[i]), Val(S + 1)))
+    (forced && !op.forced) && error("batched_mul!: the operators carry no forcing")
     _sweep_kernel!(backend, (cfg.BG, cfg.R))(Y, jy, X, jx, op.Hist, op.Mp, op.Md, op.Midx, op.Wt, mask,
-                                             op.p, op.r, op.nb, Val(D), Val(S), Val(K), Val(cfg.BG);
+                                             op.p, op.r, op.nb, Val(D), Val(S), Val(K), Val(cfg.BG),
+                                             ew, op.Fv, Val(op.colloc), Val(forced);
                                              ndrange=(nbpad, cfg.R))
     return Y
 end

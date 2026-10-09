@@ -5,7 +5,8 @@
 // Fields: key, title, formula (HTML, shown under the selector), text, axes [x, y] (parameter
 // names), p (steps per period), S (Gauss–Legendre stages), m (Krylov dimension), brute
 // (default grid), mdbm (initial grid — 'bf': the brute-force grid — and iterations), bf / md
-// (methods on by default), note.
+// (methods on by default), states (names of the state components), forced (periodic orbit on by
+// default), note.
 
 export const EXAMPLES = [
   {
@@ -19,11 +20,13 @@ export const EXAMPLES = [
 ε = 0:10 @ 2
 b₀ = -1:1 @ -0.15
 a₁ = 0:1 @ 0.1
+f₀ = 0:2 @ 1                  # forcing amplitude
 T = 2*pi
 τ = 2*pi
 A = [0, 1; -(δ + ε*cos(t)), -a₁]
-B = [0, 0; b₀, 0]`,
-    axes: ['δ', 'ε'], p: 16, S: 3, m: 6,
+B = [0, 0; b₀, 0]
+f = [0; f₀*cos(t)]            # forcing (periodic-orbit option)`,
+    axes: ['δ', 'ε'], p: 16, S: 3, m: 6, states: ['x'], forced: false,
     brute: [256, 128], mdbm: ['bf', 0, 1],
   },
   {
@@ -38,6 +41,7 @@ w = 0:5 @ 2                   # axial depth of cut [mm]
 aD = 0.02:1 @ 0.05            # radial immersion a/D
 ζ = 0.002:0.05 @ 0.011        # damping ratio
 ry = 0.8:1.3 @ 1.05           # y/x natural frequency ratio
+fz = 0:0.3 @ 0.1              # feed per tooth [mm]
 z = 2
 ω₁ = 2*pi*922
 κ = w*1e-3*6e8/(0.03993*ω₁^2)  # w Kt / (m ω₁²)
@@ -61,9 +65,11 @@ A = [0, 0, 1, 0;
 B = [0, 0, 0, 0;
      0, 0, 0, 0;
      κ*hxx, κ*hxy, 0, 0;
-     κ*hyx, κ*hyy, 0, 0]`,
-    axes: ['n', 'w'], p: 40, S: 3, m: 8,
-    brute: [256, 128], mdbm: [48, 12, 4], bf: false,
+     κ*hyx, κ*hyy, 0, 0]
+# cutting force with the nominal chip thickness fz·sin φ (periodic-orbit option), x, y in mm
+f = [0; 0; -κ*fz*hxx; -κ*fz*hyx]`,
+    axes: ['n', 'w'], p: 40, S: 3, m: 8, states: ['x [mm]'], forced: true,
+    brute: [256, 128], mdbm: ['bf', 0, 1],
     note: 'The cutting-force coefficient switches when a tooth enters or leaves the cut, so the ' +
           'step functions make A(t), B(t) discontinuous: expect first-order convergence in p. ' +
           'MDBM finds a lobe only if the initial grid resolves its width (narrow low-speed lobes need a finer initial grid).',
@@ -80,11 +86,14 @@ k_w = 0:0.6 @ 0.2             # cutting-force coefficient
 RVA = 0:0.3 @ 0.1             # relative speed-variation amplitude
 RVF = 0.05:0.5 @ 0.1          # relative speed-variation frequency
 ζ = 0.01:0.3 @ 0.1            # damping
+h₀ = 0:1 @ 0.1                # nominal chip thickness (feed per revolution)
 T = 2*pi/(RVF*Ω)
 τ = 2*pi/Ω*(1 + RVA*sin(RVF*Ω*t))
 A = [0, 1; -1 - k_w, -ζ]
-B = [0, 0; k_w, 0]`,
-    axes: ['Ω', 'k_w'], p: 200, S: 3, m: 6,
+B = [0, 0; k_w, 0]
+# cutting force with the nominal chip thickness, which follows the varying delay (periodic-orbit option)
+f = [0; k_w*h₀*(1 + RVA*sin(RVF*Ω*t))]`,
+    axes: ['Ω', 'k_w'], p: 200, S: 3, m: 6, states: ['x'], forced: false,
     brute: [256, 128], mdbm: ['bf', 0, 1],
     note: 'One period T holds 1/RVF delays, so one delay gets p·RVF steps (20 at the defaults): for a small RVF raise p.',
   },

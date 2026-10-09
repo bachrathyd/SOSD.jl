@@ -185,11 +185,11 @@ export function evalExpr(e, look) {
 // ---------------------------------------------------------------------------------------------
 // model text -> model
 // ---------------------------------------------------------------------------------------------
-const SPECIAL = { T: 'T', τ: 'tau', tau: 'tau', A: 'A', B: 'B' };
+const SPECIAL = { T: 'T', τ: 'tau', tau: 'tau', A: 'A', B: 'B', f: 'f' };
 
 export function parseModel(text) {
   const params = [], consts = new Map(), helpers = [], warn = [];
-  const model = { params, consts, helpers, T: null, tau: null, A: null, B: null, warn };
+  const model = { params, consts, helpers, T: null, tau: null, A: null, B: null, f: null, warn };
   // logical lines: comments removed, a line continues while ( or [ is open
   const lines = [], starts = [];
   let buf = '', depth = 0, first = 0;
@@ -210,7 +210,7 @@ export function parseModel(text) {
     const name = toks[0].v;
     const p = new Parser(toks.slice(2), li);
     const sp = SPECIAL[name];
-    if (sp === 'A' || sp === 'B') {
+    if (sp === 'A' || sp === 'B' || sp === 'f') {
       model[sp] = p.matrix();
       if (!p.atEnd()) throw new ParseError('unexpected text after the matrix', li, p.peek().col);
       return;
@@ -246,6 +246,12 @@ export function parseModel(text) {
       throw new ParseError(`${nm} must be ${D}×${D} (square, same size as A)`, lines.length - 1, 0);
   }
   if (D > 6) throw new ParseError('at most 6 states in the browser version', lines.length - 1, 0);
+  if (model.f) {      // forcing: a column [f1; f2; ...] or a row [f1, f2, ...] of D entries
+    const v = model.f.length === 1 ? model.f[0] : model.f.map((r) => r[0]);
+    if (v.length !== D || (model.f.length > 1 && model.f.some((r) => r.length !== 1)))
+      throw new ParseError(`f must have ${D} entries (the forcing of each state equation)`, lines.length - 1, 0);
+    model.f = v;
+  }
   model.D = D;
   // identifiers must be known
   const known = new Set(['t', ...params.map((q) => q.name), ...consts.keys()]);
@@ -253,7 +259,7 @@ export function parseModel(text) {
     for (const id of idsOf(h.e)) if (!known.has(id)) throw new ParseError(`unknown name ${id} in ${h.name}`, 0, 0);
     known.add(h.name);
   }
-  const all = [model.T, model.tau, ...model.A.flat(), ...model.B.flat()];
+  const all = [model.T, model.tau, ...model.A.flat(), ...model.B.flat(), ...(model.f || [])];
   for (const e of all) for (const id of idsOf(e)) if (!known.has(id)) throw new ParseError(`unknown name ${id}`, 0, 0);
   const tdep = (e) => {
     const seen = new Set();
@@ -341,7 +347,7 @@ function wgsl(e, name) {
  *   fn m_period(P) -> f32, fn m_tau(t, P) -> f32,
  *   fn m_AB(t, P, A: ptr<function, array<f32, DD>>, B: ...)   (row-major, A[i*D + j])
  */
-export function modelWGSL(model) {
+export function modelWGSL(model, forced = false) {
   const D = model.D, NP = Math.max(1, model.params.length);
   const pidx = new Map(model.params.map((q, i) => [q.name, i]));
   const hname = (n) => 'h_' + [...n].map((c) => (/[A-Za-z0-9]/.test(c) ? c : 'u' + c.codePointAt(0))).join('');
@@ -364,6 +370,15 @@ export function modelWGSL(model) {
     s += `  (*A)[${i * D + j}] = ${wgsl(model.A[i][j], name)};\n`;
     s += `  (*B)[${i * D + j}] = ${wgsl(model.B[i][j], name)};\n`;
   }
+  s += '}\n';
+  // forcing f(t) (the periodic-orbit option); FORCED switches the forced kernels on
+  s += `const FORCED: bool = ${forced && model.f ? 'true' : 'false'};\n`;
+  // the forcing part of the stage values lives in binding 7, declared only when it is used
+  s += forced && model.f
+    ? '@group(0) @binding(7) var<storage, read_write> Fb: array<f32>;\nfn fbW(i: u32, v: f32) { Fb[i] = v; }\nfn fbR(i: u32) -> f32 { return Fb[i]; }\n'
+    : 'fn fbW(i: u32, v: f32) { }\nfn fbR(i: u32) -> f32 { return 0.0; }\n';
+  s += `fn m_F(${tparam}, F: ptr<function, array<f32, ${D}>>) {\n${lets(true)}\n`;
+  for (let i = 0; i < D; i++) s += `  (*F)[${i}] = ${model.f ? wgsl(model.f[i], name) : '0.0'};\n`;
   s += '}\n';
   return s;
 }
